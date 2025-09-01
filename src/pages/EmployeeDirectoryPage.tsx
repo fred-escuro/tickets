@@ -1,0 +1,264 @@
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+import { OrganizationChart } from '@/components/OrganizationChart';
+import { PageWrapper, PageSection } from '@/components/PageWrapper';
+import { supportUsers } from '@/data/mockData';
+import { ArrowLeft, Search, Filter, Mail, Phone, MapPin, Users, Network, Shield, Wrench } from 'lucide-react';
+import { useState, type FC } from 'react';
+import { Link } from 'react-router-dom';
+
+const getDepartmentBadgeColor = (department: string) => {
+  switch (department) {
+    case 'IT Support':
+      return 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-300 dark:bg-blue-100 dark:text-blue-800';
+    case 'Hardware Support':
+      return 'border-green-600 bg-green-50 text-green-700 dark:border-green-300 dark:bg-green-100 dark:text-green-800';
+    case 'Software Support':
+      return 'border-purple-600 bg-purple-50 text-purple-700 dark:border-purple-300 dark:bg-purple-100 dark:text-purple-800';
+    case 'Network Support':
+      return 'border-orange-600 bg-orange-50 text-orange-700 dark:border-orange-300 dark:bg-orange-100 dark:text-orange-800';
+    case 'Security Support':
+      return 'border-red-600 bg-red-50 text-red-700 dark:border-red-300 dark:bg-red-100 dark:text-red-800';
+    default:
+      return 'border-muted-foreground/20 bg-muted text-muted-foreground';
+  }
+};
+
+const getAgentBadgeColor = (isAgent: boolean) => {
+  return isAgent 
+    ? 'border-green-600 bg-green-50 text-green-700 dark:border-green-300 dark:bg-green-100 dark:text-green-800'
+    : 'border-gray-600 bg-gray-50 text-gray-700 dark:border-gray-300 dark:bg-gray-100 dark:text-gray-800';
+};
+
+export const EmployeeDirectoryPage: FC = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterDepartment, setFilterDepartment] = useState<string>('all');
+  const [filterRole, setFilterRole] = useState<string>('all');
+
+  // Get unique departments for filter
+  const departments = Array.from(new Set(supportUsers.map(user => user.department))).sort();
+
+  // Filter users based on search and department
+  const filteredUsers = supportUsers.filter((user) => {
+    const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         user.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         user.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    const matchesDepartment = filterDepartment === 'all' || user.department === filterDepartment;
+    const matchesRole = filterRole === 'all' || 
+                       (filterRole === 'agent' && user.isAgent) ||
+                       (filterRole === 'customer' && !user.isAgent);
+    
+    return matchesSearch && matchesDepartment && matchesRole;
+  });
+
+  return (
+    <div className="min-h-screen bg-background">
+      <PageWrapper className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6">
+        {/* Header Section */}
+        <PageSection index={0}>
+          <div className="mb-6">
+            <div className="flex items-center gap-4 mb-4">
+              <Link to="/">
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Dashboard
+                </Button>
+              </Link>
+            </div>
+            
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold tracking-tight">Support Team Directory</h1>
+              <p className="text-muted-foreground">
+                Find and connect with support team members and customers
+              </p>
+            </div>
+          </div>
+        </PageSection>
+
+        {/* Tabs for Directory and Org Chart */}
+        <PageSection index={1}>
+          <Tabs defaultValue="directory" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-2 max-w-md">
+              <TabsTrigger value="directory" className="gap-2">
+                <Users className="h-4 w-4 hidden sm:inline" />
+                Directory
+              </TabsTrigger>
+              <TabsTrigger value="orgchart" className="gap-2">
+                <Network className="h-4 w-4 hidden sm:inline" />
+                Org Chart
+              </TabsTrigger>
+            </TabsList>
+
+            {/* User Directory Tab */}
+            <TabsContent value="directory" className="space-y-6">
+              {/* Filters Section */}
+              <Card>
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-lg">Search & Filter</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search by name, role, or email..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Filter by department" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Departments</SelectItem>
+                          {departments.map((dept) => (
+                            <SelectItem key={dept} value={dept}>
+                              {dept}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Select value={filterRole} onValueChange={setFilterRole}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Filter by role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Roles</SelectItem>
+                          <SelectItem value="agent">Support Agents</SelectItem>
+                          <SelectItem value="customer">Customers</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Users Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredUsers.map((user, index) => (
+                  <Card 
+                    key={user.id} 
+                    className="hover:shadow-md transition-shadow animate-in fade-in slide-in-from-bottom-4 duration-300"
+                    style={{ animationDelay: `${(index + 1) * 100}ms` }}
+                  >
+                    <CardContent className="p-6">
+                      <div className="flex items-start space-x-4">
+                        <div className="flex-shrink-0">
+                          <img
+                            src={user.avatar}
+                            alt={user.name}
+                            className="h-12 w-12 rounded-full"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-medium text-foreground truncate">
+                              {user.name}
+                            </h3>
+                            <Badge className={`${getAgentBadgeColor(user.isAgent || false)} text-xs`}>
+                              {user.isAgent ? 'Agent' : 'Customer'}
+                            </Badge>
+                          </div>
+                          
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {user.role}
+                          </p>
+                          
+                          <Badge className={`${getDepartmentBadgeColor(user.department)} text-xs mb-3`}>
+                            {user.department}
+                          </Badge>
+                          
+                          {user.skills && user.skills.length > 0 && (
+                            <div className="mb-3">
+                              <p className="text-xs text-muted-foreground mb-1">Skills:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {user.skills.slice(0, 3).map((skill) => (
+                                  <Badge key={skill} variant="outline" className="text-xs">
+                                    {skill}
+                                  </Badge>
+                                ))}
+                                {user.skills.length > 3 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{user.skills.length - 3}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
+                          <div className="space-y-1">
+                            {user.email && (
+                              <div className="flex items-center text-xs text-muted-foreground">
+                                <Mail className="h-3 w-3 mr-2" />
+                                <span className="truncate">{user.email}</span>
+                              </div>
+                            )}
+                            {user.phone && (
+                              <div className="flex items-center text-xs text-muted-foreground">
+                                <Phone className="h-3 w-3 mr-2" />
+                                <span>{user.phone}</span>
+                              </div>
+                            )}
+                            {user.location && (
+                              <div className="flex items-center text-xs text-muted-foreground">
+                                <MapPin className="h-3 w-3 mr-2" />
+                                <span className="truncate">{user.location}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {filteredUsers.length === 0 && (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <Users className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-medium mb-2">No users found</h3>
+                    <p className="text-muted-foreground text-center">
+                      No users match your current search criteria.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            {/* Organization Chart Tab */}
+            <TabsContent value="orgchart" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Network className="h-5 w-5" />
+                    Support Team Organization
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <OrganizationChart />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </PageSection>
+      </PageWrapper>
+    </div>
+  );
+};
