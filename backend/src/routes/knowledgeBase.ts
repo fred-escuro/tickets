@@ -1,0 +1,331 @@
+import { Router } from 'express';
+import { prisma } from '../index';
+import { authenticate, requireAgent } from '../middleware/auth';
+import { CreateKnowledgeBaseRequest, ApiResponse } from '../types';
+
+const router = Router();
+
+// Get all knowledge base articles
+router.get('/', authenticate, async (req, res) => {
+  try {
+    const { page = 1, limit = 20, category, search, sortBy = 'updatedAt', sortOrder = 'desc' } = req.query;
+
+    const pageNum = parseInt(page.toString());
+    const limitNum = parseInt(limit.toString());
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build where clause
+    const where: any = {};
+    if (category) where.category = category;
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { content: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    // Get total count
+    const total = await prisma.knowledgeBase.count({ where });
+
+    // Get articles
+    const articles = await prisma.knowledgeBase.findMany({
+      where,
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true
+          }
+        }
+      },
+      orderBy: { [sortBy]: sortOrder },
+      skip,
+      take: limitNum
+    });
+
+    const totalPages = Math.ceil(total / limitNum);
+
+    const response: ApiResponse = {
+      success: true,
+      data: articles,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages
+      }
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error('Get knowledge base error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get knowledge base articles'
+    });
+  }
+});
+
+// Get article by ID
+router.get('/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Increment view count
+    await prisma.knowledgeBase.update({
+      where: { id },
+      data: { views: { increment: 1 } }
+    });
+
+    const article = await prisma.knowledgeBase.findUnique({
+      where: { id },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true
+          }
+        }
+      }
+    });
+
+    if (!article) {
+      return res.status(404).json({
+        success: false,
+        error: 'Article not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: article
+    });
+  } catch (error) {
+    console.error('Get article error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get article'
+    });
+  }
+});
+
+// Create new article (agents only)
+router.post('/', authenticate, requireAgent, async (req, res) => {
+  try {
+    const { title, content, category, tags }: CreateKnowledgeBaseRequest = req.body;
+    const authorId = (req as any).user.id;
+
+    // Validate required fields
+    if (!title || !content || !category) {
+      return res.status(400).json({
+        success: false,
+        error: 'Title, content, and category are required'
+      });
+    }
+
+    const article = await prisma.knowledgeBase.create({
+      data: {
+        title,
+        content,
+        category,
+        tags: tags || [],
+        authorId
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      data: article,
+      message: 'Article created successfully'
+    });
+  } catch (error) {
+    console.error('Create article error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create article'
+    });
+  }
+});
+
+// Update article
+router.put('/:id', authenticate, requireAgent, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, content, category, tags } = req.body;
+    const userId = (req as any).user.id;
+
+    // Check if article exists
+    const existingArticle = await prisma.knowledgeBase.findUnique({
+      where: { id }
+    });
+
+    if (!existingArticle) {
+      return res.status(404).json({
+        success: false,
+        error: 'Article not found'
+      });
+    }
+
+    // Only allow updates if user is the author or admin
+    if (existingArticle.authorId !== userId && (req as any).user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Insufficient permissions to update this article'
+      });
+    }
+
+    const updatedArticle = await prisma.knowledgeBase.update({
+      where: { id },
+      data: {
+        title,
+        content,
+        category,
+        tags,
+        updatedAt: new Date()
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true
+          }
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      data: updatedArticle,
+      message: 'Article updated successfully'
+    });
+  } catch (error) {
+    console.error('Update article error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update article'
+    });
+  }
+});
+
+// Delete article
+router.delete('/:id', authenticate, requireAgent, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user.id;
+
+    const article = await prisma.knowledgeBase.findUnique({
+      where: { id }
+    });
+
+    if (!article) {
+      return res.status(404).json({
+        success: false,
+        error: 'Article not found'
+      });
+    }
+
+    // Only allow deletion if user is the author or admin
+    if (article.authorId !== userId && (req as any).user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Insufficient permissions to delete this article'
+      });
+    }
+
+    await prisma.knowledgeBase.delete({
+      where: { id }
+    });
+
+    res.json({
+      success: true,
+      message: 'Article deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete article error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete article'
+    });
+  }
+});
+
+// Mark article as helpful
+router.post('/:id/helpful', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const article = await prisma.knowledgeBase.findUnique({
+      where: { id }
+    });
+
+    if (!article) {
+      return res.status(404).json({
+        success: false,
+        error: 'Article not found'
+      });
+    }
+
+    const updatedArticle = await prisma.knowledgeBase.update({
+      where: { id },
+      data: { helpful: { increment: 1 } }
+    });
+
+    res.json({
+      success: true,
+      data: updatedArticle,
+      message: 'Article marked as helpful'
+    });
+  } catch (error) {
+    console.error('Mark helpful error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to mark article as helpful'
+    });
+  }
+});
+
+// Get categories
+router.get('/categories/list', authenticate, async (req, res) => {
+  try {
+    const categories = await prisma.knowledgeBase.groupBy({
+      by: ['category'],
+      _count: {
+        category: true
+      }
+    });
+
+    const categoryList = categories.map(cat => ({
+      name: cat.category,
+      count: cat._count.category
+    }));
+
+    res.json({
+      success: true,
+      data: categoryList
+    });
+  } catch (error) {
+    console.error('Get categories error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get categories'
+    });
+  }
+});
+
+export default router;
