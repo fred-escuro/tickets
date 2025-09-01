@@ -112,7 +112,7 @@ router.get('/:id', authenticate, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: user
     });
@@ -172,14 +172,14 @@ router.put('/:id', authenticate, async (req, res) => {
       }
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: updatedUser,
       message: 'User updated successfully'
     });
   } catch (error) {
     console.error('Update user error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to update user'
     });
@@ -202,13 +202,13 @@ router.get('/agents/list', authenticate, async (req, res) => {
       orderBy: { name: 'asc' }
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: agents
     });
   } catch (error) {
     console.error('Get agents error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get agents'
     });

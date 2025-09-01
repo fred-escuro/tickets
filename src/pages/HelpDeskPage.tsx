@@ -15,13 +15,8 @@ import { AddCommentDialog } from '@/components/ui/add-comment-dialog';
 import { openAttachmentViewer } from '@/lib/attachmentViewer';
 
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
-import { 
-  helpdeskTickets, 
-  helpdeskKnowledgeBase,
-  helpdeskCategories,
-  type HelpdeskTicket,
-  type HelpdeskKnowledgeBase
-} from '@/data/mockData';
+import { TicketService, type Ticket } from '@/lib/services/ticketService';
+import { useApi } from '@/hooks/useApi';
 import { 
   ArrowLeft, 
   HelpCircle, 
@@ -54,9 +49,10 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 const getStatusColor = (status: string) => {
-  switch (status) {
+  switch (status.toLowerCase()) {
     case 'open':
       return 'bg-blue-100 text-blue-700 border-blue-200';
+    case 'in_progress':
     case 'in-progress':
       return 'bg-yellow-100 text-yellow-700 border-yellow-200';
     case 'resolved':
@@ -69,9 +65,10 @@ const getStatusColor = (status: string) => {
 };
 
 const getStatusIcon = (status: string) => {
-  switch (status) {
+  switch (status.toLowerCase()) {
     case 'open':
       return <AlertCircle className="h-4 w-4" />;
+    case 'in_progress':
     case 'in-progress':
       return <Clock className="h-4 w-4" />;
     case 'resolved':
@@ -101,7 +98,7 @@ const getCategoryIcon = (category: string) => {
 };
 
 const getPriorityColor = (priority: string) => {
-  switch (priority) {
+  switch (priority.toLowerCase()) {
     case 'low':
       return 'bg-green-100 text-green-700';
     case 'medium':
@@ -115,17 +112,24 @@ const getPriorityColor = (priority: string) => {
   }
 };
 
-const formatDate = (date: Date) => {
+const formatDate = (date: Date | string) => {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  
+  // Check if the date is valid
+  if (isNaN(dateObj.getTime())) {
+    return 'Invalid date';
+  }
+  
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
-  }).format(date);
+  }).format(dateObj);
 };
 
-const TicketCard: FC<{ ticket: HelpdeskTicket; index?: number }> = ({ ticket, index = 0 }) => {
+const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [showAddComment, setShowAddComment] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
@@ -146,21 +150,10 @@ const TicketCard: FC<{ ticket: HelpdeskTicket; index?: number }> = ({ ticket, in
       type: 'issue',
       dateKey: issueDateKey,
       data: ticket,
-      timestamp: ticket.submittedAt
+      timestamp: new Date(ticket.submittedAt)
     });
 
-    // Add comments
-    if (ticket.comments) {
-      ticket.comments.forEach(comment => {
-        const commentDateKey = new Date(comment.timestamp).toDateString();
-        timeline.push({
-          type: 'comment',
-          dateKey: commentDateKey,
-          data: comment,
-          timestamp: comment.timestamp
-        });
-      });
-    }
+    // For now, no comments - we can add this later when implementing comments API
 
     // Sort by timestamp (latest first)
     timeline.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
@@ -667,7 +660,7 @@ const TicketCard: FC<{ ticket: HelpdeskTicket; index?: number }> = ({ ticket, in
   );
 };
 
-const KnowledgeBaseCard: FC<{ article: HelpdeskKnowledgeBase; index?: number }> = ({ article, index = 0 }) => (
+const KnowledgeBaseCard: FC<{ article: any; index?: number }> = ({ article, index = 0 }) => (
   <Card 
     className="hover:shadow-md transition-shadow cursor-pointer animate-in fade-in slide-in-from-bottom-4 duration-300"
     style={{ animationDelay: `${(index + 1) * 100}ms` }}
@@ -816,11 +809,11 @@ const NewTicketDialog: FC<{ autoOpen?: boolean; onOpenChange?: (open: boolean) =
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {helpdeskCategories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
+                                  {['hardware', 'software', 'network', 'mobile', 'general'].map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category.charAt(0).toUpperCase() + category.slice(1)}
+                  </SelectItem>
+                ))}
                 </SelectContent>
               </Select>
             </div>
@@ -892,6 +885,19 @@ export const HelpDeskPage: FC = () => {
   const [activeTab, setActiveTab] = useState('tickets');
   const [autoOpenNewTicket, setAutoOpenNewTicket] = useState(false);
   
+  // Fetch tickets from backend API
+  const { 
+    data: ticketsData, 
+    loading: ticketsLoading, 
+    error: ticketsError, 
+    execute: fetchTickets 
+  } = useApi(
+    () => TicketService.getTickets(),
+    { autoExecute: true }
+  );
+
+  const tickets = ticketsData?.data || [];
+  
   // Handle URL parameters on component mount
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -907,24 +913,24 @@ export const HelpDeskPage: FC = () => {
     }
   }, [searchParams]);
   
-  const filteredTickets = helpdeskTickets.filter(ticket => {
-    const matchesFilter = ticketFilter === 'all' || ticket.status === ticketFilter;
+  const filteredTickets = tickets.filter(ticket => {
+    const matchesFilter = ticketFilter === 'all' || 
+      (ticketFilter === 'open' && ticket.status === 'OPEN') ||
+      (ticketFilter === 'in-progress' && ticket.status === 'IN_PROGRESS') ||
+      (ticketFilter === 'resolved' && ticket.status === 'RESOLVED') ||
+      (ticketFilter === 'closed' && ticket.status === 'CLOSED');
     const matchesSearch = searchQuery === '' || 
       ticket.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ticket.description.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 
-  const filteredKnowledgeBase = helpdeskKnowledgeBase.filter(article =>
-    searchQuery === '' || 
-    article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    article.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    article.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // For now, we'll use empty knowledge base until we implement that API
+  const filteredKnowledgeBase: any[] = [];
 
-  const openTickets = helpdeskTickets.filter(t => t.status === 'open').length;
-  const inProgressTickets = helpdeskTickets.filter(t => t.status === 'in-progress').length;
-  const resolvedTickets = helpdeskTickets.filter(t => t.status === 'resolved').length;
+  const openTickets = tickets.filter(t => t.status === 'OPEN').length;
+  const inProgressTickets = tickets.filter(t => t.status === 'IN_PROGRESS').length;
+  const resolvedTickets = tickets.filter(t => t.status === 'RESOLVED').length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -1055,7 +1061,7 @@ export const HelpDeskPage: FC = () => {
               <h2 className="text-lg font-semibold">Knowledge Base</h2>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <FileText className="h-4 w-4" />
-                <span>{helpdeskKnowledgeBase.length} articles</span>
+                <span>0 articles</span>
               </div>
             </div>
             

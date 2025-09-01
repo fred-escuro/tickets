@@ -97,10 +97,10 @@ router.get('/', authenticate, async (req, res) => {
       }
     };
 
-    res.json(response);
+    return res.json(response);
   } catch (error) {
     console.error('Get tickets error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get tickets'
     });
@@ -164,13 +164,13 @@ router.get('/:id', authenticate, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: ticket
     });
   } catch (error) {
     console.error('Get ticket error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get ticket'
     });
@@ -213,14 +213,14 @@ router.post('/', authenticate, async (req, res) => {
       }
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: ticket,
       message: 'Ticket created successfully'
     });
   } catch (error) {
     console.error('Create ticket error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to create ticket'
     });
@@ -305,14 +305,14 @@ router.put('/:id', authenticate, async (req, res) => {
       }
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: updatedTicket,
       message: 'Ticket updated successfully'
     });
   } catch (error) {
     console.error('Update ticket error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to update ticket'
     });
@@ -348,13 +348,13 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
       where: { id }
     });
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Ticket deleted successfully'
     });
   } catch (error) {
     console.error('Delete ticket error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to delete ticket'
     });
@@ -399,13 +399,13 @@ router.get('/stats/overview', authenticate, async (req, res) => {
       closed: closedTickets
     };
 
-    res.json({
+    return res.json({
       success: true,
       data: stats
     });
   } catch (error) {
     console.error('Get stats error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get ticket statistics'
     });

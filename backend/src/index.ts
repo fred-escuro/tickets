@@ -5,19 +5,6 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 
-// Import routes
-import authRoutes from './routes/auth';
-import userRoutes from './routes/users';
-import ticketRoutes from './routes/tickets';
-import commentRoutes from './routes/comments';
-import attachmentRoutes from './routes/attachments';
-import knowledgeBaseRoutes from './routes/knowledgeBase';
-import searchRoutes from './routes/search';
-
-// Import middleware
-import { errorHandler } from './middleware/errorHandler';
-import { notFound } from './middleware/notFound';
-
 // Load environment variables
 dotenv.config();
 
@@ -47,18 +34,130 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API Routes
-app.use('/api/auth', authRoutes);
-// app.use('/api/users', userRoutes);
-// app.use('/api/tickets', ticketRoutes);
-// app.use('/api/comments', commentRoutes);
-// app.use('/api/attachments', attachmentRoutes);
-// app.use('/api/knowledge', knowledgeBaseRoutes);
-// app.use('/api/search', searchRoutes);
+// Simple ticket routes (minimal working version)
+app.get('/api/tickets', async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status, priority, category, search } = req.query;
+    
+    const pageNum = parseInt(page.toString());
+    const limitNum = parseInt(limit.toString());
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build where clause
+    const where: any = {};
+    if (status) where.status = status;
+    if (priority) where.priority = priority;
+    if (category) where.category = category;
+    if (search) {
+      where.OR = [
+        { title: { contains: search.toString(), mode: 'insensitive' } },
+        { description: { contains: search.toString(), mode: 'insensitive' } }
+      ];
+    }
+
+    // Get total count
+    const total = await prisma.ticket.count({ where });
+
+    // Get tickets with relations
+    const tickets = await prisma.ticket.findMany({
+      where,
+      include: {
+        submitter: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true
+          }
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true
+          }
+        }
+      },
+      orderBy: { submittedAt: 'desc' },
+      skip,
+      take: limitNum
+    });
+
+    const totalPages = Math.ceil(total / limitNum);
+
+    res.json({
+      success: true,
+      data: tickets,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages
+      }
+    });
+  } catch (error) {
+    console.error('Get tickets error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get tickets'
+    });
+  }
+});
+
+// Get ticket statistics
+app.get('/api/tickets/stats/overview', async (req, res) => {
+  try {
+    const [
+      totalTickets,
+      openTickets,
+      inProgressTickets,
+      resolvedTickets,
+      closedTickets
+    ] = await Promise.all([
+      prisma.ticket.count(),
+      prisma.ticket.count({ where: { status: 'OPEN' } }),
+      prisma.ticket.count({ where: { status: 'IN_PROGRESS' } }),
+      prisma.ticket.count({ where: { status: 'RESOLVED' } }),
+      prisma.ticket.count({ where: { status: 'CLOSED' } })
+    ]);
+
+    const stats = {
+      total: totalTickets,
+      open: openTickets,
+      inProgress: inProgressTickets,
+      resolved: resolvedTickets,
+      closed: closedTickets
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('Get stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get ticket statistics'
+    });
+  }
+});
 
 // Error handling middleware
-app.use(notFound);
-app.use(errorHandler);
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'Endpoint not found'
+  });
+});
+
+app.use((error: any, req: any, res: any, next: any) => {
+  console.error('Server error:', error);
+  res.status(500).json({
+    success: false,
+    error: 'Internal server error'
+  });
+});
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
@@ -84,6 +183,7 @@ const startServer = async () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+      console.log(`🎫 Tickets API: http://localhost:${PORT}/api/tickets`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

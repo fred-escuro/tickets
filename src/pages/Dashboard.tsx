@@ -4,6 +4,8 @@ import { EmployeeDirectory } from '@/components/EmployeeDirectory';
 import { Projects } from '@/components/Projects';
 import { Analytics } from '@/components/Analytics';
 import { TeamCalendar } from '@/components/TeamCalendar';
+import { ApiTest } from '@/components/ApiTest';
+import { TicketList } from '@/components/TicketList';
 import { type FC } from 'react';
 
 export const Dashboard: FC = () => {
@@ -16,6 +18,9 @@ export const Dashboard: FC = () => {
             {/* Tickets Overview */}
             <Helpdesk />
             
+            {/* Ticket List */}
+            <TicketList />
+            
             {/* Knowledge Base */}
             <Resources />
             
@@ -26,6 +31,9 @@ export const Dashboard: FC = () => {
           {/* Sidebar - Right Column */}
           <div className="lg:col-span-4">
             <div className="sticky top-32 space-y-4 sm:space-y-6">
+              {/* API Connection Test */}
+              <ApiTest />
+              
               {/* Support Team */}
               <EmployeeDirectory />
               
