@@ -51,7 +51,9 @@ router.get('/', authenticate, async (req, res) => {
             submitter: {
               select: {
                 id: true,
-                name: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
                 email: true,
                 avatar: true
               }
@@ -59,7 +61,9 @@ router.get('/', authenticate, async (req, res) => {
             assignee: {
               select: {
                 id: true,
-                name: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
                 email: true,
                 avatar: true
               }
@@ -105,7 +109,9 @@ router.get('/', authenticate, async (req, res) => {
             author: {
               select: {
                 id: true,
-                name: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
                 email: true,
                 avatar: true
               }
@@ -129,7 +135,9 @@ router.get('/', authenticate, async (req, res) => {
     if ((type === 'all' || type === 'users') && (req as any).user.role === 'admin') {
       const userWhere: any = {
         OR: [
-          { name: { contains: searchTerm, mode: 'insensitive' } },
+          { firstName: { contains: searchTerm, mode: 'insensitive' } },
+          { lastName: { contains: searchTerm, mode: 'insensitive' } },
+          { middleName: { contains: searchTerm, mode: 'insensitive' } },
           { email: { contains: searchTerm, mode: 'insensitive' } },
           { department: { contains: searchTerm, mode: 'insensitive' } }
         ]
@@ -141,7 +149,9 @@ router.get('/', authenticate, async (req, res) => {
           where: userWhere,
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
             email: true,
             role: true,
             department: true,
@@ -149,7 +159,7 @@ router.get('/', authenticate, async (req, res) => {
             isAgent: true,
             createdAt: true
           },
-          orderBy: { name: 'asc' },
+          orderBy: { firstName: 'asc' },
           skip,
           take: limitNum
         })
@@ -259,13 +269,17 @@ router.get('/suggestions', authenticate, async (req, res) => {
       const userSuggestions = await prisma.user.findMany({
         where: {
           OR: [
-            { name: { contains: searchTerm, mode: 'insensitive' } },
+            { firstName: { contains: searchTerm, mode: 'insensitive' } },
+            { lastName: { contains: searchTerm, mode: 'insensitive' } },
+            { middleName: { contains: searchTerm, mode: 'insensitive' } },
             { email: { contains: searchTerm, mode: 'insensitive' } }
           ]
         },
         select: {
           id: true,
-          name: true,
+          firstName: true,
+          lastName: true,
+          middleName: true,
           email: true,
           role: true
         },
@@ -275,7 +289,7 @@ router.get('/suggestions', authenticate, async (req, res) => {
       suggestions.push(...userSuggestions.map(u => ({
         ...u,
         type: 'user',
-        display: `${u.name} (${u.email})`
+        display: `${u.middleName ? `${u.firstName} ${u.middleName} ${u.lastName}` : `${u.firstName} ${u.lastName}`} (${u.email})`
       })));
     }
 
@@ -341,7 +355,9 @@ router.get('/stats', authenticate, async (req, res) => {
       (req as any).user.role === 'admin' ? prisma.user.count({
         where: {
           OR: [
-            { name: { contains: searchTerm, mode: 'insensitive' } },
+            { firstName: { contains: searchTerm, mode: 'insensitive' } },
+            { lastName: { contains: searchTerm, mode: 'insensitive' } },
+            { middleName: { contains: searchTerm, mode: 'insensitive' } },
             { email: { contains: searchTerm, mode: 'insensitive' } }
           ]
         }

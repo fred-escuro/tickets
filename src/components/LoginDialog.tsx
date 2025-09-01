@@ -45,7 +45,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
         // Dispatch custom event to notify other components
         window.dispatchEvent(new Event('auth-change'));
         
-        toast.success(`Welcome back, ${response.data.user.name}!`);
+        toast.success(`Welcome back, ${response.data.user.middleName ? `${response.data.user.firstName} ${response.data.user.middleName} ${response.data.user.lastName}` : `${response.data.user.firstName} ${response.data.user.lastName}`}!`);
         onLoginSuccess();
         onClose();
         
@@ -82,7 +82,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
         // Dispatch custom event to notify other components
         window.dispatchEvent(new Event('auth-change'));
         
-        toast.success(`Welcome back, ${response.data.user.name}!`);
+        toast.success(`Welcome back, ${response.data.user.middleName ? `${response.data.user.firstName} ${response.data.user.middleName} ${response.data.user.lastName}` : `${response.data.user.firstName} ${response.data.user.lastName}`}!`);
         onLoginSuccess();
         onClose();
         

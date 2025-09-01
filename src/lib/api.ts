@@ -18,6 +18,12 @@ export const API_ENDPOINTS = {
     PROFILE: '/api/users/profile',
     UPDATE: '/api/users/profile',
     AVATAR: '/api/users/avatar',
+    LIST: '/api/users',
+    GET: (id: string) => `/api/users/${id}`,
+    CREATE: '/api/users',
+    UPDATE_BY_ID: (id: string) => `/api/users/${id}`,
+    DELETE: (id: string) => `/api/users/${id}`,
+    AGENTS: '/api/users/agents/list',
   },
   // Tickets
   TICKETS: {
@@ -183,3 +189,20 @@ export const apiClient = new ApiClient();
 export const buildApiUrl = (endpoint: string): string => {
   return `${API_BASE_URL}${endpoint}`;
 };
+
+// API Response types
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+}
+
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}

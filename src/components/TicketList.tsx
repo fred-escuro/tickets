@@ -145,9 +145,11 @@ export const TicketList = () => {
                       {ticket.assignee ? (
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs">
-                            {ticket.assignee.name.charAt(0)}
+                            {ticket.assignee.firstName.charAt(0)}
                           </div>
-                          <span className="text-sm">{ticket.assignee.name}</span>
+                          <span className="text-sm">
+                            {ticket.assignee.middleName ? `${ticket.assignee.firstName} ${ticket.assignee.middleName} ${ticket.assignee.lastName}` : `${ticket.assignee.firstName} ${ticket.assignee.lastName}`}
+                          </span>
                         </div>
                       ) : (
                         <span className="text-sm text-muted-foreground">Unassigned</span>

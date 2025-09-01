@@ -12,7 +12,8 @@ async function main() {
     where: { email: 'admin@company.com' },
     update: {},
     create: {
-      name: 'System Administrator',
+      firstName: 'System',
+      lastName: 'Administrator',
       email: 'admin@company.com',
       password: adminPassword,
       role: 'admin',
@@ -28,7 +29,8 @@ async function main() {
     where: { email: 'john.support@company.com' },
     update: {},
     create: {
-      name: 'John Support',
+      firstName: 'John',
+      lastName: 'Support',
       email: 'john.support@company.com',
       password: agentPassword,
       role: 'support_agent',
@@ -42,7 +44,8 @@ async function main() {
     where: { email: 'sarah.tech@company.com' },
     update: {},
     create: {
-      name: 'Sarah Tech',
+      firstName: 'Sarah',
+      lastName: 'Tech',
       email: 'sarah.tech@company.com',
       password: agentPassword,
       role: 'support_agent',
@@ -56,7 +59,8 @@ async function main() {
     where: { email: 'mike.hardware@company.com' },
     update: {},
     create: {
-      name: 'Mike Hardware',
+      firstName: 'Mike',
+      lastName: 'Hardware',
       email: 'mike.hardware@company.com',
       password: agentPassword,
       role: 'support_agent',
@@ -72,7 +76,8 @@ async function main() {
     where: { email: 'alice.user@company.com' },
     update: {},
     create: {
-      name: 'Alice User',
+      firstName: 'Alice',
+      lastName: 'User',
       email: 'alice.user@company.com',
       password: userPassword,
       role: 'user',
@@ -85,7 +90,8 @@ async function main() {
     where: { email: 'bob.employee@company.com' },
     update: {},
     create: {
-      name: 'Bob Employee',
+      firstName: 'Bob',
+      lastName: 'Employee',
       email: 'bob.employee@company.com',
       password: userPassword,
       role: 'user',

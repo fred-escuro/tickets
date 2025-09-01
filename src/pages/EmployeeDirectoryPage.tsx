@@ -7,10 +7,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { OrganizationChart } from '@/components/OrganizationChart';
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
-import { supportUsers } from '@/data/mockData';
-import { ArrowLeft, Search, Filter, Mail, Phone, MapPin, Users, Network, Shield, Wrench } from 'lucide-react';
-import { useState, type FC } from 'react';
+import { ArrowLeft, Search, Filter, Mail, Phone, MapPin, Users, Network, Shield, Wrench, Loader2, AlertCircle } from 'lucide-react';
+import { useState, useEffect, type FC } from 'react';
 import { Link } from 'react-router-dom';
+import { useApi } from '@/hooks/useApi';
+import { UserService, type SupportAgent } from '@/lib/services/userService';
 
 const getDepartmentBadgeColor = (department: string) => {
   switch (department) {
@@ -40,17 +41,31 @@ export const EmployeeDirectoryPage: FC = () => {
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterRole, setFilterRole] = useState<string>('all');
 
+  // Fetch all users using the API hook
+  const { data: usersData, loading: usersLoading, error: usersError, execute: fetchUsers } = useApi(
+    UserService.getAllUsers,
+    { autoExecute: false }
+  );
+
+  // Use useEffect to fetch data on component mount
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const users = usersData?.data || [];
+
   // Get unique departments for filter
-  const departments = Array.from(new Set(supportUsers.map(user => user.department))).sort();
+  const departments = Array.from(new Set(users.map(user => user.department))).sort();
 
   // Filter users based on search and department
-  const filteredUsers = supportUsers.filter((user) => {
-    const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         user.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         user.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredUsers = users.filter((user) => {
+    const fullName = user.middleName ? `${user.firstName} ${user.middleName} ${user.lastName}` : `${user.firstName} ${user.lastName}`;
+    const matchesSearch = fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         (user.department && user.department.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                         (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                         (user.role && user.role.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    const matchesDepartment = filterDepartment === 'all' || user.department === filterDepartment;
+    const matchesDepartment = filterDepartment === 'all' || (user.department && user.department === filterDepartment);
     const matchesRole = filterRole === 'all' || 
                        (filterRole === 'agent' && user.isAgent) ||
                        (filterRole === 'customer' && !user.isAgent);
@@ -71,12 +86,21 @@ export const EmployeeDirectoryPage: FC = () => {
                   Back to Dashboard
                 </Button>
               </Link>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => fetchUsers()} 
+                disabled={usersLoading}
+                className="gap-2"
+              >
+                {usersLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Refresh'}
+              </Button>
             </div>
             
             <div className="space-y-2">
-              <h1 className="text-2xl font-bold tracking-tight">Support Team Directory</h1>
+              <h1 className="text-2xl font-bold tracking-tight">User Directory</h1>
               <p className="text-muted-foreground">
-                Find and connect with support team members and customers
+                Find and connect with all users in the system
               </p>
             </div>
           </div>
@@ -149,87 +173,92 @@ export const EmployeeDirectoryPage: FC = () => {
                 </CardContent>
               </Card>
 
-              {/* Users Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredUsers.map((user, index) => (
-                  <Card 
-                    key={user.id} 
-                    className="hover:shadow-md transition-shadow animate-in fade-in slide-in-from-bottom-4 duration-300"
-                    style={{ animationDelay: `${(index + 1) * 100}ms` }}
-                  >
-                    <CardContent className="p-6">
-                      <div className="flex items-start space-x-4">
-                        <div className="flex-shrink-0">
-                          <img
-                            src={user.avatar}
-                            alt={user.name}
-                            className="h-12 w-12 rounded-full"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-medium text-foreground truncate">
-                              {user.name}
-                            </h3>
-                            <Badge className={`${getAgentBadgeColor(user.isAgent || false)} text-xs`}>
-                              {user.isAgent ? 'Agent' : 'Customer'}
-                            </Badge>
-                          </div>
-                          
-                          <p className="text-sm text-muted-foreground mb-2">
-                            {user.role}
-                          </p>
-                          
-                          <Badge className={`${getDepartmentBadgeColor(user.department)} text-xs mb-3`}>
-                            {user.department}
-                          </Badge>
-                          
-                          {user.skills && user.skills.length > 0 && (
-                            <div className="mb-3">
-                              <p className="text-xs text-muted-foreground mb-1">Skills:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {user.skills.slice(0, 3).map((skill) => (
-                                  <Badge key={skill} variant="outline" className="text-xs">
-                                    {skill}
-                                  </Badge>
-                                ))}
-                                {user.skills.length > 3 && (
-                                  <Badge variant="outline" className="text-xs">
-                                    +{user.skills.length - 3}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                          
-                          <div className="space-y-1">
-                            {user.email && (
-                              <div className="flex items-center text-xs text-muted-foreground">
-                                <Mail className="h-3 w-3 mr-2" />
-                                <span className="truncate">{user.email}</span>
-                              </div>
-                            )}
-                            {user.phone && (
-                              <div className="flex items-center text-xs text-muted-foreground">
-                                <Phone className="h-3 w-3 mr-2" />
-                                <span>{user.phone}</span>
-                              </div>
-                            )}
-                            {user.location && (
-                              <div className="flex items-center text-xs text-muted-foreground">
-                                <MapPin className="h-3 w-3 mr-2" />
-                                <span className="truncate">{user.location}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              {/* Loading State */}
+              {usersLoading && (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <Loader2 className="h-12 w-12 animate-spin text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-medium mb-2">Loading users...</h3>
+                    <p className="text-muted-foreground text-center">
+                      Fetching data from the backend
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
 
-              {filteredUsers.length === 0 && (
+              {/* Error State */}
+              {usersError && (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <AlertCircle className="h-12 w-12 animate-spin text-red-500 mb-4" />
+                    <h3 className="text-lg font-medium mb-2 text-red-600">Failed to load data</h3>
+                    <p className="text-muted-foreground text-center mb-4">
+                      {usersError}
+                    </p>
+                    <Button onClick={() => fetchUsers()} variant="outline">
+                      Try Again
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Users Grid */}
+              {!usersLoading && !usersError && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredUsers.map((user, index) => (
+                    <Card 
+                      key={user.id} 
+                      className="group hover:shadow-xl hover:bg-gradient-to-br hover:from-blue-50/60 hover:to-blue-100/30 dark:hover:from-white/5 dark:hover:to-white/[0.03] hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 duration-300 cursor-pointer border-border hover:border-primary/20 dark:hover:border-white/10 hover:ring-2 hover:ring-primary/10 dark:hover:ring-white/10 relative overflow-hidden"
+                      style={{ animationDelay: `${(index + 1) * 100}ms` }}
+                    >
+                      {/* Hover background overlay */}
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                      <CardContent className="p-6 relative z-10">
+                        <div className="flex items-start space-x-4">
+                          <div className="flex-shrink-0">
+                            <div className="group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg">
+                              <img
+                                src={user.avatar || '/default-avatar.png'}
+                                alt={user.middleName ? `${user.firstName} ${user.middleName} ${user.lastName}` : `${user.firstName} ${user.lastName}`}
+                                className="h-12 w-12 rounded-full"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors duration-300">
+                                {user.middleName ? `${user.firstName} ${user.middleName} ${user.lastName}` : `${user.firstName} ${user.lastName}`}
+                              </h3>
+                              <Badge className={`${getAgentBadgeColor(user.isAgent)} text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
+                                {user.isAgent ? 'Agent' : 'User'}
+                              </Badge>
+                            </div>
+                            
+                            {user.department && (
+                              <Badge className={`${getDepartmentBadgeColor(user.department)} text-xs mb-3 group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
+                                {user.department}
+                              </Badge>
+                            )}
+                            
+
+                            
+                            <div className="space-y-1">
+                              {user.email && (
+                                <div className="flex items-center text-xs text-muted-foreground group-hover:text-muted-foreground/80 transition-colors duration-300">
+                                  <Mail className="h-3 w-3 mr-2 group-hover:translate-x-1 transition-transform duration-300" />
+                                  <span className="truncate">{user.email}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {!usersLoading && !usersError && filteredUsers.length === 0 && (
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-12">
                     <Users className="h-12 w-12 text-muted-foreground mb-4" />

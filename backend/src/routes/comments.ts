@@ -39,7 +39,9 @@ router.get('/ticket/:ticketId', authenticate, async (req, res) => {
         author: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
             email: true,
             avatar: true
           }
@@ -112,7 +114,9 @@ router.post('/', authenticate, async (req, res) => {
         author: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
             email: true,
             avatar: true
           }
@@ -182,7 +186,9 @@ router.put('/:id', authenticate, async (req, res) => {
         author: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
             email: true,
             avatar: true
           }

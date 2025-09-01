@@ -17,7 +17,9 @@ export interface LoginCredentials {
 export interface RegisterData {
   email: string;
   password: string;
-  name: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string;
   role?: string;
   department?: string;
   avatar?: string;
@@ -29,7 +31,9 @@ export interface RegisterData {
 
 export interface User {
   id: string;
-  name: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string;
   email: string;
   role: string;
   department?: string;

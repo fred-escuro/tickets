@@ -18,7 +18,9 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
     const where: any = {};
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { middleName: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } }
       ];
     }
@@ -33,7 +35,9 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
       where,
       select: {
         id: true,
-        name: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
         email: true,
         role: true,
         department: true,
@@ -91,7 +95,9 @@ router.get('/:id', authenticate, async (req, res) => {
       where: { id },
       select: {
         id: true,
-        name: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
         email: true,
         role: true,
         department: true,
@@ -158,7 +164,9 @@ router.put('/:id', authenticate, async (req, res) => {
       data: updateData,
       select: {
         id: true,
-        name: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
         email: true,
         role: true,
         department: true,
@@ -193,13 +201,15 @@ router.get('/agents/list', authenticate, async (req, res) => {
       where: { isAgent: true },
       select: {
         id: true,
-        name: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
         email: true,
         avatar: true,
         department: true,
         skills: true
       },
-      orderBy: { name: 'asc' }
+      orderBy: { firstName: 'asc' }
     });
 
     return res.json({

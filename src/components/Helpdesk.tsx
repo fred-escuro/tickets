@@ -212,7 +212,7 @@ export const Helpdesk: FC = () => {
           <Button variant="outline" size="sm" onClick={() => fetchStats()} className="h-8">
             Stats
           </Button>
-          <Link to="/helpdesk">
+          <Link to="/tickets">
             <Button variant="ghost" size="sm" className="gap-2 h-8">
               Support
               <ArrowRight className="h-4 w-4" />

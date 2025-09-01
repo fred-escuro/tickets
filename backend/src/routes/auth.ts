@@ -10,13 +10,13 @@ const router = Router();
 // Register new user
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, role, department, avatar, phone, location, isAgent, skills }: CreateUserRequest = req.body;
+    const { firstName, lastName, middleName, email, password, role, department, avatar, phone, location, isAgent, skills }: CreateUserRequest = req.body;
 
     // Validate required fields
-    if (!name || !email || !password) {
+    if (!firstName || !lastName || !email || !password) {
       return res.status(400).json({
         success: false,
-        error: 'Name, email, and password are required'
+        error: 'First name, last name, email, and password are required'
       });
     }
 
@@ -39,7 +39,9 @@ router.post('/register', async (req, res) => {
     // Create user
     const user = await prisma.user.create({
       data: {
-        name,
+        firstName,
+        lastName,
+        middleName,
         email,
         password: hashedPassword,
         role: role || 'user',
@@ -52,7 +54,9 @@ router.post('/register', async (req, res) => {
       },
       select: {
         id: true,
-        name: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
         email: true,
         role: true,
         department: true,
@@ -82,6 +86,7 @@ router.post('/register', async (req, res) => {
     // Convert Prisma user to our User type format
     const userResponse = {
       ...user,
+      middleName: user.middleName || undefined,
       department: user.department || undefined,
       avatar: user.avatar || undefined,
       phone: user.phone || undefined,
@@ -162,6 +167,7 @@ router.post('/login', async (req, res) => {
     // Convert Prisma user to our User type format
     const userResponse = {
       ...userWithoutPassword,
+      middleName: userWithoutPassword.middleName || undefined,
       department: userWithoutPassword.department || undefined,
       avatar: userWithoutPassword.avatar || undefined,
       phone: userWithoutPassword.phone || undefined,
@@ -209,7 +215,9 @@ router.post('/refresh', async (req, res) => {
       where: { id: decoded.userId },
       select: {
         id: true,
-        name: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
         email: true,
         role: true,
         department: true,
@@ -240,6 +248,7 @@ router.post('/refresh', async (req, res) => {
     // Convert Prisma user to our User type format
     const userResponse = {
       ...user,
+      middleName: user.middleName || undefined,
       department: user.department || undefined,
       avatar: user.avatar || undefined,
       phone: user.phone || undefined,

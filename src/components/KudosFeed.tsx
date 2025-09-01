@@ -26,7 +26,7 @@ export const KudosFeed: FC = () => {
 
     const newKudo: Kudo = {
       id: generateId(),
-      from: currentUser.name,
+      from: currentUser.middleName ? `${currentUser.firstName} ${currentUser.middleName} ${currentUser.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`,
       to: newKudoTo.trim(),
       message: newKudoMessage.trim(),
       timestamp: new Date()

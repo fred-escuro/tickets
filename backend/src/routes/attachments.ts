@@ -86,7 +86,9 @@ router.post('/upload', authenticate, upload.single('file'), async (req, res) => 
         uploader: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
             email: true,
             avatar: true
           }
@@ -119,7 +121,9 @@ router.get('/:id', authenticate, async (req, res) => {
         uploader: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
             email: true
           }
         }

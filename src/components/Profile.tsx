@@ -127,14 +127,14 @@ export const Profile: FC = () => {
           <img
             className="h-10 w-10 rounded-full object-cover border-2 border-border hover:border-primary transition-colors"
             src={currentUser.avatar || '/default-avatar.png'}
-            alt={`${currentUser.name}'s avatar`}
+            alt={`${currentUser.middleName ? `${currentUser.firstName} ${currentUser.middleName} ${currentUser.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`}'s avatar`}
           />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{currentUser.name}</p>
+            <p className="text-sm font-medium leading-none">{currentUser.middleName ? `${currentUser.firstName} ${currentUser.middleName} ${currentUser.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`}</p>
             <p className="text-xs leading-none text-muted-foreground">
               {currentUser.role === 'admin' ? 'System Administrator' : currentUser.role}
             </p>

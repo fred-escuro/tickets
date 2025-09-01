@@ -105,7 +105,7 @@ export const Header: FC = () => {
             {isAuthenticated && currentUser && (
               <div className="hidden sm:block">
                 <span className="text-lg font-medium text-muted-foreground">
-                  Welcome, {currentUser.name}
+                  Welcome, {currentUser.middleName ? `${currentUser.firstName} ${currentUser.middleName} ${currentUser.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`}
                 </span>
               </div>
             )}
@@ -226,7 +226,7 @@ export const Header: FC = () => {
       {currentUser && (
         <div className="sm:hidden mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-3 pt-3 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70">
           <p className="text-sm text-muted-foreground">
-            Welcome, {currentUser.name}
+            Welcome, {currentUser.middleName ? `${currentUser.firstName} ${currentUser.middleName} ${currentUser.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`}
           </p>
         </div>
       )}

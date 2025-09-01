@@ -1,20 +1,34 @@
-import { apiClient, API_ENDPOINTS, ApiResponse, PaginatedResponse } from '../api';
+import { apiClient, API_ENDPOINTS } from '../api';
+import type { ApiResponse, PaginatedResponse } from '../api';
 
 // User types
 export interface User {
   id: string;
-  email: string;
   firstName: string;
   lastName: string;
+  middleName?: string;
+  email: string;
   role: string;
   avatar?: string;
   department?: string;
-  position?: string;
   phone?: string;
-  isActive: boolean;
-  lastLoginAt?: string;
+  location?: string;
+  isAgent: boolean;
+  skills?: any;
   createdAt: string;
   updatedAt: string;
+}
+
+// Support Agent types for backend API
+export interface SupportAgent {
+  id: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string;
+  email: string;
+  avatar?: string;
+  department: string;
+  skills?: string[];
 }
 
 export interface CreateUserData {
@@ -22,6 +36,7 @@ export interface CreateUserData {
   password: string;
   firstName: string;
   lastName: string;
+  middleName?: string;
   role: string;
   department?: string;
   position?: string;
@@ -31,6 +46,7 @@ export interface CreateUserData {
 export interface UpdateUserData {
   firstName?: string;
   lastName?: string;
+  middleName?: string;
   role?: string;
   department?: string;
   position?: string;
@@ -41,6 +57,7 @@ export interface UpdateUserData {
 export interface UpdateProfileData {
   firstName?: string;
   lastName?: string;
+  middleName?: string;
   phone?: string;
 }
 
@@ -145,6 +162,16 @@ export class UserService {
   // Get users by role
   static async getUsersByRole(role: string): Promise<ApiResponse<User[]>> {
     return apiClient.get(`/api/users/role/${role}`);
+  }
+
+  // Get support agents
+  static async getSupportAgents(): Promise<ApiResponse<SupportAgent[]>> {
+    return apiClient.get(API_ENDPOINTS.USERS.AGENTS);
+  }
+
+  // Get all users
+  static async getAllUsers(): Promise<ApiResponse<User[]>> {
+    return apiClient.get(API_ENDPOINTS.USERS.LIST);
   }
 
   // Bulk update users

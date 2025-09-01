@@ -7,7 +7,9 @@ export interface BaseEntity {
 
 // User types
 export interface User extends BaseEntity {
-  name: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string;
   email: string;
   role: string;
   department?: string;
@@ -19,7 +21,9 @@ export interface User extends BaseEntity {
 }
 
 export interface CreateUserRequest {
-  name: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string;
   email: string;
   password: string;
   role?: string;
@@ -32,7 +36,9 @@ export interface CreateUserRequest {
 }
 
 export interface UpdateUserRequest {
-  name?: string;
+  firstName?: string;
+  lastName?: string;
+  middleName?: string;
   email?: string;
   role?: string;
   department?: string;

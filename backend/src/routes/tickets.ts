@@ -59,7 +59,9 @@ router.get('/', authenticate, async (req, res) => {
         submitter: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
             email: true,
             avatar: true
           }
@@ -67,7 +69,9 @@ router.get('/', authenticate, async (req, res) => {
         assignee: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
             email: true,
             avatar: true
           }
@@ -118,7 +122,9 @@ router.get('/:id', authenticate, async (req, res) => {
         submitter: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
             email: true,
             avatar: true,
             department: true
@@ -127,7 +133,9 @@ router.get('/:id', authenticate, async (req, res) => {
         assignee: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
             email: true,
             avatar: true,
             department: true
@@ -138,7 +146,9 @@ router.get('/:id', authenticate, async (req, res) => {
             author: {
               select: {
                 id: true,
-                name: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
                 email: true,
                 avatar: true
               }
@@ -205,7 +215,9 @@ router.post('/', authenticate, async (req, res) => {
         submitter: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
             email: true,
             avatar: true
           }
@@ -289,7 +301,9 @@ router.put('/:id', authenticate, async (req, res) => {
         submitter: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
             email: true,
             avatar: true
           }
@@ -297,7 +311,9 @@ router.put('/:id', authenticate, async (req, res) => {
         assignee: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
             email: true,
             avatar: true
           }
