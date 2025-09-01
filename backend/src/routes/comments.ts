@@ -64,10 +64,10 @@ router.get('/ticket/:ticketId', authenticate, async (req, res) => {
       }
     };
 
-    res.json(response);
+    return res.json(response);
   } catch (error) {
     console.error('Get comments error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get comments'
     });
@@ -126,14 +126,14 @@ router.post('/', authenticate, async (req, res) => {
       data: { updatedAt: new Date() }
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: comment,
       message: 'Comment added successfully'
     });
   } catch (error) {
     console.error('Create comment error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to create comment'
     });
@@ -190,14 +190,14 @@ router.put('/:id', authenticate, async (req, res) => {
       }
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: updatedComment,
       message: 'Comment updated successfully'
     });
   } catch (error) {
     console.error('Update comment error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to update comment'
     });
@@ -235,13 +235,13 @@ router.delete('/:id', authenticate, async (req, res) => {
       where: { id }
     });
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Comment deleted successfully'
     });
   } catch (error) {
     console.error('Delete comment error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to delete comment'
     });

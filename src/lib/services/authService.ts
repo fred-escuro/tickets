@@ -1,4 +1,12 @@
-import { apiClient, API_ENDPOINTS, ApiResponse } from '../api';
+import { apiClient, API_ENDPOINTS } from '../api';
+
+// Define ApiResponse locally to avoid import issues
+interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+}
 
 // Auth types
 export interface LoginCredentials {
@@ -9,18 +17,27 @@ export interface LoginCredentials {
 export interface RegisterData {
   email: string;
   password: string;
-  firstName: string;
-  lastName: string;
+  name: string;
   role?: string;
+  department?: string;
+  avatar?: string;
+  phone?: string;
+  location?: string;
+  isAgent?: boolean;
+  skills?: string[];
 }
 
 export interface User {
   id: string;
+  name: string;
   email: string;
-  firstName: string;
-  lastName: string;
   role: string;
+  department?: string;
   avatar?: string;
+  phone?: string;
+  location?: string;
+  isAgent: boolean;
+  skills?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -45,16 +62,29 @@ export class AuthService {
 
   // Logout user
   static async logout(): Promise<ApiResponse<void>> {
-    const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT, {});
-    
-    // Clear local storage on successful logout
-    if (response.success) {
+    try {
+      const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT, {});
+      
+      // Always clear local storage regardless of backend response
       localStorage.removeItem('auth-token');
       localStorage.removeItem('refresh-token');
       localStorage.removeItem('user');
+      
+      return response;
+    } catch (error) {
+      console.error('Logout error:', error);
+      
+      // Even if backend logout fails, clear local storage
+      localStorage.removeItem('auth-token');
+      localStorage.removeItem('refresh-token');
+      localStorage.removeItem('user');
+      
+      return {
+        success: true, // Consider logout successful locally
+        data: undefined,
+        error: undefined
+      };
     }
-    
-    return response;
   }
 
   // Refresh token

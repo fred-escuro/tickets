@@ -40,7 +40,7 @@ router.get('/', authenticate, async (req, res) => {
           }
         }
       },
-      orderBy: { [sortBy]: sortOrder },
+      orderBy: { [sortBy as string]: sortOrder as 'asc' | 'desc' },
       skip,
       take: limitNum
     });
@@ -58,10 +58,10 @@ router.get('/', authenticate, async (req, res) => {
       }
     };
 
-    res.json(response);
+    return res.json(response);
   } catch (error) {
     console.error('Get knowledge base error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get knowledge base articles'
     });
@@ -100,13 +100,13 @@ router.get('/:id', authenticate, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: article
     });
   } catch (error) {
     console.error('Get article error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get article'
     });
@@ -147,14 +147,14 @@ router.post('/', authenticate, requireAgent, async (req, res) => {
       }
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: article,
       message: 'Article created successfully'
     });
   } catch (error) {
     console.error('Create article error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to create article'
     });
@@ -209,14 +209,14 @@ router.put('/:id', authenticate, requireAgent, async (req, res) => {
       }
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: updatedArticle,
       message: 'Article updated successfully'
     });
   } catch (error) {
     console.error('Update article error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to update article'
     });
@@ -252,13 +252,13 @@ router.delete('/:id', authenticate, requireAgent, async (req, res) => {
       where: { id }
     });
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Article deleted successfully'
     });
   } catch (error) {
     console.error('Delete article error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to delete article'
     });
@@ -286,14 +286,14 @@ router.post('/:id/helpful', authenticate, async (req, res) => {
       data: { helpful: { increment: 1 } }
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: updatedArticle,
       message: 'Article marked as helpful'
     });
   } catch (error) {
     console.error('Mark helpful error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to mark article as helpful'
     });
@@ -315,13 +315,13 @@ router.get('/categories/list', authenticate, async (req, res) => {
       count: cat._count.category
     }));
 
-    res.json({
+    return res.json({
       success: true,
       data: categoryList
     });
   } catch (error) {
     console.error('Get categories error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get categories'
     });

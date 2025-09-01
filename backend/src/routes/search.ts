@@ -14,9 +14,10 @@ router.get('/', authenticate, async (req, res) => {
       category,
       page = 1,
       limit = 20
-    } = req.query as SearchQuery;
+    } = req.query;
 
-    if (!q || q.trim().length === 0) {
+    // Type guard for required query parameter
+    if (!q || typeof q !== 'string' || q.trim().length === 0) {
       return res.status(400).json({
         success: false,
         error: 'Search query is required'
@@ -26,7 +27,7 @@ router.get('/', authenticate, async (req, res) => {
     const pageNum = parseInt(page.toString());
     const limitNum = parseInt(limit.toString());
     const skip = (pageNum - 1) * limitNum;
-    const searchTerm = q.trim();
+    const searchTerm = (q as string).trim();
 
     let results: any = {};
     let totalResults = 0;
@@ -179,10 +180,10 @@ router.get('/', authenticate, async (req, res) => {
       }
     };
 
-    res.json(response);
+    return res.json(response);
   } catch (error) {
     console.error('Search error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Search failed'
     });
@@ -194,14 +195,14 @@ router.get('/suggestions', authenticate, async (req, res) => {
   try {
     const { q, type = 'all' } = req.query;
 
-    if (!q || q.trim().length === 0) {
+    if (!q || typeof q !== 'string' || q.trim().length === 0) {
       return res.json({
         success: true,
         data: []
       });
     }
 
-    const searchTerm = q.trim();
+    const searchTerm = (q as string).trim();
     const suggestions: any[] = [];
 
     // Ticket suggestions
@@ -292,13 +293,13 @@ router.get('/suggestions', authenticate, async (req, res) => {
       })
       .slice(0, 10);
 
-    res.json({
+    return res.json({
       success: true,
       data: sortedSuggestions
     });
   } catch (error) {
     console.error('Search suggestions error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get search suggestions'
     });
@@ -310,14 +311,14 @@ router.get('/stats', authenticate, async (req, res) => {
   try {
     const { q } = req.query;
 
-    if (!q || q.trim().length === 0) {
+    if (!q || typeof q !== 'string' || q.trim().length === 0) {
       return res.status(400).json({
         success: false,
         error: 'Search query is required'
       });
     }
 
-    const searchTerm = q.trim();
+    const searchTerm = (q as string).trim();
 
     // Count results by type
     const [ticketCount, kbCount, userCount] = await Promise.all([
@@ -357,13 +358,13 @@ router.get('/stats', authenticate, async (req, res) => {
       }
     };
 
-    res.json({
+    return res.json({
       success: true,
       data: stats
     });
   } catch (error) {
     console.error('Search stats error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get search statistics'
     });

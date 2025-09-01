@@ -101,6 +101,8 @@ export interface UpdateTicketRequest {
   resolution?: string;
   satisfaction?: number;
   tags?: string[];
+  resolvedAt?: Date;
+  assignedAt?: Date;
 }
 
 // Comment types

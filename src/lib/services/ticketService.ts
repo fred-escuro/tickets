@@ -1,14 +1,9 @@
 // Simple ticket service without complex dependencies
-const API_BASE_URL = ''; // Use relative paths to trigger Vite proxy
+// Use relative paths to trigger Vite proxy to backend
+const API_BASE_URL = '';
 
 // Basic types
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  avatar?: string;
-  department?: string;
-}
+import type { User } from './authService';
 
 export interface Ticket {
   id: string;
@@ -26,6 +21,17 @@ export interface Ticket {
   tags?: string[];
   submitter?: User;
   assignee?: User;
+  comments?: any[];
+  attachments?: any[];
+}
+
+export interface CreateTicketRequest {
+  title: string;
+  description: string;
+  category: string;
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  dueDate?: string;
+  tags?: string[];
 }
 
 export interface TicketFilter {
@@ -42,10 +48,44 @@ export interface TicketFilter {
 // Simple API client
 const apiClient = {
   async get<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    const headers: Record<string, string> = {};
+    
+    // Add auth token if available
+    const authToken = localStorage.getItem('auth-token');
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
     }
+    
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
+    }
+    
+    return response.json();
+  },
+
+  async post<T>(endpoint: string, data: any): Promise<T> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Add auth token if available
+        ...(localStorage.getItem('auth-token') && {
+          'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
+        })
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
+    }
+    
     return response.json();
   }
 };
@@ -73,6 +113,16 @@ export class TicketService {
 
     const endpoint = `/api/tickets?${queryParams.toString()}`;
     return apiClient.get(endpoint);
+  }
+
+  // Create a new ticket
+  static async createTicket(ticketData: CreateTicketRequest): Promise<{
+    success: boolean;
+    data: Ticket;
+    message: string;
+  }> {
+    const endpoint = '/api/tickets';
+    return apiClient.post(endpoint, ticketData);
   }
 
   // Get ticket statistics

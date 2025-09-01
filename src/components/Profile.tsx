@@ -7,7 +7,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { currentUser } from '@/data/mockData';
+import { AuthService } from '@/lib/services/authService';
+import { toast } from 'sonner';
 import { 
   User, 
   Settings, 
@@ -19,10 +20,46 @@ import {
   Heart,
   MessageSquare
 } from 'lucide-react';
-import { type FC } from 'react';
+import { type FC, useState, useEffect } from 'react';
 
 export const Profile: FC = () => {
-  const handleProfileAction = (action: string) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(AuthService.getCurrentUser());
+
+  // Update authentication state when it changes
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = localStorage.getItem('auth-token');
+      setIsAuthenticated(!!token);
+      
+      if (token) {
+        setCurrentUser(AuthService.getCurrentUser());
+      } else {
+        setCurrentUser(null);
+      }
+    };
+
+    // Listen for storage changes (when login/logout happens in other tabs)
+    window.addEventListener('storage', checkAuth);
+    
+    // Listen for custom auth events in the same tab
+    const handleAuthChange = () => {
+      console.log('Profile: Auth change event received');
+      checkAuth();
+    };
+    
+    window.addEventListener('auth-change', handleAuthChange);
+    
+    // Also check on mount
+    checkAuth();
+
+    return () => {
+      window.removeEventListener('storage', checkAuth);
+      window.removeEventListener('auth-change', handleAuthChange);
+    };
+  }, []);
+
+  const handleProfileAction = async (action: string) => {
     switch (action) {
       case 'profile':
         console.log('Navigate to profile');
@@ -58,12 +95,26 @@ export const Profile: FC = () => {
         break;
       case 'logout':
         console.log('Logout user');
-        // TODO: Implement logout functionality
+        
+        // Logout and clear all auth data
+        await AuthService.logout();
+        toast.success('Logged out successfully');
+        
+        // Dispatch custom event to notify other components
+        window.dispatchEvent(new Event('auth-change'));
+        
+        // Redirect to root URL
+        window.location.href = '/';
         break;
       default:
         break;
     }
   };
+
+  // Don't render if not authenticated
+  if (!isAuthenticated || !currentUser) {
+    return null;
+  }
 
   return (
     <DropdownMenu>
@@ -75,7 +126,7 @@ export const Profile: FC = () => {
         >
           <img
             className="h-10 w-10 rounded-full object-cover border-2 border-border hover:border-primary transition-colors"
-            src={currentUser.avatar}
+            src={currentUser.avatar || '/default-avatar.png'}
             alt={`${currentUser.name}'s avatar`}
           />
         </Button>
@@ -85,10 +136,10 @@ export const Profile: FC = () => {
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">{currentUser.name}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              {currentUser.role}
+              {currentUser.role === 'admin' ? 'System Administrator' : currentUser.role}
             </p>
             <p className="text-xs leading-none text-muted-foreground">
-              {currentUser.department}
+              {currentUser.department || 'IT'}
             </p>
           </div>
         </DropdownMenuLabel>

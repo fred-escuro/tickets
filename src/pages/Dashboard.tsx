@@ -14,7 +14,7 @@ export const Dashboard: FC = () => {
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-12">
           {/* Main Content - Left Column */}
-          <div className="lg:col-span-8 space-y-4 sm:space-y-6">
+          <div className="lg:col-span-8 space-y-4 sm:gap-6">
             {/* Tickets Overview */}
             <Helpdesk />
             
@@ -30,7 +30,7 @@ export const Dashboard: FC = () => {
 
           {/* Sidebar - Right Column */}
           <div className="lg:col-span-4">
-            <div className="sticky top-32 space-y-4 sm:space-y-6">
+            <div className="sticky top-32 space-y-4 sm:gap-6">
               {/* API Connection Test */}
               <ApiTest />
               

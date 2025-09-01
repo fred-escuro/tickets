@@ -16,6 +16,7 @@ import { openAttachmentViewer } from '@/lib/attachmentViewer';
 
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { TicketService, type Ticket } from '@/lib/services/ticketService';
+import { AttachmentService } from '@/lib/services/attachmentService';
 import { useApi } from '@/hooks/useApi';
 import { 
   ArrowLeft, 
@@ -42,11 +43,13 @@ import {
   Paperclip,
   User,
   CheckSquare,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 import { useState, useEffect, type FC } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+
 
 const getStatusColor = (status: string) => {
   switch (status.toLowerCase()) {
@@ -699,16 +702,25 @@ const KnowledgeBaseCard: FC<{ article: any; index?: number }> = ({ article, inde
   </Card>
 );
 
-const NewTicketDialog: FC<{ autoOpen?: boolean; onOpenChange?: (open: boolean) => void }> = ({ 
+const NewTicketDialog: FC<{ 
+  autoOpen?: boolean; 
+  onOpenChange?: (open: boolean) => void;
+  isAuthenticated?: boolean;
+  onLoginRequired?: () => void;
+}> = ({ 
   autoOpen = false, 
-  onOpenChange 
+  onOpenChange,
+  isAuthenticated = false,
+  onLoginRequired
 }) => {
   const [open, setOpen] = useState(autoOpen);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     category: '',
-    priority: 'medium' as 'low' | 'medium' | 'high' | 'critical'
+    priority: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
+    dueDate: '',
+    tags: [] as string[]
   });
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -720,6 +732,10 @@ const NewTicketDialog: FC<{ autoOpen?: boolean; onOpenChange?: (open: boolean) =
   }, [autoOpen]);
 
   const handleOpenChange = (newOpen: boolean) => {
+    if (newOpen && !isAuthenticated) {
+      onLoginRequired?.();
+      return;
+    }
     setOpen(newOpen);
     onOpenChange?.(newOpen);
   };
@@ -735,30 +751,33 @@ const NewTicketDialog: FC<{ autoOpen?: boolean; onOpenChange?: (open: boolean) =
     setIsSubmitting(true);
     
     try {
-      // Simulate file upload
-      const uploadedAttachments = await Promise.all(
-        attachments.map(async (attachment) => {
-          // In a real app, you would upload the file to your server here
-          await new Promise(resolve => setTimeout(resolve, 500)); // Simulate upload delay
-          return {
-            id: attachment.id,
-            name: attachment.name,
-            size: attachment.size,
-            type: attachment.type,
-            url: URL.createObjectURL(attachment.file), // In real app, this would be the server URL
-            uploadedAt: new Date(),
-            uploadedBy: 'current-user'
-          };
-        })
-      );
-      
-      // Handle form submission
+      // Create ticket data for backend
       const ticketData = {
-        ...formData,
-        attachments: uploadedAttachments
+        title: formData.title.trim(),
+        description: formData.description,
+        category: formData.category,
+        priority: formData.priority,
+        dueDate: formData.dueDate || undefined,
+        tags: formData.tags
       };
+
+      // Create the ticket first
+      const ticketResponse = await TicketService.createTicket(ticketData);
       
-      console.log('New ticket:', ticketData);
+      if (!ticketResponse.success) {
+        throw new Error(ticketResponse.message || 'Failed to create ticket');
+      }
+
+      // If there are attachments, upload them
+      if (attachments.length > 0) {
+        try {
+          await AttachmentService.uploadFiles(attachments, ticketResponse.data.id);
+        } catch (uploadError) {
+          console.warn('Failed to upload some attachments:', uploadError);
+          toast.warning('Ticket created but some attachments failed to upload');
+        }
+      }
+
       toast.success('Support ticket created successfully!');
       handleOpenChange(false);
       
@@ -767,11 +786,17 @@ const NewTicketDialog: FC<{ autoOpen?: boolean; onOpenChange?: (open: boolean) =
         title: '',
         description: '',
         category: '',
-        priority: 'medium' as 'low' | 'medium' | 'high' | 'critical'
+        priority: 'MEDIUM',
+        dueDate: '',
+        tags: []
       });
       setAttachments([]);
+
+      // Refresh the tickets list
+      window.location.reload();
     } catch (error) {
-      toast.error('Failed to create ticket. Please try again.');
+      console.error('Failed to create ticket:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create ticket. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -809,27 +834,52 @@ const NewTicketDialog: FC<{ autoOpen?: boolean; onOpenChange?: (open: boolean) =
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                                  {['hardware', 'software', 'network', 'mobile', 'general'].map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category.charAt(0).toUpperCase() + category.slice(1)}
-                  </SelectItem>
-                ))}
+                  {['hardware', 'software', 'network', 'mobile', 'general'].map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category.charAt(0).toUpperCase() + category.slice(1)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="priority">Priority</Label>
-              <Select value={formData.priority} onValueChange={(value: 'low' | 'medium' | 'high' | 'critical') => setFormData(prev => ({ ...prev, priority: value }))}>
+              <Select value={formData.priority} onValueChange={(value: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL') => setFormData(prev => ({ ...prev, priority: value }))}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="CRITICAL">Critical</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="dueDate">Due Date (Optional)</Label>
+              <Input
+                id="dueDate"
+                type="date"
+                value={formData.dueDate}
+                onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tags">Tags (Optional)</Label>
+              <Input
+                id="tags"
+                placeholder="Enter tags separated by commas"
+                value={formData.tags.join(', ')}
+                onChange={(e) => {
+                  const tags = e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+                  setFormData(prev => ({ ...prev, tags }));
+                }}
+              />
             </div>
           </div>
           
@@ -884,7 +934,6 @@ export const HelpDeskPage: FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('tickets');
   const [autoOpenNewTicket, setAutoOpenNewTicket] = useState(false);
-  
   // Fetch tickets from backend API
   const { 
     data: ticketsData, 
@@ -893,7 +942,7 @@ export const HelpDeskPage: FC = () => {
     execute: fetchTickets 
   } = useApi(
     () => TicketService.getTickets(),
-    { autoExecute: true }
+    { autoExecute: true } // Auto-execute since we're now protected by ProtectedRoute
   );
 
   const tickets = ticketsData?.data || [];
@@ -995,6 +1044,7 @@ export const HelpDeskPage: FC = () => {
           </div>
         </PageSection>
 
+        {/* Tabs */}
         <PageSection index={3}>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="grid w-full grid-cols-3 max-w-md">
@@ -1175,6 +1225,8 @@ export const HelpDeskPage: FC = () => {
         </Tabs>
         </PageSection>
       </PageWrapper>
+      
+
     </div>
   );
 };

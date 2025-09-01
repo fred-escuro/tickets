@@ -6,6 +6,7 @@ import { ThemeProvider } from './components/ThemeProvider';
 import { ScrollToTop } from './components/ScrollToTop';
 import { FloatingHelpButton } from './components/FloatingHelpButton';
 import { Header } from './components/Header';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import { Dashboard } from './pages/Dashboard';
 import { HelpDeskPage } from './pages/HelpDeskPage';
 import { EmployeeDirectoryPage } from './pages/EmployeeDirectoryPage';
@@ -21,49 +22,65 @@ const AppRoutes: FC = () => {
       <Route
         path="/"
         element={
-          <Dashboard />
+          <ProtectedRoute pageTitle="Welcome to Dashboard" pageDescription="Please log in to access your dashboard and view analytics.">
+            <Dashboard />
+          </ProtectedRoute>
         }
       />
       <Route
         path="/tickets"
         element={
-          <HelpDeskPage />
+          <ProtectedRoute pageTitle="Welcome to TicketHub" pageDescription="Please log in to access the help desk and support system.">
+            <HelpDeskPage />
+          </ProtectedRoute>
         }
       />
       <Route
         path="/users"
         element={
-          <EmployeeDirectoryPage />
+          <ProtectedRoute pageTitle="Employee Directory" pageDescription="Please log in to view the employee directory and team information.">
+            <EmployeeDirectoryPage />
+          </ProtectedRoute>
         }
       />
       <Route
         path="/tasks"
         element={
-          <ProjectsPage />
+          <ProtectedRoute pageTitle="Project Management" pageDescription="Please log in to manage projects and track tasks.">
+            <ProjectsPage />
+          </ProtectedRoute>
         }
       />
       <Route
         path="/calendar"
         element={
-          <CalendarPage />
+          <ProtectedRoute pageTitle="Team Calendar" pageDescription="Please log in to view and manage team schedules.">
+            <CalendarPage />
+          </ProtectedRoute>
         }
       />
       <Route
         path="/reports"
         element={
-          <AnalyticsPage />
+          <ProtectedRoute pageTitle="Analytics & Reports" pageDescription="Please log in to view analytics and generate reports.">
+            <AnalyticsPage />
+          </ProtectedRoute>
         }
       />
       <Route
         path="/knowledge-base"
         element={
-          <ResourcesPage />
+          <ProtectedRoute pageTitle="Knowledge Base" pageDescription="Please log in to access the knowledge base and resources.">
+            <ResourcesPage />
+          </ProtectedRoute>
         }
       />
       <Route
         path="/settings"
         element={
-          <SettingsPage />
+          <ProtectedRoute pageTitle="Settings" pageDescription="Please log in to access your account settings and preferences.">
+            <SettingsPage />
+          </ProtectedRoute>
         }
       />
     </Routes>

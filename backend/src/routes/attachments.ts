@@ -94,14 +94,14 @@ router.post('/upload', authenticate, upload.single('file'), async (req, res) => 
       }
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: attachment,
       message: 'File uploaded successfully'
     });
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to upload file'
     });
@@ -133,13 +133,13 @@ router.get('/:id', authenticate, async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: attachment
     });
   } catch (error) {
     console.error('Get attachment error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get attachment'
     });
@@ -147,6 +147,7 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // Download attachment
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 router.get('/:id/download', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
@@ -178,9 +179,10 @@ router.get('/:id/download', authenticate, async (req, res) => {
     // Stream file to response
     const fileStream = fs.createReadStream(attachment.filePath);
     fileStream.pipe(res);
+    return; // File download - no JSON response
   } catch (error) {
     console.error('Download error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to download file'
     });
@@ -222,13 +224,13 @@ router.delete('/:id', authenticate, async (req, res) => {
       where: { id }
     });
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Attachment deleted successfully'
     });
   } catch (error) {
     console.error('Delete attachment error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to delete attachment'
     });
