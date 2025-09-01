@@ -57,8 +57,8 @@ export const AddCommentDialog: React.FC<AddCommentDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
+        <DialogHeader className="p-6 pb-2 border-b">
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
             {title}
@@ -75,7 +75,7 @@ export const AddCommentDialog: React.FC<AddCommentDialogProps> = ({
           )}
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Comment Editor */}
           <div className="space-y-2">
             <Label htmlFor="comment">Comment</Label>
@@ -104,24 +104,23 @@ export const AddCommentDialog: React.FC<AddCommentDialogProps> = ({
               ]}
             />
           </div>
-
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={handleClose}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={isSubmitting || !comment.trim()}
-              className="min-w-[100px]"
-            >
-              {isSubmitting ? 'Adding...' : 'Add Comment'}
-            </Button>
-          </div>
+        </div>
+        {/* Action Buttons - footer outside scroll */}
+        <div className="flex justify-end gap-3 p-6 border-t">
+          <Button
+            variant="outline"
+            onClick={handleClose}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={isSubmitting || !comment.trim()}
+            className="min-w-[100px]"
+          >
+            {isSubmitting ? 'Adding...' : 'Add Comment'}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

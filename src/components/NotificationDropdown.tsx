@@ -98,7 +98,7 @@ export const NotificationDropdown = () => {
         {unreadCount > 0 && (
           <Badge
             variant="destructive"
-            className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs"
+            className="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full p-0 text-[10px] leading-none flex items-center justify-center ring-2 ring-background shadow pointer-events-none text-white"
           >
             {unreadCount > 9 ? '9+' : unreadCount}
           </Badge>

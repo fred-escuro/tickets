@@ -11,7 +11,6 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { FileUpload, type FileAttachment } from '@/components/ui/file-upload';
 import { RichTextDisplay } from '@/components/ui/rich-text-display';
 import { AttachmentDisplay } from '@/components/ui/attachment-display';
-import { AttachmentList } from '@/components/ui/attachment-list';
 import { AddCommentDialog } from '@/components/ui/add-comment-dialog';
 import { openAttachmentViewer } from '@/lib/attachmentViewer';
 
@@ -42,13 +41,13 @@ import {
   Wifi,
   Settings,
   Smartphone,
-  File as FileIcon,
   ChevronRight,
   ChevronDown,
   Calendar,
   Paperclip,
   User,
-  CheckSquare
+  CheckSquare,
+  X
 } from 'lucide-react';
 import { useState, useEffect, type FC } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -213,68 +212,65 @@ const TicketCard: FC<{ ticket: HelpdeskTicket; index?: number }> = ({ ticket, in
   return (
     <>
       <Card 
-        className="group hover:shadow-xl hover:shadow-primary/10 hover:bg-gradient-to-br hover:from-muted/50 hover:to-muted/30 hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 duration-300 cursor-pointer border-border hover:border-primary/40 hover:ring-2 hover:ring-primary/20 relative overflow-hidden"
+        className="group hover:shadow-xl hover:bg-gradient-to-br hover:from-blue-50/60 hover:to-blue-100/30 dark:hover:from-white/5 dark:hover:to-white/[0.03] hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 duration-300 cursor-pointer border-border hover:border-primary/20 dark:hover:border-white/10 hover:ring-2 hover:ring-primary/10 dark:hover:ring-white/10 relative overflow-hidden"
         style={{ animationDelay: `${(index + 1) * 100}ms` }}
         onClick={() => setShowDetails(true)}
       >
         {/* Gradient overlay on hover */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-200/20 to-transparent dark:from-white/5 dark:to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
         
         <CardContent className="p-5 relative">
           <div className="space-y-4">
-            {/* Header with category, title, and badges */}
-            <div className="flex items-start justify-between">
-              <div className="space-y-2 min-w-0 flex-1">
-                <div className="flex items-center gap-3">
-                  <div className="group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg">
-                    {getCategoryIcon(ticket.category)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-base truncate group-hover:text-primary transition-colors duration-300">{ticket.title}</h3>
-                    <p className="text-sm text-muted-foreground font-mono">#{ticket.id}</p>
-                  </div>
+            {/* Header with category, title, and ticket number */}
+            <div className="flex items-start gap-3">
+              <div className="group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg">
+                {getCategoryIcon(ticket.category)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-base truncate group-hover:text-primary transition-colors duration-300">{ticket.title}</h3>
+                <p className="text-sm text-muted-foreground font-mono">#{ticket.id}</p>
+              </div>
+            </div>
+            
+            {/* Status badges row */}
+            <div className="flex flex-row gap-2 items-center">
+              <Badge className={`${getStatusColor(ticket.status)} border text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
+                <div className="flex items-center gap-1">
+                  {getStatusIcon(ticket.status)}
+                  <span className="capitalize font-medium">{ticket.status}</span>
                 </div>
-              </div>
-              <div className="flex flex-col gap-2 items-end">
-                <Badge className={`${getStatusColor(ticket.status)} border text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
+              </Badge>
+              <Badge className={`${getPriorityColor(ticket.priority)} text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm font-medium`}>
+                {ticket.priority.toUpperCase()}
+              </Badge>
+              {ticket.comments && ticket.comments.length > 0 && (
+                <Badge variant="secondary" className="text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm">
                   <div className="flex items-center gap-1">
-                    {getStatusIcon(ticket.status)}
-                    <span className="capitalize font-medium">{ticket.status}</span>
+                    <MessageSquare className="h-3 w-3" />
+                    <span className="font-medium">{ticket.comments.length}</span>
                   </div>
                 </Badge>
-                <Badge className={`${getPriorityColor(ticket.priority)} text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm font-medium`}>
-                  {ticket.priority.toUpperCase()}
+              )}
+              {ticket.attachments && ticket.attachments.length > 0 && (
+                <Badge variant="secondary" className="text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm">
+                  <div className="flex items-center gap-1">
+                    <Paperclip className="h-3 w-3" />
+                    <span className="font-medium">{ticket.attachments.length}</span>
+                  </div>
                 </Badge>
-                {ticket.comments && ticket.comments.length > 0 && (
-                  <Badge variant="secondary" className="text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm">
-                    <div className="flex items-center gap-1">
-                      <MessageSquare className="h-3 w-3" />
-                      <span className="font-medium">{ticket.comments.length}</span>
-                    </div>
-                  </Badge>
-                )}
-              </div>
+              )}
             </div>
             
             {/* Description and attachments */}
             <div className="space-y-3">
               <div 
-                className="text-sm line-clamp-3 prose prose-sm max-w-none group-hover:text-foreground/90 transition-colors duration-300 bg-muted/30 p-3 rounded-lg"
+                className="text-[10px] prose prose-[10px] max-w-none group-hover:text-foreground/90 transition-colors duration-300 bg-muted/30 p-3 rounded-lg max-h-20 overflow-y-auto scrollbar-thin"
+                style={{ scrollbarWidth: 'thin' }}
                 dangerouslySetInnerHTML={{ 
-                  __html: ticket.description.length > 300 
-                    ? ticket.description.substring(0, 300) + '...' 
-                    : ticket.description 
+                  __html: ticket.description
                 }}
               />
-              {ticket.attachments && ticket.attachments.length > 0 && (
-                <div className="bg-background/50 rounded-lg p-2">
-                  <AttachmentList 
-                    attachments={ticket.attachments} 
-                    compact={true}
-                    className="text-xs"
-                  />
-                </div>
-              )}
+
             </div>
             
             {/* Footer with metadata and action buttons */}
@@ -327,12 +323,23 @@ const TicketCard: FC<{ ticket: HelpdeskTicket; index?: number }> = ({ ticket, in
         <DialogContent className="sm:max-w-4xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
           {/* Sticky Header */}
           <div className="sticky top-0 bg-background border-b p-6 z-10 rounded-t-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                {getCategoryIcon(ticket.category)}
-                {ticket.title}
-              </DialogTitle>
-            </DialogHeader>
+            <div className="flex items-start justify-between">
+              <DialogHeader className="flex-1">
+                <DialogTitle className="flex items-center gap-2">
+                  {getCategoryIcon(ticket.category)}
+                  {ticket.title}
+                </DialogTitle>
+              </DialogHeader>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDetails(false)}
+                className="h-8 w-8 p-0 hover:bg-muted/50 rounded-full"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
             
             {/* Ticket Info Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
@@ -432,11 +439,11 @@ const TicketCard: FC<{ ticket: HelpdeskTicket; index?: number }> = ({ ticket, in
                      const isExpanded = expandedDates.has(itemKey);
                      
                      return (
-                       <div key={itemKey} className="border border-border rounded-lg overflow-hidden bg-background shadow-sm">
+                       <div key={itemKey} className="border border-border rounded-lg overflow-hidden bg-background/80 shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/30 hover:bg-muted/30 dark:hover:bg-white/[0.04] group">
                          {/* Item Header */}
                          <button
                            onClick={() => toggleDateExpansion(itemKey)}
-                           className="w-full flex items-center justify-between p-4 bg-muted/20 hover:bg-muted/40 hover:shadow-sm transition-all duration-200 group border-b border-border"
+                           className="w-full flex items-center justify-between p-4 bg-transparent group-hover:bg-muted/30 dark:group-hover:bg-white/[0.04] hover:shadow-sm transition-all duration-200 border-b border-border group-hover:border-primary/20 relative before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-primary/0 group-hover:before:bg-primary/40"
                          >
                            <div className="flex items-center gap-3">
                              <div className="flex items-center gap-2">
@@ -488,7 +495,7 @@ const TicketCard: FC<{ ticket: HelpdeskTicket; index?: number }> = ({ ticket, in
                          {/* Item Content */}
                          {isExpanded && (
                            <div className="p-4">
-                             <div className="border-l-2 border-primary/20 pl-4 hover:bg-muted/20 hover:border-primary/40 rounded-r-lg transition-all duration-200 group/item">
+                             <div className="border-l-2 border-primary/20 pl-4 hover:bg-muted/20 hover:border-primary/40 group-hover:bg-muted/20 group-hover:border-primary/30 rounded-r-lg transition-all duration-200 group/item">
                                {item.type === 'issue' ? (
                                  // Original Issue
                                  <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
