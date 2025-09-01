@@ -90,6 +90,16 @@ export interface TicketTrendData {
 }
 
 // Helpdesk Types
+export interface TicketAttachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+  uploadedAt: Date;
+  uploadedBy: string;
+}
+
 export interface HelpdeskTicket {
   id: string;
   title: string;
@@ -106,7 +116,7 @@ export interface HelpdeskTicket {
   resolution?: string;
   satisfaction?: number;
   tags?: string[];
-  attachments?: string[];
+  attachments?: TicketAttachment[];
   comments?: HelpdeskComment[];
 }
 
@@ -117,6 +127,7 @@ export interface HelpdeskComment {
   content: string;
   timestamp: Date;
   isInternal: boolean;
+  attachments?: TicketAttachment[];
 }
 
 export interface HelpdeskCategory {
@@ -554,7 +565,7 @@ export const helpdeskTickets: HelpdeskTicket[] = [
   {
     id: 'HT-001',
     title: 'Cannot access company email',
-    description: 'I\'m unable to log into my email account. Getting authentication errors.',
+    description: '<p>I\'m experiencing issues with my company email account. Here are the details:</p><ul><li><strong>Error Message:</strong> "Authentication failed. Please check your credentials."</li><li><strong>Browser:</strong> Chrome (latest version)</li><li><strong>Time:</strong> Started this morning at 9:00 AM</li></ul><p>I\'ve tried the following troubleshooting steps:</p><ol><li>Cleared browser cache and cookies</li><li>Reset my password through the self-service portal</li><li>Tried accessing from different browsers (Firefox, Edge)</li></ol><p>None of these steps resolved the issue. I need immediate access to my email for an important client meeting this afternoon.</p><p>Please see the attached screenshot of the error message.</p>',
     category: 'access',
     priority: 'high',
     status: 'in-progress',
@@ -563,19 +574,118 @@ export const helpdeskTickets: HelpdeskTicket[] = [
     assignedTo: 'John Support',
     assignedAt: new Date('2025-01-22T09:15:00'),
     dueDate: new Date('2025-01-25T17:00:00'),
-    tags: ['email', 'authentication', 'urgent']
+    tags: ['email', 'authentication', 'urgent'],
+    attachments: [
+      {
+        id: 'att-001',
+        name: 'error-screenshot.png',
+        size: 245760,
+        type: 'image/png',
+        url: 'https://via.placeholder.com/800x600/ff6b6b/ffffff?text=Error+Screenshot',
+        uploadedAt: new Date('2025-01-22T09:05:00'),
+        uploadedBy: 'Emma Customer'
+      },
+      {
+        id: 'att-002',
+        name: 'browser-details.pdf',
+        size: 102400,
+        type: 'application/pdf',
+        url: 'https://via.placeholder.com/800x600/4ecdc4/ffffff?text=Browser+Details+PDF',
+        uploadedAt: new Date('2025-01-22T09:10:00'),
+        uploadedBy: 'Emma Customer'
+      }
+    ],
+    comments: [
+      {
+        id: 'com-001',
+        ticketId: 'HT-001',
+        author: 'John Support',
+        content: '<p>Thank you for the detailed information and screenshots. I can see the authentication error you\'re experiencing.</p><p>I\'ve checked your account status and found that your email account was temporarily locked due to multiple failed login attempts. This is a security measure.</p><p><strong>Action taken:</strong></p><ul><li>Unlocked your email account</li><li>Reset your password to a temporary one</li><li>Sent the new password to your backup email</li></ul><p>Please check your backup email for the temporary password and let me know if you can access your account now.</p>',
+        timestamp: new Date('2025-01-22T09:30:00'),
+        isInternal: false
+      },
+      {
+        id: 'com-002',
+        ticketId: 'HT-001',
+        author: 'Emma Customer',
+        content: '<p>Thank you John! I received the temporary password and was able to access my email successfully. I\'ve also changed it to a new secure password as recommended.</p><p>Everything is working perfectly now. I appreciate the quick response!</p>',
+        timestamp: new Date('2025-01-22T10:15:00'),
+        isInternal: false
+      },
+      {
+        id: 'com-003',
+        ticketId: 'HT-001',
+        author: 'John Support',
+        content: '<p>Excellent! I\'m glad we could resolve this quickly. I\'ve also enabled two-factor authentication on your account to prevent similar issues in the future.</p><p>Please check your email for the 2FA setup instructions. Let me know if you need any help with the setup.</p>',
+        timestamp: new Date('2025-01-22T10:45:00'),
+        isInternal: false
+      },
+      {
+        id: 'com-004',
+        ticketId: 'HT-001',
+        author: 'Sarah Tech',
+        content: '<p>Internal Note: Account security has been enhanced. Monitoring for any suspicious activity.</p>',
+        timestamp: new Date('2025-01-22T11:00:00'),
+        isInternal: true
+      }
+    ]
   },
   {
     id: 'HT-002',
     title: 'Laptop running very slow',
-    description: 'My laptop has been extremely slow for the past week. Takes forever to open applications.',
+    description: '<p>My laptop has been experiencing severe performance issues for the past week. Here\'s what I\'ve observed:</p><h3>Performance Issues:</h3><ul><li><strong>Startup time:</strong> Takes 5+ minutes to fully boot</li><li><strong>Application loading:</strong> 30-60 seconds to open basic apps like Word or Excel</li><li><strong>System responsiveness:</strong> 10-15 second delays when clicking buttons</li><li><strong>Fan noise:</strong> Constantly running at high speed</li></ul><h3>System Information:</h3><ul><li><strong>Model:</strong> Dell Latitude 5520</li><li><strong>OS:</strong> Windows 11 Pro</li><li><strong>RAM:</strong> 16GB</li><li><strong>Storage:</strong> 512GB SSD (showing 85% full)</li></ul><p>I\'ve already tried:</p><ol><li>Restarting the computer multiple times</li><li>Running Windows Defender scan (no threats found)</li><li>Clearing temporary files</li><li>Updating Windows</li></ol><p>This is affecting my productivity significantly. Please help!</p>',
     category: 'hardware',
     priority: 'medium',
     status: 'open',
     submittedBy: 'Alex Manager',
     submittedAt: new Date('2025-01-22T10:30:00'),
     dueDate: new Date('2025-01-26T17:00:00'),
-    tags: ['performance', 'laptop', 'slow']
+    tags: ['performance', 'laptop', 'slow'],
+    attachments: [
+      {
+        id: 'att-003',
+        name: 'task-manager-screenshot.png',
+        size: 189440,
+        type: 'image/png',
+        url: 'https://via.placeholder.com/800x600/45b7d1/ffffff?text=Task+Manager+Screenshot',
+        uploadedAt: new Date('2025-01-22T10:35:00'),
+        uploadedBy: 'Alex Manager'
+      }
+    ],
+    comments: [
+      {
+        id: 'com-005',
+        ticketId: 'HT-002',
+        author: 'Mike Hardware',
+        content: '<p>Hi Alex, I\'ve reviewed your laptop performance issue. Based on the task manager screenshot, I can see several potential causes:</p><ul><li><strong>High CPU usage</strong> from background processes</li><li><strong>Low available RAM</strong> (only 2GB free out of 16GB)</li><li><strong>Disk space</strong> is at 85% capacity</li></ul><p>Let\'s start with some immediate fixes:</p><ol><li>Close unnecessary applications and browser tabs</li><li>Run Disk Cleanup to free up space</li><li>Restart your computer</li></ol><p>I\'ll schedule a remote session tomorrow to perform a deeper analysis.</p>',
+        timestamp: new Date('2025-01-22T11:00:00'),
+        isInternal: false
+      },
+      {
+        id: 'com-006',
+        ticketId: 'HT-002',
+        author: 'Alex Manager',
+        content: '<p>Thanks Mike! I\'ve tried those steps and it\'s running a bit better now. I freed up about 10GB of space and closed some unnecessary programs.</p><p>However, it\'s still slower than normal. Looking forward to the remote session tomorrow.</p>',
+        timestamp: new Date('2025-01-22T14:30:00'),
+        isInternal: false
+      },
+      {
+        id: 'com-007',
+        ticketId: 'HT-002',
+        author: 'Mike Hardware',
+        content: '<p>Great progress! I\'ve scheduled the remote session for tomorrow at 10:00 AM. I\'ll also bring some diagnostic tools to check for:</p><ul><li>Hardware health (SSD, RAM)</li><li>Background services</li><li>Startup programs</li><li>Driver updates</li></ul><p>Please make sure your laptop is connected to the network and you\'re available for the session.</p>',
+        timestamp: new Date('2025-01-22T15:00:00'),
+        isInternal: false
+      },
+      {
+        id: 'com-008',
+        ticketId: 'HT-002',
+        author: 'Lisa Network',
+        content: '<p>Internal Note: Checked network logs - no connectivity issues detected. Performance issue appears to be local to the device.</p>',
+        timestamp: new Date('2025-01-22T16:00:00'),
+        isInternal: true
+      }
+    ]
   },
   {
     id: 'HT-003',
@@ -591,7 +701,49 @@ export const helpdeskTickets: HelpdeskTicket[] = [
     resolvedAt: new Date('2025-01-22T08:00:00'),
     resolution: 'Replaced toner cartridge and updated drivers.',
     satisfaction: 5,
-    tags: ['printer', 'conference-room']
+    tags: ['printer', 'conference-room'],
+    comments: [
+      {
+        id: 'com-009',
+        ticketId: 'HT-003',
+        author: 'Mike Hardware',
+        content: '<p>Hi David, I\'ve received your printer issue report. I\'ll check the printer in Conference Room B this afternoon.</p><p>Can you confirm if the printer is showing any error messages on the display?</p>',
+        timestamp: new Date('2025-01-21T14:45:00'),
+        isInternal: false
+      },
+      {
+        id: 'com-010',
+        ticketId: 'HT-003',
+        author: 'David Security',
+        content: '<p>Yes, the printer shows "Toner Low" and "Paper Jam" messages. I tried to clear the paper jam but it\'s still not working.</p>',
+        timestamp: new Date('2025-01-21T15:30:00'),
+        isInternal: false
+      },
+      {
+        id: 'com-011',
+        ticketId: 'HT-003',
+        author: 'Mike Hardware',
+        content: '<p>Thanks for the details. I\'ll bring replacement toner and tools to fix the paper jam. I\'ll be there around 4:00 PM today.</p>',
+        timestamp: new Date('2025-01-21T16:00:00'),
+        isInternal: false
+      },
+      {
+        id: 'com-012',
+        ticketId: 'HT-003',
+        author: 'Mike Hardware',
+        content: '<p>Issue resolved! I\'ve:</p><ul><li>Cleared the paper jam</li><li>Replaced the toner cartridge</li><li>Updated the printer drivers</li><li>Tested with a sample print job</li></ul><p>The printer is now working perfectly. Please test it when you get a chance.</p>',
+        timestamp: new Date('2025-01-22T08:30:00'),
+        isInternal: false
+      },
+      {
+        id: 'com-013',
+        ticketId: 'HT-003',
+        author: 'David Security',
+        content: '<p>Perfect! I just tested the printer and it\'s working great. Thanks for the quick fix, Mike!</p>',
+        timestamp: new Date('2025-01-22T09:00:00'),
+        isInternal: false
+      }
+    ]
   },
   {
     id: 'HT-004',

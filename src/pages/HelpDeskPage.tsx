@@ -7,6 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { FileUpload, type FileAttachment } from '@/components/ui/file-upload';
+import { RichTextDisplay } from '@/components/ui/rich-text-display';
+import { AttachmentDisplay } from '@/components/ui/attachment-display';
+import { AttachmentList } from '@/components/ui/attachment-list';
+import { AddCommentDialog } from '@/components/ui/add-comment-dialog';
+import { openAttachmentViewer } from '@/lib/attachmentViewer';
 
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { 
@@ -34,7 +41,14 @@ import {
   Monitor,
   Wifi,
   Settings,
-  Smartphone
+  Smartphone,
+  File as FileIcon,
+  ChevronRight,
+  ChevronDown,
+  Calendar,
+  Paperclip,
+  User,
+  CheckSquare
 } from 'lucide-react';
 import { useState, useEffect, type FC } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -112,44 +126,539 @@ const formatDate = (date: Date) => {
   }).format(date);
 };
 
-const TicketCard: FC<{ ticket: HelpdeskTicket; index?: number }> = ({ ticket, index = 0 }) => (
-  <Card 
-    className="hover:shadow-md transition-shadow animate-in fade-in slide-in-from-bottom-4 duration-300"
-    style={{ animationDelay: `${(index + 1) * 100}ms` }}
-  >
-    <CardContent className="p-4">
-      <div className="space-y-3">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1 min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              {getCategoryIcon(ticket.category)}
-              <h3 className="font-medium truncate">{ticket.title}</h3>
-            </div>
-            <p className="text-sm text-muted-foreground">#{ticket.id}</p>
-          </div>
-          <div className="flex flex-col gap-2 items-end">
-            <Badge className={`${getStatusColor(ticket.status)} border text-xs`}>
-              <div className="flex items-center gap-1">
-                {getStatusIcon(ticket.status)}
-                <span className="capitalize">{ticket.status}</span>
+const TicketCard: FC<{ ticket: HelpdeskTicket; index?: number }> = ({ ticket, index = 0 }) => {
+  const [showDetails, setShowDetails] = useState(false);
+  const [showAddComment, setShowAddComment] = useState(false);
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+
+  // Create a unified timeline including original issue and comments
+  const createTimeline = () => {
+    const timeline: Array<{
+      type: 'issue' | 'comment';
+      dateKey: string;
+      data: any;
+      timestamp: Date;
+    }> = [];
+
+    // Add original issue
+    const issueDateKey = new Date(ticket.submittedAt).toDateString();
+    timeline.push({
+      type: 'issue',
+      dateKey: issueDateKey,
+      data: ticket,
+      timestamp: ticket.submittedAt
+    });
+
+    // Add comments
+    if (ticket.comments) {
+      ticket.comments.forEach(comment => {
+        const commentDateKey = new Date(comment.timestamp).toDateString();
+        timeline.push({
+          type: 'comment',
+          dateKey: commentDateKey,
+          data: comment,
+          timestamp: comment.timestamp
+        });
+      });
+    }
+
+    // Sort by timestamp (latest first)
+    timeline.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+    // Group by date
+    const grouped = timeline.reduce((groups, item) => {
+      if (!groups[item.dateKey]) {
+        groups[item.dateKey] = [];
+      }
+      groups[item.dateKey].push(item);
+      return groups;
+    }, {} as Record<string, typeof timeline>);
+
+    return grouped;
+  };
+
+  const groupedTimeline = createTimeline();
+
+  const toggleDateExpansion = (dateKey: string) => {
+    const newExpanded = new Set(expandedDates);
+    if (newExpanded.has(dateKey)) {
+      newExpanded.delete(dateKey);
+    } else {
+      newExpanded.add(dateKey);
+    }
+    setExpandedDates(newExpanded);
+  };
+
+  const expandAllDates = () => {
+    const allItemKeys = Object.values(groupedTimeline).flat().map((item, index) => `${item.type}-${index}`);
+    setExpandedDates(new Set(allItemKeys));
+  };
+
+  const collapseAllDates = () => {
+    setExpandedDates(new Set());
+  };
+
+  const handleAddComment = async (commentData: { content: string; attachments: FileAttachment[] }) => {
+    // Simulate comment submission
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // In a real app, you would submit the comment to your server
+    console.log('New comment for ticket', ticket.id, ':', commentData);
+    
+    // Refresh the ticket details or update the local state
+    // For now, we'll just show a success message
+  };
+
+  return (
+    <>
+      <Card 
+        className="group hover:shadow-xl hover:shadow-primary/10 hover:bg-gradient-to-br hover:from-muted/50 hover:to-muted/30 hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 duration-300 cursor-pointer border-border hover:border-primary/40 hover:ring-2 hover:ring-primary/20 relative overflow-hidden"
+        style={{ animationDelay: `${(index + 1) * 100}ms` }}
+        onClick={() => setShowDetails(true)}
+      >
+        {/* Gradient overlay on hover */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+        
+        <CardContent className="p-5 relative">
+          <div className="space-y-4">
+            {/* Header with category, title, and badges */}
+            <div className="flex items-start justify-between">
+              <div className="space-y-2 min-w-0 flex-1">
+                <div className="flex items-center gap-3">
+                  <div className="group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg">
+                    {getCategoryIcon(ticket.category)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-base truncate group-hover:text-primary transition-colors duration-300">{ticket.title}</h3>
+                    <p className="text-sm text-muted-foreground font-mono">#{ticket.id}</p>
+                  </div>
+                </div>
               </div>
-            </Badge>
-            <Badge className={`${getPriorityColor(ticket.priority)} text-xs`}>
-              {ticket.priority.toUpperCase()}
-            </Badge>
+              <div className="flex flex-col gap-2 items-end">
+                <Badge className={`${getStatusColor(ticket.status)} border text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
+                  <div className="flex items-center gap-1">
+                    {getStatusIcon(ticket.status)}
+                    <span className="capitalize font-medium">{ticket.status}</span>
+                  </div>
+                </Badge>
+                <Badge className={`${getPriorityColor(ticket.priority)} text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm font-medium`}>
+                  {ticket.priority.toUpperCase()}
+                </Badge>
+                {ticket.comments && ticket.comments.length > 0 && (
+                  <Badge variant="secondary" className="text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm">
+                    <div className="flex items-center gap-1">
+                      <MessageSquare className="h-3 w-3" />
+                      <span className="font-medium">{ticket.comments.length}</span>
+                    </div>
+                  </Badge>
+                )}
+              </div>
+            </div>
+            
+            {/* Description and attachments */}
+            <div className="space-y-3">
+              <div 
+                className="text-sm line-clamp-3 prose prose-sm max-w-none group-hover:text-foreground/90 transition-colors duration-300 bg-muted/30 p-3 rounded-lg"
+                dangerouslySetInnerHTML={{ 
+                  __html: ticket.description.length > 300 
+                    ? ticket.description.substring(0, 300) + '...' 
+                    : ticket.description 
+                }}
+              />
+              {ticket.attachments && ticket.attachments.length > 0 && (
+                <div className="bg-background/50 rounded-lg p-2">
+                  <AttachmentList 
+                    attachments={ticket.attachments} 
+                    compact={true}
+                    className="text-xs"
+                  />
+                </div>
+              )}
+            </div>
+            
+            {/* Footer with metadata and action buttons */}
+            <div className="flex items-center justify-between pt-2 border-t border-border/50">
+              <div className="flex items-center gap-4 text-xs text-muted-foreground group-hover:text-muted-foreground/80 transition-colors duration-300">
+                <span className="group-hover:translate-x-1 transition-transform duration-300 flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  {formatDate(ticket.submittedAt)}
+                </span>
+                {ticket.assignedTo && (
+                  <span className="group-hover:translate-x-1 transition-transform duration-300 flex items-center gap-1">
+                    <User className="h-3 w-3" />
+                    {ticket.assignedTo}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAddComment(true);
+                  }}
+                  className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary"
+                  title="Add Comment"
+                >
+                  <MessageSquare className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAddTask(true);
+                  }}
+                  className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary"
+                  title="Add Task"
+                >
+                  <CheckSquare className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
           </div>
-        </div>
-        
-        <p className="text-sm line-clamp-2">{ticket.description}</p>
-        
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Created {formatDate(ticket.submittedAt)}</span>
-          {ticket.assignedTo && <span>Assigned to {ticket.assignedTo}</span>}
-        </div>
-      </div>
-    </CardContent>
-  </Card>
-);
+        </CardContent>
+      </Card>
+
+      {/* Ticket Details Dialog */}
+      <Dialog open={showDetails} onOpenChange={setShowDetails}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
+          {/* Sticky Header */}
+          <div className="sticky top-0 bg-background border-b p-6 z-10 rounded-t-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {getCategoryIcon(ticket.category)}
+                {ticket.title}
+              </DialogTitle>
+            </DialogHeader>
+            
+            {/* Ticket Info Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Ticket ID</p>
+                <p className="text-sm font-medium">#{ticket.id}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Status</p>
+                <Badge className={`${getStatusColor(ticket.status)} text-xs`}>
+                  {ticket.status}
+                </Badge>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Priority</p>
+                <Badge className={`${getPriorityColor(ticket.priority)} text-xs`}>
+                  {ticket.priority}
+                </Badge>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Category</p>
+                <p className="text-sm">{ticket.category}</p>
+              </div>
+            </div>
+            
+            {/* User and Date Info */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Created By</p>
+                <p className="text-sm font-medium">{ticket.submittedBy}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Date Created</p>
+                <p className="text-sm">{formatDate(ticket.submittedAt)}</p>
+              </div>
+              {ticket.assignedTo && (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Assigned To</p>
+                  <p className="text-sm">{ticket.assignedTo}</p>
+                </div>
+              )}
+              {ticket.dueDate && (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Due Date</p>
+                  <p className="text-sm">{formatDate(ticket.dueDate)}</p>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 rounded-b-lg">
+
+            {/* Timeline View - Comments and Original Issue */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">
+                  Timeline ({Object.values(groupedTimeline).flat().length} items)
+                </h4>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => setShowAddComment(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    Add Comment
+                  </Button>
+                </div>
+              </div>
+               
+              {/* Timeline Controls */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={expandAllDates}
+                      className="text-xs"
+                    >
+                      Expand All
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={collapseAllDates}
+                      className="text-xs"
+                    >
+                      Collapse All
+                    </Button>
+                  </div>
+                </div>
+               
+               {/* Timeline Tree View */}
+               <div className="space-y-2">
+                   {Object.values(groupedTimeline).flat().map((item, index) => {
+                     const itemKey = `${item.type}-${index}`;
+                     const isExpanded = expandedDates.has(itemKey);
+                     
+                     return (
+                       <div key={itemKey} className="border border-border rounded-lg overflow-hidden bg-background shadow-sm">
+                         {/* Item Header */}
+                         <button
+                           onClick={() => toggleDateExpansion(itemKey)}
+                           className="w-full flex items-center justify-between p-4 bg-muted/20 hover:bg-muted/40 hover:shadow-sm transition-all duration-200 group border-b border-border"
+                         >
+                           <div className="flex items-center gap-3">
+                             <div className="flex items-center gap-2">
+                               {item.type === 'issue' ? (
+                                 <div className="h-5 w-5 bg-primary/10 rounded flex items-center justify-center">
+                                   <span className="text-xs">📋</span>
+                                 </div>
+                               ) : (
+                                 <MessageSquare className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors duration-200" />
+                               )}
+                               <div className="flex items-center gap-2">
+                                 <span className="font-semibold text-sm group-hover:text-primary transition-colors duration-200">
+                                   {item.type === 'issue' ? (
+                                     `Original Issue - ${item.data.submittedBy}`
+                                   ) : (
+                                     `Comment - ${item.data.author}${item.data.isInternal ? ' (Internal)' : ''}`
+                                   )}
+                                 </span>
+                                 <span className="text-xs text-muted-foreground">
+                                   {item.type === 'issue' ? formatDate(item.data.submittedAt) : formatDate(item.data.timestamp)}
+                                 </span>
+                               </div>
+                             </div>
+                           </div>
+                           <div className="flex items-center gap-2">
+                             {/* Attachment Icon */}
+                             {((item.type === 'issue' && item.data.attachments && item.data.attachments.length > 0) ||
+                               (item.type === 'comment' && item.data.attachments && item.data.attachments.length > 0)) && (
+                               <button
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   const attachments = item.data.attachments || [];
+                                   openAttachmentViewer(attachments, 0);
+                                 }}
+                                 className="p-1 hover:bg-muted/50 rounded transition-colors duration-200"
+                                 title={`View ${item.data.attachments?.length || 0} attachment${(item.data.attachments?.length || 0) !== 1 ? 's' : ''}`}
+                               >
+                                 <Paperclip className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors duration-200" />
+                               </button>
+                             )}
+                             {isExpanded ? (
+                               <ChevronDown className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-200" />
+                             ) : (
+                               <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-200" />
+                             )}
+                           </div>
+                         </button>
+                         
+                         {/* Item Content */}
+                         {isExpanded && (
+                           <div className="p-4">
+                             <div className="border-l-2 border-primary/20 pl-4 hover:bg-muted/20 hover:border-primary/40 rounded-r-lg transition-all duration-200 group/item">
+                               {item.type === 'issue' ? (
+                                 // Original Issue
+                                 <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+                                   <div className="flex items-center justify-between mb-3">
+                                     <div className="flex items-center gap-3">
+                                       <div className="flex items-center gap-2">
+                                         <Badge variant="default" className="text-xs bg-primary text-primary-foreground">
+                                           <div className="flex items-center gap-1">
+                                             <span>📋</span>
+                                             <span>Original Issue</span>
+                                           </div>
+                                         </Badge>
+                                         <div className="flex items-center gap-1">
+                                           <span className="text-sm font-semibold text-primary">{item.data.submittedBy}</span>
+                                           <span className="text-xs text-muted-foreground">•</span>
+                                           <span className="text-xs text-muted-foreground">Ticket Creator</span>
+                                         </div>
+                                       </div>
+                                     </div>
+                                     <div className="flex items-center gap-2">
+                                       <span className="text-xs text-muted-foreground">
+                                         Created {formatDate(item.data.submittedAt)}
+                                       </span>
+                                     </div>
+                                   </div>
+                                   <div className="bg-background rounded-lg border border-border p-3 mb-3">
+                                     <RichTextDisplay content={item.data.description} />
+                                   </div>
+                                   {item.data.attachments && item.data.attachments.length > 0 && (
+                                     <div>
+                                       <AttachmentDisplay attachments={item.data.attachments} />
+                                     </div>
+                                   )}
+                                 </div>
+                               ) : (
+                                 // Comment
+                                 <div className="bg-muted/20 border border-muted/30 rounded-lg p-4">
+                                   <div className="flex items-center justify-between mb-3">
+                                     <div className="flex items-center gap-3">
+                                       <div className="flex items-center gap-2">
+                                         <Badge variant="secondary" className="text-xs">
+                                           <div className="flex items-center gap-1">
+                                             <MessageSquare className="h-3 w-3" />
+                                             <span>Comment</span>
+                                           </div>
+                                         </Badge>
+                                         <div className="flex items-center gap-1">
+                                           <span className="text-sm font-semibold">{item.data.author}</span>
+                                           {item.data.isInternal && (
+                                             <>
+                                               <span className="text-xs text-muted-foreground">•</span>
+                                               <Badge variant="outline" className="text-xs">
+                                                 Internal
+                                               </Badge>
+                                             </>
+                                           )}
+                                         </div>
+                                       </div>
+                                     </div>
+                                     <div className="flex items-center gap-2">
+                                       <span className="text-xs text-muted-foreground">
+                                         {formatDate(item.data.timestamp)}
+                                       </span>
+                                     </div>
+                                   </div>
+                                   <div className="bg-background rounded-lg border border-border p-3 mb-3">
+                                     <RichTextDisplay content={item.data.content} />
+                                   </div>
+                                   {item.data.attachments && item.data.attachments.length > 0 && (
+                                     <div>
+                                       <AttachmentDisplay attachments={item.data.attachments} />
+                                     </div>
+                                   )}
+                                 </div>
+                               )}
+                             </div>
+                           </div>
+                         )}
+                       </div>
+                     );
+                   })}
+                 </div>
+               </div>
+             </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Comment Dialog */}
+      <AddCommentDialog
+        isOpen={showAddComment}
+        onClose={() => setShowAddComment(false)}
+        onSubmit={handleAddComment}
+        ticketId={ticket.id}
+        ticketTitle={ticket.title}
+        title="Add Comment to Ticket"
+        placeholder="Add your comment to this ticket..."
+      />
+
+      {/* Add Task Dialog */}
+      <Dialog open={showAddTask} onOpenChange={setShowAddTask}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckSquare className="h-5 w-5" />
+              Add Task to Ticket #{ticket.id}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="task-title">Task Title</Label>
+              <Input
+                id="task-title"
+                placeholder="Enter task title"
+                className="w-full"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="task-description">Description</Label>
+              <Textarea
+                id="task-description"
+                placeholder="Describe the task..."
+                className="min-h-[100px]"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="task-priority">Priority</Label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="task-assignee">Assignee</Label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select assignee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="john">John Support</SelectItem>
+                    <SelectItem value="sarah">Sarah Tech</SelectItem>
+                    <SelectItem value="mike">Mike Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="outline" onClick={() => setShowAddTask(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => {
+                toast.success('Task added successfully!');
+                setShowAddTask(false);
+              }}>
+                Add Task
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+};
 
 const KnowledgeBaseCard: FC<{ article: HelpdeskKnowledgeBase; index?: number }> = ({ article, index = 0 }) => (
   <Card 
@@ -199,8 +708,10 @@ const NewTicketDialog: FC<{ autoOpen?: boolean; onOpenChange?: (open: boolean) =
     title: '',
     description: '',
     category: '',
-    priority: 'medium'
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'critical'
   });
+  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (autoOpen) {
@@ -213,7 +724,7 @@ const NewTicketDialog: FC<{ autoOpen?: boolean; onOpenChange?: (open: boolean) =
     onOpenChange?.(newOpen);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.title.trim() || !formData.description.trim() || !formData.category) {
@@ -221,18 +732,49 @@ const NewTicketDialog: FC<{ autoOpen?: boolean; onOpenChange?: (open: boolean) =
       return;
     }
     
-    // Handle form submission
-    console.log('New ticket:', formData);
-    toast.success('Support ticket created successfully!');
-    handleOpenChange(false);
+    setIsSubmitting(true);
     
-    // Reset form
-    setFormData({
-      title: '',
-      description: '',
-      category: '',
-      priority: 'medium'
-    });
+    try {
+      // Simulate file upload
+      const uploadedAttachments = await Promise.all(
+        attachments.map(async (attachment) => {
+          // In a real app, you would upload the file to your server here
+          await new Promise(resolve => setTimeout(resolve, 500)); // Simulate upload delay
+          return {
+            id: attachment.id,
+            name: attachment.name,
+            size: attachment.size,
+            type: attachment.type,
+            url: URL.createObjectURL(attachment.file), // In real app, this would be the server URL
+            uploadedAt: new Date(),
+            uploadedBy: 'current-user'
+          };
+        })
+      );
+      
+      // Handle form submission
+      const ticketData = {
+        ...formData,
+        attachments: uploadedAttachments
+      };
+      
+      console.log('New ticket:', ticketData);
+      toast.success('Support ticket created successfully!');
+      handleOpenChange(false);
+      
+      // Reset form
+      setFormData({
+        title: '',
+        description: '',
+        category: '',
+        priority: 'medium' as 'low' | 'medium' | 'high' | 'critical'
+      });
+      setAttachments([]);
+    } catch (error) {
+      toast.error('Failed to create ticket. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -243,11 +785,11 @@ const NewTicketDialog: FC<{ autoOpen?: boolean; onOpenChange?: (open: boolean) =
           New Ticket
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
+        <DialogHeader className="p-6 pb-4 border-b border-border rounded-t-lg">
           <DialogTitle>Create Support Ticket</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6 rounded-b-lg">
           <div className="space-y-2">
             <Label htmlFor="title">Issue Title *</Label>
             <Input
@@ -277,7 +819,7 @@ const NewTicketDialog: FC<{ autoOpen?: boolean; onOpenChange?: (open: boolean) =
             </div>
             <div className="space-y-2">
               <Label htmlFor="priority">Priority</Label>
-              <Select value={formData.priority} onValueChange={(value) => setFormData(prev => ({ ...prev, priority: value }))}>
+              <Select value={formData.priority} onValueChange={(value: 'low' | 'medium' | 'high' | 'critical') => setFormData(prev => ({ ...prev, priority: value }))}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -293,21 +835,42 @@ const NewTicketDialog: FC<{ autoOpen?: boolean; onOpenChange?: (open: boolean) =
           
           <div className="space-y-2">
             <Label htmlFor="description">Description *</Label>
-            <Textarea
-              id="description"
-              placeholder="Detailed description of the issue..."
+            <RichTextEditor
               value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              rows={4}
-              required
+              onChange={(value) => setFormData(prev => ({ ...prev, description: value }))}
+              placeholder="Describe your issue in detail. You can use formatting, add images, and include links..."
+              className="min-h-[200px]"
             />
           </div>
           
-          <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+          <div className="space-y-2">
+            <Label>Attachments</Label>
+            <FileUpload
+              files={attachments}
+              onFilesChange={setAttachments}
+              maxFiles={10}
+              maxFileSize={10 * 1024 * 1024} // 10MB
+              acceptedTypes={[
+                'image/*',
+                'application/pdf',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'text/plain',
+                'application/zip',
+                'application/x-rar-compressed'
+              ]}
+            />
+          </div>
+          
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit">Create Ticket</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Creating...' : 'Create Ticket'}
+            </Button>
           </div>
         </form>
       </DialogContent>
@@ -455,7 +1018,7 @@ export const HelpDeskPage: FC = () => {
             </div>
             
             <PageSection index={4}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredTickets.map((ticket, index) => (
                   <TicketCard key={ticket.id} ticket={ticket} index={index} />
                 ))}
