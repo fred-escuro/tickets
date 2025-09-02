@@ -59,9 +59,6 @@ export const Avatar: React.FC<AvatarProps> = ({
   // Check if we have a valid image source
   const hasValidImage = src && src.trim() !== '' && !imageError;
 
-  // Debug logging
-  console.log('Avatar component render:', { src, fallback, hasValidImage, imageError, showInitials, imageLoaded });
-
   // Show image if available and no error
   if (hasValidImage) {
     return (
@@ -91,7 +88,6 @@ export const Avatar: React.FC<AvatarProps> = ({
 
   // Show initials fallback
   if (showInitials && fallback) {
-    console.log('Showing initials fallback for:', fallback);
     return (
       <div className={cn(
         'rounded-full bg-primary/10 text-primary flex items-center justify-center font-medium border-2 border-primary/20',

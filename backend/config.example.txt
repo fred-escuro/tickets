@@ -1,5 +1,5 @@
 # Database Configuration
-DATABASE_URL="postgresql://fredmann:fredmann@localhost:5432/ticketing_db"
+DATABASE_URL="postgresql://username:password@localhost:5432/ticketing_db"
 
 # Server Configuration
 PORT=3001

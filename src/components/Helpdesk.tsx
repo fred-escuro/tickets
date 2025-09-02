@@ -270,7 +270,7 @@ export const Helpdesk: FC = () => {
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-medium truncate text-foreground">{ticket.title}</p>
                       <p className="text-xs text-muted-foreground">
-                        {ticket.id} • {formatDate(ticket.submittedAt)}
+                        #{ticket.ticketNumber} • {formatDate(ticket.submittedAt)}
                       </p>
                     </div>
                     <div className="flex items-center gap-1 ml-2">

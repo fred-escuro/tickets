@@ -289,7 +289,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
                <div className="min-w-0 flex-1">
                  <h3 className="font-semibold text-base truncate group-hover:text-primary transition-colors duration-300">{ticket.title}</h3>
                                    <div className="flex items-center gap-2 mt-1">
-                    <p className="text-sm text-muted-foreground font-mono">#{ticket.id}</p>
+                    <p className="text-sm text-muted-foreground font-mono">#{ticket.ticketNumber}</p>
                   </div>
                </div>
              </div>
@@ -333,6 +333,31 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
                 }}
               />
 
+              {/* Attachments List */}
+              {ticket.attachments && ticket.attachments.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Paperclip className="h-3 w-3" />
+                    <span className="font-medium">Attachments ({ticket.attachments.length})</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {ticket.attachments.slice(0, 3).map((attachment) => (
+                      <div
+                        key={attachment.id}
+                        className="flex items-center gap-1 px-2 py-1 bg-muted/50 rounded text-xs text-muted-foreground border border-border/50"
+                      >
+                        <FileText className="h-2 w-2" />
+                        <span className="truncate max-w-20">{attachment.name}</span>
+                      </div>
+                    ))}
+                    {ticket.attachments.length > 3 && (
+                      <div className="px-2 py-1 bg-muted/50 rounded text-xs text-muted-foreground border border-border/50">
+                        +{ticket.attachments.length - 3} more
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Footer with metadata and action buttons */}
@@ -410,8 +435,8 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
             {/* Ticket Info Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Ticket ID</p>
-                <p className="text-sm font-medium">#{ticket.id}</p>
+                <p className="text-xs text-muted-foreground">Ticket Number</p>
+                <p className="text-sm font-medium">#{ticket.ticketNumber}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Status</p>
@@ -677,7 +702,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckSquare className="h-5 w-5" />
-              Add Task to Ticket #{ticket.id}
+              Add Task to Ticket #{ticket.ticketNumber}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -812,6 +837,21 @@ const NewTicketDialog: FC<{
     }
   }, [autoOpen]);
 
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      setFormData({
+        title: '',
+        description: '',
+        category: '',
+        priority: 'MEDIUM',
+        dueDate: '',
+        tags: []
+      });
+      setAttachments([]);
+    }
+  }, [open]);
+
   const handleOpenChange = (newOpen: boolean) => {
     if (newOpen && !isAuthenticated) {
       onLoginRequired?.();
@@ -852,7 +892,7 @@ const NewTicketDialog: FC<{
       // If there are attachments, upload them
       if (attachments.length > 0) {
         try {
-          await AttachmentService.uploadFiles(attachments, ticketResponse.data.id);
+          await AttachmentService.uploadFilesForTicket(attachments, ticketResponse.data.id);
         } catch (uploadError) {
           console.warn('Failed to upload some attachments:', uploadError);
           toast.warning('Ticket created but some attachments failed to upload');
@@ -891,7 +931,7 @@ const NewTicketDialog: FC<{
           New Ticket
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
         <DialogHeader className="p-6 pb-4 border-b border-border rounded-t-lg">
           <DialogTitle>Create Support Ticket</DialogTitle>
         </DialogHeader>
@@ -967,6 +1007,7 @@ const NewTicketDialog: FC<{
           <div className="space-y-2">
             <Label htmlFor="description">Description *</Label>
             <RichTextEditor
+              key={`ticket-${open}`}
               value={formData.description}
               onChange={(value) => setFormData(prev => ({ ...prev, description: value }))}
               placeholder="Describe your issue in detail. You can use formatting, add images, and include links..."

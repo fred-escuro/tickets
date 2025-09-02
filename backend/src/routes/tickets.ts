@@ -76,10 +76,19 @@ router.get('/', authenticate, async (req, res) => {
             avatar: true
           }
         },
+        attachments: {
+          select: {
+            id: true,
+            name: true,
+            fileSize: true,
+            mimeType: true,
+            uploadedAt: true,
+            uploadedBy: true
+          }
+        },
         _count: {
           select: {
-            comments: true,
-            attachments: true
+            comments: true
           }
         }
       },

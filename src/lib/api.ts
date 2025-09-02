@@ -131,11 +131,16 @@ export class ApiClient {
     const url = `${this.baseURL}${endpoint}`;
     const requestHeaders = { ...getDefaultHeaders(), ...headers };
 
+    // Don't set Content-Type for FormData - let the browser set it with the boundary
+    if (body instanceof FormData) {
+      delete requestHeaders['Content-Type'];
+    }
+
     try {
       const response = await fetch(url, {
         method,
         headers: requestHeaders,
-        body: body ? JSON.stringify(body) : undefined,
+        body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
         signal,
         credentials: 'include',
       });

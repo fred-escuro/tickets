@@ -1,4 +1,5 @@
 import { API_ENDPOINTS } from '../api';
+import { AttachmentService, type FileAttachment } from './attachmentService';
 
 // Types
 export interface Comment {
@@ -23,6 +24,7 @@ export interface CreateCommentRequest {
   ticketId: string;
   content: string;
   isInternal?: boolean;
+  attachments?: FileAttachment[];
 }
 
 export interface UpdateCommentRequest {
@@ -142,10 +144,51 @@ export class CommentService {
     return apiClient.get(endpoint);
   }
 
-  // Create a new comment
+  // Create a new comment with attachments
   static async createComment(commentData: CreateCommentRequest): Promise<CommentResponse> {
-    const endpoint = '/api/comments';
-    return apiClient.post(endpoint, commentData);
+    try {
+      // First create the comment
+      const commentResponse = await apiClient.post('/api/comments', {
+        ticketId: commentData.ticketId,
+        content: commentData.content,
+        isInternal: commentData.isInternal || false
+      });
+
+      if (!commentResponse.success) {
+        throw new Error(commentResponse.error || 'Failed to create comment');
+      }
+
+      const comment = commentResponse.data;
+
+      // If there are attachments, upload them
+      if (commentData.attachments && commentData.attachments.length > 0) {
+        try {
+          const uploadedAttachments = await AttachmentService.uploadFilesForComment(
+            commentData.attachments,
+            comment.id
+          );
+          
+          // Update the comment response to include attachments
+          comment.attachments = uploadedAttachments;
+        } catch (attachmentError) {
+          console.error('Failed to upload attachments:', attachmentError);
+          // Don't fail the comment creation if attachments fail
+        }
+      }
+
+      return {
+        success: true,
+        data: comment,
+        message: 'Comment created successfully'
+      };
+    } catch (error) {
+      console.error('Create comment error:', error);
+      return {
+        success: false,
+        data: null as any,
+        message: error instanceof Error ? error.message : 'Failed to create comment'
+      };
+    }
   }
 
   // Update a comment

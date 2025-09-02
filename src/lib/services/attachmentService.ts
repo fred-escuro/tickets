@@ -19,28 +19,30 @@ export interface UploadedAttachment {
 }
 
 export class AttachmentService {
-  // Upload a single file
-  static async uploadFile(file: File, ticketId?: string): Promise<UploadedAttachment> {
+  // Upload a single file for a ticket
+  static async uploadFileForTicket(file: File, ticketId: string): Promise<UploadedAttachment> {
     const formData = new FormData();
     formData.append('file', file);
-    
-    if (ticketId) {
-      formData.append('ticketId', ticketId);
-    }
+    formData.append('ticketId', ticketId);
 
-    const response = await apiClient.post('/api/attachments/upload', formData);
-    
-    if (!response.success) {
-      throw new Error(response.error || 'Failed to upload file');
-    }
+    try {
+      const response = await apiClient.post('/api/attachments/upload', formData);
+      
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to upload file');
+      }
 
-    return response.data;
+      return response.data as UploadedAttachment;
+    } catch (error) {
+      console.error('Upload error in AttachmentService:', error);
+      throw error;
+    }
   }
 
-  // Upload multiple files
-  static async uploadFiles(files: FileAttachment[], ticketId?: string): Promise<UploadedAttachment[]> {
+    // Upload multiple files for a ticket
+  static async uploadFilesForTicket(files: FileAttachment[], ticketId: string): Promise<UploadedAttachment[]> {
     const uploadPromises = files.map(attachment => 
-      this.uploadFile(attachment.file, ticketId)
+      this.uploadFileForTicket(attachment.file, ticketId)
     );
 
     return Promise.all(uploadPromises);

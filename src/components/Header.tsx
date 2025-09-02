@@ -40,8 +40,6 @@ export const Header: FC = () => {
       const token = localStorage.getItem('auth-token');
       const user = AuthService.getCurrentUser();
       
-      console.log('Header: Checking auth - Token:', !!token, 'User:', !!user);
-      
       setIsAuthenticated(!!token);
       
       if (token) {
@@ -56,12 +54,11 @@ export const Header: FC = () => {
     
     // Listen for custom auth events in the same tab
     const handleAuthChange = () => {
-      console.log('Header: Auth change event received');
       checkAuth();
     };
     
     // Also check auth periodically to catch any missed events
-    const interval = setInterval(checkAuth, 1000);
+    const interval = setInterval(checkAuth, 30000); // Check every 30 seconds instead of every second
     
     window.addEventListener('auth-change', handleAuthChange);
     

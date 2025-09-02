@@ -212,7 +212,7 @@ export const ProjectsPage: FC = () => {
                           <SelectContent>
                             {helpdeskTickets.map((ticket) => (
                               <SelectItem key={ticket.id} value={ticket.id}>
-                                {ticket.id} - {ticket.title}
+                                #{ticket.ticketNumber} - {ticket.title}
                               </SelectItem>
                             ))}
                           </SelectContent>

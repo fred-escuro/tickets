@@ -65,6 +65,7 @@ export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type Status = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED' | 'ESCALATED';
 
 export interface Ticket extends BaseEntity {
+  ticketNumber: number;
   title: string;
   description: string;
   category: string;

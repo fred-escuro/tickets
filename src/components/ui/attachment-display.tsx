@@ -13,11 +13,31 @@ import {
   X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { type TicketAttachment } from '@/data/mockData';
 import { openAttachmentViewer } from '@/lib/attachmentViewer';
+import { AttachmentService } from '@/lib/services/attachmentService';
+
+// Backend attachment type
+interface BackendAttachment {
+  id: string;
+  name: string;
+  fileSize: number;
+  mimeType: string;
+  filePath: string;
+  uploadedBy: string;
+  uploadedAt: string | Date; // Can be string from backend or Date object
+  ticketId?: string;
+  commentId?: string;
+  uploader?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    middleName?: string;
+    email: string;
+  };
+}
 
 interface AttachmentDisplayProps {
-  attachments: TicketAttachment[];
+  attachments: BackendAttachment[];
   className?: string;
   showDownload?: boolean;
   showPreview?: boolean;
@@ -40,14 +60,22 @@ const formatFileSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-const formatDate = (date: Date) => {
+const formatDate = (date: string | Date) => {
+  // Convert string to Date if needed
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  
+  // Check if the date is valid
+  if (isNaN(dateObj.getTime())) {
+    return 'Invalid date';
+  }
+  
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
-  }).format(date);
+  }).format(dateObj);
 };
 
 export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
@@ -60,17 +88,61 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
     return null;
   }
 
-  const handleDownload = (attachment: TicketAttachment) => {
-    const link = document.createElement('a');
-    link.href = attachment.url;
-    link.download = attachment.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async (attachment: BackendAttachment) => {
+    try {
+      // Get the download URL
+      const downloadUrl = AttachmentService.getDownloadUrl(attachment.id);
+      
+      // Get the auth token
+      const token = localStorage.getItem('auth-token');
+      
+      // Fetch the file with authentication
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.statusText}`);
+      }
+      
+      // Get the file blob
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = attachment.name;
+      
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+      // You could show a toast notification here
+      alert('Download failed. Please try again.');
+    }
   };
 
-  const handlePreview = (attachment: TicketAttachment, index: number) => {
-    openAttachmentViewer(attachments, index);
+  const handlePreview = (attachment: BackendAttachment, index: number) => {
+    // Convert backend attachment to frontend format for the viewer
+    const frontendAttachments = attachments.map(att => ({
+      id: att.id,
+      name: att.name,
+      size: att.fileSize,
+      type: att.mimeType,
+      url: AttachmentService.getDownloadUrl(att.id),
+      uploadedAt: typeof att.uploadedAt === 'string' ? new Date(att.uploadedAt) : att.uploadedAt,
+      uploadedBy: att.uploader ? `${att.uploader.firstName} ${att.uploader.lastName}` : 'Unknown'
+    }));
+    openAttachmentViewer(frontendAttachments, index);
   };
 
   return (
@@ -89,13 +161,13 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
              <CardContent className="p-0">
                <div className="flex items-center gap-3">
                  <div className="h-10 w-10 bg-muted rounded flex items-center justify-center">
-                   {getFileIcon(attachment.type)}
+                   {getFileIcon(attachment.mimeType)}
                  </div>
                  
                  <div className="flex-1 min-w-0">
                    <p className="text-sm font-medium truncate">{attachment.name}</p>
                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                     <span>{formatFileSize(attachment.size)}</span>
+                     <span>{formatFileSize(attachment.fileSize)}</span>
                      <span>•</span>
                      <span>{formatDate(attachment.uploadedAt)}</span>
                      <span>•</span>

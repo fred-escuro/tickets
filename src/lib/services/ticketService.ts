@@ -4,9 +4,11 @@ const API_BASE_URL = '';
 
 // Basic types
 import type { User } from './authService';
+import { AttachmentService, type FileAttachment } from './attachmentService';
 
 export interface Ticket {
   id: string;
+  ticketNumber: number;
   title: string;
   description: string;
   status: string;
@@ -32,6 +34,7 @@ export interface CreateTicketRequest {
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   dueDate?: string;
   tags?: string[];
+  attachments?: FileAttachment[];
 }
 
 export interface TicketFilter {
@@ -115,14 +118,58 @@ export class TicketService {
     return apiClient.get(endpoint);
   }
 
-  // Create a new ticket
+  // Create a new ticket with attachments
   static async createTicket(ticketData: CreateTicketRequest): Promise<{
     success: boolean;
     data: Ticket;
     message: string;
   }> {
-    const endpoint = '/api/tickets';
-    return apiClient.post(endpoint, ticketData);
+    try {
+      // First create the ticket
+      const ticketResponse = await apiClient.post('/api/tickets', {
+        title: ticketData.title,
+        description: ticketData.description,
+        category: ticketData.category,
+        priority: ticketData.priority || 'MEDIUM',
+        dueDate: ticketData.dueDate,
+        tags: ticketData.tags || []
+      });
+
+      if (!ticketResponse.success) {
+        throw new Error(ticketResponse.error || 'Failed to create ticket');
+      }
+
+      const ticket = ticketResponse.data;
+
+      // If there are attachments, upload them
+      if (ticketData.attachments && ticketData.attachments.length > 0) {
+        try {
+          const uploadedAttachments = await AttachmentService.uploadFilesForTicket(
+            ticketData.attachments,
+            ticket.id
+          );
+          
+          // Update the ticket response to include attachments
+          ticket.attachments = uploadedAttachments;
+        } catch (attachmentError) {
+          console.error('Failed to upload attachments:', attachmentError);
+          // Don't fail the ticket creation if attachments fail
+        }
+      }
+
+      return {
+        success: true,
+        data: ticket,
+        message: 'Ticket created successfully'
+      };
+    } catch (error) {
+      console.error('Create ticket error:', error);
+      return {
+        success: false,
+        data: null as any,
+        message: error instanceof Error ? error.message : 'Failed to create ticket'
+      };
+    }
   }
 
   // Get ticket statistics

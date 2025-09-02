@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './button';
 import { Label } from './label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './dialog';
@@ -6,7 +6,7 @@ import { RichTextEditor } from './rich-text-editor';
 import { FileUpload, type FileAttachment } from './file-upload';
 import { Switch } from './switch';
 import { toast } from 'sonner';
-import { MessageSquare, X, Eye, EyeOff } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 
 interface AddCommentDialogProps {
   isOpen: boolean;
@@ -31,6 +31,16 @@ export const AddCommentDialog: React.FC<AddCommentDialogProps> = ({
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isInternal, setIsInternal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setComment('');
+      setAttachments([]);
+      setIsInternal(false);
+      setIsSubmitting(false);
+    }
+  }, [isOpen]);
 
   const handleSubmit = async () => {
     if (!comment.trim()) {
@@ -60,7 +70,7 @@ export const AddCommentDialog: React.FC<AddCommentDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
         <DialogHeader className="p-6 pb-2 border-b">
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
@@ -83,6 +93,7 @@ export const AddCommentDialog: React.FC<AddCommentDialogProps> = ({
           <div className="space-y-2">
             <Label htmlFor="comment">Comment</Label>
             <RichTextEditor
+              key={`comment-${isOpen}`}
               value={comment}
               onChange={setComment}
               placeholder={placeholder}

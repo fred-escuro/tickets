@@ -102,6 +102,7 @@ export interface TicketAttachment {
 
 export interface HelpdeskTicket {
   id: string;
+  ticketNumber: number;
   title: string;
   description: string;
   category: string;
@@ -564,6 +565,7 @@ export const helpdeskCategories: HelpdeskCategory[] = [
 export const helpdeskTickets: HelpdeskTicket[] = [
   {
     id: 'HT-001',
+    ticketNumber: 1001,
     title: 'Cannot access company email',
     description: '<p>I\'m experiencing issues with my company email account. Here are the details:</p><ul><li><strong>Error Message:</strong> "Authentication failed. Please check your credentials."</li><li><strong>Browser:</strong> Chrome (latest version)</li><li><strong>Time:</strong> Started this morning at 9:00 AM</li></ul><p>I\'ve tried the following troubleshooting steps:</p><ol><li>Cleared browser cache and cookies</li><li>Reset my password through the self-service portal</li><li>Tried accessing from different browsers (Firefox, Edge)</li></ol><p>None of these steps resolved the issue. I need immediate access to my email for an important client meeting this afternoon.</p><p>Please see the attached screenshot of the error message.</p>',
     category: 'access',
@@ -632,6 +634,7 @@ export const helpdeskTickets: HelpdeskTicket[] = [
   },
   {
     id: 'HT-002',
+    ticketNumber: 1002,
     title: 'Laptop running very slow',
     description: '<p>My laptop has been experiencing severe performance issues for the past week. Here\'s what I\'ve observed:</p><h3>Performance Issues:</h3><ul><li><strong>Startup time:</strong> Takes 5+ minutes to fully boot</li><li><strong>Application loading:</strong> 30-60 seconds to open basic apps like Word or Excel</li><li><strong>System responsiveness:</strong> 10-15 second delays when clicking buttons</li><li><strong>Fan noise:</strong> Constantly running at high speed</li></ul><h3>System Information:</h3><ul><li><strong>Model:</strong> Dell Latitude 5520</li><li><strong>OS:</strong> Windows 11 Pro</li><li><strong>RAM:</strong> 16GB</li><li><strong>Storage:</strong> 512GB SSD (showing 85% full)</li></ul><p>I\'ve already tried:</p><ol><li>Restarting the computer multiple times</li><li>Running Windows Defender scan (no threats found)</li><li>Clearing temporary files</li><li>Updating Windows</li></ol><p>This is affecting my productivity significantly. Please help!</p>',
     category: 'hardware',
@@ -689,6 +692,7 @@ export const helpdeskTickets: HelpdeskTicket[] = [
   },
   {
     id: 'HT-003',
+    ticketNumber: 1003,
     title: 'Printer not working in conference room',
     description: 'The printer in Conference Room B is not responding to print jobs.',
     category: 'hardware',
@@ -747,6 +751,7 @@ export const helpdeskTickets: HelpdeskTicket[] = [
   },
   {
     id: 'HT-004',
+    ticketNumber: 1004,
     title: 'Software license expired',
     description: 'Adobe Creative Suite license has expired and I need access for a project.',
     category: 'software',
@@ -761,6 +766,7 @@ export const helpdeskTickets: HelpdeskTicket[] = [
   },
   {
     id: 'HT-005',
+    ticketNumber: 1005,
     title: 'Request VPN access',
     description: 'I need VPN access to work remotely. Please set up access for my account.',
     category: 'access',
@@ -773,6 +779,7 @@ export const helpdeskTickets: HelpdeskTicket[] = [
   },
   {
     id: 'HT-006',
+    ticketNumber: 1006,
     title: 'WiFi connection unstable',
     description: 'WiFi keeps dropping connection in the office. Very frustrating.',
     category: 'network',
@@ -785,6 +792,7 @@ export const helpdeskTickets: HelpdeskTicket[] = [
   },
   {
     id: 'HT-007',
+    ticketNumber: 1007,
     title: 'Mobile app crashes',
     description: 'Company mobile app crashes immediately when opened.',
     category: 'mobile',

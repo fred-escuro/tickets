@@ -120,6 +120,19 @@ router.post('/', authenticate, async (req, res) => {
             email: true,
             avatar: true
           }
+        },
+        attachments: {
+          include: {
+            uploader: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                email: true
+              }
+            }
+          }
         }
       }
     });

@@ -94,6 +94,7 @@ export const TicketList = () => {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Ticket #</TableHead>
                 <TableHead>Title</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Priority</TableHead>
@@ -106,6 +107,9 @@ export const TicketList = () => {
               {tickets.length > 0 ? (
                 tickets.map((ticket: Ticket) => (
                   <TableRow key={ticket.id}>
+                    <TableCell className="font-mono font-medium">
+                      #{ticket.ticketNumber}
+                    </TableCell>
                     <TableCell>
                       <div>
                         <div className="font-medium">{ticket.title}</div>
@@ -159,7 +163,7 @@ export const TicketList = () => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     <p className="text-muted-foreground">No tickets found</p>
                   </TableCell>
                 </TableRow>
