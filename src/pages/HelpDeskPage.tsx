@@ -351,12 +351,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
                       }
                     </span>
                   </span>
-                 {ticket.assignee && (
-                   <span className="group-hover:translate-x-1 transition-transform duration-300 flex items-center gap-1">
-                     <User className="h-3 w-3" />
-                     {`${ticket.assignee.firstName} ${ticket.assignee.lastName}`}
-                   </span>
-                 )}
+
                </div>
               <div className="flex items-center gap-1">
                 <Button
