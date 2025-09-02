@@ -1,9 +1,70 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, authorize } from '../middleware/auth';
-import { UpdateUserRequest, ApiResponse } from '../types';
+import { UpdateUserRequest, ApiResponse, CreateUserRequest } from '../types';
 
 const router = Router();
+
+// Create new user (admin only)
+router.post('/', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const createData: CreateUserRequest = req.body;
+
+    // Check if user with email already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email: createData.email }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        error: 'User with this email already exists'
+      });
+    }
+
+    // Hash password using bcryptjs
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash(createData.password, 10);
+
+    // Create user
+    const newUser = await prisma.user.create({
+      data: {
+        ...createData,
+        password: hashedPassword,
+        role: createData.role || 'user',
+        isAgent: createData.isAgent || false
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        email: true,
+        role: true,
+        department: true,
+        avatar: true,
+        phone: true,
+        location: true,
+        isAgent: true,
+        skills: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: newUser,
+      message: 'User created successfully'
+    });
+  } catch (error) {
+    console.error('Create user error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to create user'
+    });
+  }
+});
 
 // Get all users (admin only)
 router.get('/', authenticate, authorize('admin'), async (req, res) => {
@@ -221,6 +282,49 @@ router.get('/agents/list', authenticate, async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to get agents'
+    });
+  }
+});
+
+// Delete user (admin only)
+router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({
+      where: { id }
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Prevent admin from deleting themselves
+    if (id === (req as any).user.id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete your own account'
+      });
+    }
+
+    // Delete user
+    await prisma.user.delete({
+      where: { id }
+    });
+
+    return res.json({
+      success: true,
+      message: 'User deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to delete user'
     });
   }
 });

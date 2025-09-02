@@ -41,6 +41,8 @@ export interface CreateUserData {
   department?: string;
   position?: string;
   phone?: string;
+  avatar?: string;
+  location?: string;
 }
 
 export interface UpdateUserData {
@@ -51,6 +53,8 @@ export interface UpdateUserData {
   department?: string;
   position?: string;
   phone?: string;
+  avatar?: string;
+  location?: string;
   isActive?: boolean;
 }
 
@@ -118,7 +122,7 @@ export class UserService {
 
   // Update user
   static async updateUser(id: string, data: UpdateUserData): Promise<ApiResponse<User>> {
-    return apiClient.put(`${API_ENDPOINTS.USERS.UPDATE(id)}`, data);
+    return apiClient.put(`${API_ENDPOINTS.USERS.UPDATE_BY_ID(id)}`, data);
   }
 
   // Update current user profile

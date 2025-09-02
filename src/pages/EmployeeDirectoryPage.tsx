@@ -1,17 +1,20 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Avatar } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { OrganizationChart } from '@/components/OrganizationChart';
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
-import { ArrowLeft, Search, Filter, Mail, Phone, MapPin, Users, Network, Shield, Wrench, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Search, Filter, Mail, Phone, MapPin, Users, Network, Shield, Wrench, Loader2, AlertCircle, Plus } from 'lucide-react';
 import { useState, useEffect, type FC } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '@/hooks/useApi';
-import { UserService, type SupportAgent } from '@/lib/services/userService';
+import { UserService, type SupportAgent, type User, type CreateUserData, type UpdateUserData, USER_ROLES, USER_DEPARTMENTS } from '@/lib/services/userService';
 
 const getDepartmentBadgeColor = (department: string) => {
   switch (department) {
@@ -40,6 +43,23 @@ export const EmployeeDirectoryPage: FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterRole, setFilterRole] = useState<string>('all');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    middleName: '',
+    email: '',
+    password: '',
+    role: 'user',
+    department: '',
+    phone: '',
+    location: '',
+    isAgent: false,
+    avatar: ''
+  });
+  const [error, setError] = useState('');
 
   // Fetch all users using the API hook
   const { data: usersData, loading: usersLoading, error: usersError, execute: fetchUsers } = useApi(
@@ -73,6 +93,131 @@ export const EmployeeDirectoryPage: FC = () => {
     return matchesSearch && matchesDepartment && matchesRole;
   });
 
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const createData: CreateUserData = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        middleName: formData.middleName || undefined,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
+        department: formData.department || undefined,
+        phone: formData.phone || undefined,
+        avatar: formData.avatar || undefined,
+        location: formData.location || undefined
+      };
+
+      const response = await UserService.createUser(createData);
+      
+      if (response.success) {
+        setShowCreateForm(false);
+        setFormData({
+          firstName: '',
+          lastName: '',
+          middleName: '',
+          email: '',
+          password: '',
+          role: 'user',
+          department: '',
+          phone: '',
+          location: '',
+          isAgent: false,
+          avatar: ''
+        });
+        fetchUsers();
+        setError('');
+      } else {
+        setError(response.error || 'Failed to create user');
+      }
+    } catch (err) {
+      setError('Failed to create user');
+      console.error('Error creating user:', err);
+    }
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+
+    try {
+      const updateData: UpdateUserData = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        middleName: formData.middleName || undefined,
+        role: formData.role,
+        department: formData.department || undefined,
+        phone: formData.phone || undefined,
+        avatar: formData.avatar || undefined,
+        location: formData.location || undefined
+      };
+
+      const response = await UserService.updateUser(selectedUser.id, updateData);
+      
+      if (response.success) {
+        setShowEditForm(false);
+        setSelectedUser(null);
+        setFormData({
+          firstName: '',
+          lastName: '',
+          middleName: '',
+          email: '',
+          password: '',
+          role: 'user',
+          department: '',
+          phone: '',
+          location: '',
+          isAgent: false,
+          avatar: ''
+        });
+        fetchUsers();
+        setError('');
+      } else {
+        setError(response.error || 'Failed to update user');
+      }
+    } catch (err) {
+      setError('Failed to update user');
+      console.error('Error updating user:', err);
+    }
+  };
+
+  const handleEditUser = (user: User) => {
+    setSelectedUser(user);
+    setFormData({
+      firstName: user.firstName,
+      lastName: user.lastName,
+      middleName: user.middleName || '',
+      email: user.email,
+      password: '',
+      role: user.role,
+      department: user.department || '',
+      phone: user.phone || '',
+      location: user.location || '',
+      isAgent: user.isAgent,
+      avatar: user.avatar || ''
+    });
+    setShowEditForm(true);
+  };
+
+  const resetForm = () => {
+    setFormData({
+      firstName: '',
+      lastName: '',
+      middleName: '',
+      email: '',
+      password: '',
+      role: 'user',
+      department: '',
+      phone: '',
+      location: '',
+      isAgent: false,
+      avatar: ''
+    });
+    setSelectedUser(null);
+    setError('');
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <PageWrapper className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6">
@@ -94,6 +239,18 @@ export const EmployeeDirectoryPage: FC = () => {
                 className="gap-2"
               >
                 {usersLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Refresh'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  resetForm();
+                  setShowCreateForm(true);
+                }} 
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Create New User
               </Button>
             </div>
             
@@ -210,6 +367,7 @@ export const EmployeeDirectoryPage: FC = () => {
                       key={user.id} 
                       className="group hover:shadow-xl hover:bg-gradient-to-br hover:from-blue-50/60 hover:to-blue-100/30 dark:hover:from-white/5 dark:hover:to-white/[0.03] hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 duration-300 cursor-pointer border-border hover:border-primary/20 dark:hover:border-white/10 hover:ring-2 hover:ring-primary/10 dark:hover:ring-white/10 relative overflow-hidden"
                       style={{ animationDelay: `${(index + 1) * 100}ms` }}
+                      onClick={() => handleEditUser(user)}
                     >
                       {/* Hover background overlay */}
                       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
@@ -217,10 +375,12 @@ export const EmployeeDirectoryPage: FC = () => {
                         <div className="flex items-start space-x-4">
                           <div className="flex-shrink-0">
                             <div className="group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg">
-                              <img
-                                src={user.avatar || '/default-avatar.png'}
+                              <Avatar
+                                src={user.avatar}
                                 alt={user.middleName ? `${user.firstName} ${user.middleName} ${user.lastName}` : `${user.firstName} ${user.lastName}`}
-                                className="h-12 w-12 rounded-full"
+                                fallback={`${user.firstName} ${user.lastName}`}
+                                size="lg"
+                                className="h-12 w-12"
                               />
                             </div>
                           </div>
@@ -288,6 +448,310 @@ export const EmployeeDirectoryPage: FC = () => {
           </Tabs>
         </PageSection>
       </PageWrapper>
+
+      {/* Create User Dialog */}
+      <Dialog open={showCreateForm} onOpenChange={(open) => {
+        if (!open) {
+          resetForm();
+        }
+        setShowCreateForm(open);
+      }}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Create New User</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="avatar">Avatar URL</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="avatar"
+                  type="url"
+                  placeholder="https://example.com/avatar.jpg"
+                  value={formData.avatar}
+                  onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const generatedAvatar = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(formData.firstName + ' ' + formData.lastName)}&backgroundColor=1f2937&textColor=ffffff`;
+                    setFormData({ ...formData, avatar: generatedAvatar });
+                  }}
+                  disabled={!formData.firstName || !formData.lastName}
+                >
+                  Generate
+                </Button>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">First Name *</Label>
+                <Input
+                  id="firstName"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Last Name *</Label>
+                <Input
+                  id="lastName"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="middleName">Middle Name</Label>
+                <Input
+                  id="middleName"
+                  value={formData.middleName}
+                  onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="password">Password *</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="role">Role *</Label>
+                <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {USER_ROLES.map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {role}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="department">Department</Label>
+                <Select value={formData.department} onValueChange={(value) => setFormData({ ...formData, department: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {USER_DEPARTMENTS.map((dept) => (
+                      <SelectItem key={dept} value={dept}>
+                        {dept}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="location">Location</Label>
+              <Input
+                id="location"
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+              />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="isAgent"
+                checked={formData.isAgent}
+                onChange={(e) => setFormData({ ...formData, isAgent: e.target.checked })}
+                className="rounded border-gray-300"
+              />
+              <Label htmlFor="isAgent">Is Support Agent</Label>
+            </div>
+
+            {error && (
+              <div className="text-red-500 text-sm">{error}</div>
+            )}
+
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => { setShowCreateForm(false); resetForm(); }}>
+                Cancel
+              </Button>
+              <Button type="submit">Create User</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editAvatar">Avatar URL</Label>
+              <Input
+                id="editAvatar"
+                type="url"
+                placeholder="https://example.com/avatar.jpg"
+                value={formData.avatar}
+                onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="editFirstName">First Name *</Label>
+                <Input
+                  id="editFirstName"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editLastName">Last Name *</Label>
+                <Input
+                  id="editLastName"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="editMiddleName">Middle Name</Label>
+                <Input
+                  id="editMiddleName"
+                  value={formData.middleName}
+                  onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editEmail">Email</Label>
+                <Input
+                  id="editEmail"
+                  type="email"
+                  value={formData.email}
+                  disabled
+                  className="bg-gray-50"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="editRole">Role *</Label>
+                <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {USER_ROLES.map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {role}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editDepartment">Department</Label>
+                <Select value={formData.department} onValueChange={(value) => setFormData({ ...formData, department: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {USER_DEPARTMENTS.map((dept) => (
+                      <SelectItem key={dept} value={dept}>
+                        {dept}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="editPhone">Phone</Label>
+                <Input
+                  id="editPhone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editLocation">Location</Label>
+                <Input
+                  id="editLocation"
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="editIsAgent"
+                checked={formData.isAgent}
+                onChange={(e) => setFormData({ ...formData, isAgent: e.target.checked })}
+                className="rounded border-gray-300"
+              />
+              <Label htmlFor="editIsAgent">Is Support Agent</Label>
+            </div>
+
+            {error && (
+              <div className="text-red-500 text-sm">{error}</div>
+            )}
+
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => { setShowEditForm(false); resetForm(); }}>
+                Cancel
+              </Button>
+              <Button type="submit">Update User</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

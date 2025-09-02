@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Avatar } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { AuthService } from '@/lib/services/authService';
+import { UserService } from '@/lib/services/userService';
 import { toast } from 'sonner';
 import { 
   User, 
@@ -18,13 +20,16 @@ import {
   Shield, 
   FileText,
   Heart,
-  MessageSquare
+  MessageSquare,
+  RefreshCw
 } from 'lucide-react';
 import { type FC, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export const Profile: FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(AuthService.getCurrentUser());
+  const navigate = useNavigate();
 
   // Update authentication state when it changes
   useEffect(() => {
@@ -59,11 +64,26 @@ export const Profile: FC = () => {
     };
   }, []);
 
+  const refreshUserData = async () => {
+    try {
+      if (currentUser) {
+        const response = await UserService.getUser(currentUser.id);
+        if (response.success && response.data) {
+          const freshUser = response.data;
+          AuthService.setCurrentUser(freshUser);
+          setCurrentUser(freshUser);
+          toast.success('Profile refreshed');
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    }
+  };
+
   const handleProfileAction = async (action: string) => {
     switch (action) {
       case 'profile':
-        console.log('Navigate to profile');
-        // TODO: Implement navigation to profile page
+        navigate('/profile');
         break;
       case 'settings':
         console.log('Navigate to settings');
@@ -124,10 +144,13 @@ export const Profile: FC = () => {
           className="relative h-10 w-10 rounded-full p-0 hover:bg-accent"
           aria-label="Profile menu"
         >
-          <img
-            className="h-10 w-10 rounded-full object-cover border-2 border-border hover:border-primary transition-colors"
-            src={currentUser.avatar || '/default-avatar.png'}
+          <Avatar
+            src={currentUser.avatar || undefined}
             alt={`${currentUser.middleName ? `${currentUser.firstName} ${currentUser.middleName} ${currentUser.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`}'s avatar`}
+            fallback={`${currentUser.firstName} ${currentUser.lastName}`}
+            size="md"
+            className="border-2 border-border hover:border-primary transition-colors"
+            showInitials={true}
           />
         </Button>
       </DropdownMenuTrigger>
@@ -152,6 +175,13 @@ export const Profile: FC = () => {
         >
           <User className="mr-2 h-4 w-4" />
           <span>View Profile</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem 
+          onClick={refreshUserData}
+          className="cursor-pointer"
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          <span>Refresh Profile</span>
         </DropdownMenuItem>
         <DropdownMenuItem 
           onClick={() => handleProfileAction('settings')}

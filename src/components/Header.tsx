@@ -15,7 +15,8 @@ import {
   FileText, 
   Headphones,
   ChevronDown,
-  Settings
+  Settings,
+  Shield
 } from 'lucide-react';
 import { type FC, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -87,6 +88,7 @@ export const Header: FC = () => {
     { path: '/calendar', label: 'Calendar', icon: Calendar },
     { path: '/reports', label: 'Reports', icon: BarChart3 },
     { path: '/knowledge-base', label: 'Knowledge Base', icon: Headphones },
+    { path: '/admin/users', label: 'User Management', icon: Shield },
     { path: '/settings', label: 'Settings', icon: Settings },
   ];
 

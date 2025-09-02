@@ -1005,6 +1005,8 @@ export const HelpDeskPage: FC = () => {
             <NewTicketDialog 
               autoOpen={autoOpenNewTicket} 
               onOpenChange={(open) => !open && setAutoOpenNewTicket(false)}
+              isAuthenticated={true}
+              onLoginRequired={() => {}}
             />
           </div>
         </PageSection>

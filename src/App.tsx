@@ -15,6 +15,8 @@ import { CalendarPage } from './pages/CalendarPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { ResourcesPage } from './pages/ResourcesPage';
 import SettingsPage from './pages/SettingsPage';
+import UsersPage from './pages/UsersPage';
+import { ProfilePage } from './pages/ProfilePage';
 
 const AppRoutes: FC = () => {
   return (
@@ -37,6 +39,14 @@ const AppRoutes: FC = () => {
       />
       <Route
         path="/users"
+        element={
+          <ProtectedRoute pageTitle="Employee Directory" pageDescription="Please log in to view the employee directory and team information.">
+            <EmployeeDirectoryPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/directory"
         element={
           <ProtectedRoute pageTitle="Employee Directory" pageDescription="Please log in to view the employee directory and team information.">
             <EmployeeDirectoryPage />
@@ -80,6 +90,14 @@ const AppRoutes: FC = () => {
         element={
           <ProtectedRoute pageTitle="Settings" pageDescription="Please log in to access your account settings and preferences.">
             <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute pageTitle="Profile" pageDescription="Please log in to view and edit your profile.">
+            <ProfilePage />
           </ProtectedRoute>
         }
       />
