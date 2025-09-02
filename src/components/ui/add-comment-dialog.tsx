@@ -127,11 +127,17 @@ export const AddCommentDialog: React.FC<AddCommentDialogProps> = ({
               maxFiles={5}
               maxFileSize={5 * 1024 * 1024} // 5MB
               acceptedTypes={[
-                'image/*',
+                'image/jpeg',
+                'image/png',
+                'image/gif',
                 'application/pdf',
                 'application/msword',
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'text/plain'
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'text/plain',
+                'application/zip',
+                'application/x-rar-compressed'
               ]}
             />
           </div>

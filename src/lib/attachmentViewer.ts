@@ -5,6 +5,9 @@ export const openAttachmentViewer = (
   attachments: TicketAttachment[],
   initialIndex: number = 0
 ) => {
+  // Get the authentication token from localStorage
+  const authToken = localStorage.getItem('auth-token');
+  
   const windowFeatures = [
     'width=800',
     'height=600',
@@ -100,6 +103,7 @@ export const openAttachmentViewer = (
 
       <script>
         const attachments = ${JSON.stringify(attachments)};
+        const authToken = '${authToken}';
         let currentIndex = ${initialIndex};
         let imageZoom = 1;
         let imageRotation = 0;
@@ -154,7 +158,8 @@ export const openAttachmentViewer = (
             content.innerHTML = \`
               <div class="image-container">
                 <img src="\${attachment.url}" alt="\${attachment.name}" 
-                     style="transform: scale(\${imageZoom}) rotate(\${imageRotation}deg);">
+                     style="transform: scale(\${imageZoom}) rotate(\${imageRotation}deg);"
+                     onerror="handleImageError(this, '\${attachment.url}')">
               </div>
             \`;
           } else if (isVideo) {
@@ -181,10 +186,10 @@ export const openAttachmentViewer = (
                   <p style="font-size: 0.875rem; color: #6b7280; margin: 0;">\${formatFileSize(attachment.size)}</p>
                 </div>
                 <div class="file-actions">
-                  <button class="action-btn" onclick="window.open('\${attachment.url}', '_blank')">
+                  <button class="action-btn" onclick="openFileWithAuth('\${attachment.url}')">
                     👁️ Open in New Tab
                   </button>
-                  <button class="action-btn primary" onclick="downloadFile('\${attachment.url}', '\${attachment.name}')">
+                  <button class="action-btn primary" onclick="downloadFileWithAuth('\${attachment.url}', '\${attachment.name}')">
                     ⬇ Download
                   </button>
                 </div>
@@ -206,7 +211,7 @@ export const openAttachmentViewer = (
                    onclick="goToIndex(\${index})" 
                    style="cursor: pointer;">
                 \${att.type.startsWith('image/') 
-                  ? \`<img src="\${att.url}" alt="\${att.name}">\`
+                  ? \`<img src="\${att.url}" alt="\${att.name}" onerror="handleThumbnailError(this, '\${att.url}')">\`
                   : \`<div class="thumbnail-icon">\${getFileIcon(att.type)}</div>\`
                 }
               </div>
@@ -244,6 +249,139 @@ export const openAttachmentViewer = (
           document.body.removeChild(link);
         }
 
+        function downloadFileWithAuth(url, filename) {
+          if (authToken) {
+            // Create a fetch request with authentication
+            fetch(url, {
+              headers: {
+                'Authorization': \`Bearer \${authToken}\`
+              }
+            })
+            .then(response => response.blob())
+            .then(blob => {
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = filename;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(url);
+            })
+            .catch(error => {
+              console.error('Download failed:', error);
+              alert('Download failed. Please try again.');
+            });
+          } else {
+            // Fallback to direct download
+            downloadFile(url, filename);
+          }
+        }
+
+        function openFileWithAuth(url) {
+          if (authToken) {
+            // Create a new window with authentication
+            const newWindow = window.open('', '_blank');
+            if (newWindow) {
+              newWindow.document.write(\`
+                <html>
+                  <head><title>Loading...</title></head>
+                  <body>
+                    <p>Loading file...</p>
+                    <script>
+                      fetch('\${url}', {
+                        headers: {
+                          'Authorization': 'Bearer \${authToken}'
+                        }
+                      })
+                      .then(response => response.blob())
+                      .then(blob => {
+                        const url = window.URL.createObjectURL(blob);
+                        window.location.href = url;
+                      })
+                      .catch(error => {
+                        document.body.innerHTML = '<p>Error loading file: ' + error.message + '</p>';
+                      });
+                    </script>
+                  </body>
+                </html>
+              \`);
+              newWindow.document.close();
+            }
+          } else {
+            // Fallback to direct open
+            window.open(url, '_blank');
+          }
+        }
+
+        function handleImageError(img, url) {
+          console.log('Image failed to load:', url);
+          // Try to load with authentication
+          if (authToken) {
+            fetch(url, {
+              headers: {
+                'Authorization': \`Bearer \${authToken}\`
+              }
+            })
+            .then(response => response.blob())
+            .then(blob => {
+              const objectUrl = URL.createObjectURL(blob);
+              img.src = objectUrl;
+              img.onload = () => URL.revokeObjectURL(objectUrl);
+            })
+            .catch(error => {
+              console.error('Failed to load image with auth:', error);
+              // Show error placeholder
+              img.style.display = 'none';
+              img.parentNode.innerHTML = \`
+                <div style="text-align: center; padding: 2rem;">
+                  <div style="font-size: 3rem; margin-bottom: 1rem;">🖼️</div>
+                  <p style="color: #6b7280;">Failed to load image</p>
+                  <p style="font-size: 0.875rem; color: #9ca3af;">\${error.message}</p>
+                </div>
+              \`;
+            });
+          } else {
+            // Show error placeholder
+            img.style.display = 'none';
+            img.parentNode.innerHTML = \`
+              <div style="text-align: center; padding: 2rem;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">🖼️</div>
+                <p style="color: #6b7280;">Failed to load image</p>
+                <p style="font-size: 0.875rem; color: #9ca3af;">Authentication required</p>
+              </div>
+            \`;
+          }
+        }
+
+        function handleThumbnailError(img, url) {
+          console.log('Thumbnail failed to load:', url);
+          // Try to load with authentication
+          if (authToken) {
+            fetch(url, {
+              headers: {
+                'Authorization': \`Bearer \${authToken}\`
+              }
+            })
+            .then(response => response.blob())
+            .then(blob => {
+              const objectUrl = URL.createObjectURL(blob);
+              img.src = objectUrl;
+              img.onload = () => URL.revokeObjectURL(objectUrl);
+            })
+            .catch(error => {
+              console.error('Failed to load thumbnail with auth:', error);
+              // Show error placeholder
+              img.style.display = 'none';
+              img.parentNode.innerHTML = \`<div class="thumbnail-icon">🖼️</div>\`;
+            });
+          } else {
+            // Show error placeholder
+            img.style.display = 'none';
+            img.parentNode.innerHTML = \`<div class="thumbnail-icon">🖼️</div>\`;
+          }
+        }
+
         function handleKeyDown(e) {
           switch (e.key) {
             case 'Escape':
@@ -265,7 +403,7 @@ export const openAttachmentViewer = (
         document.getElementById('close').addEventListener('click', () => window.close());
         document.getElementById('download').addEventListener('click', () => {
           const attachment = attachments[currentIndex];
-          downloadFile(attachment.url, attachment.name);
+          downloadFileWithAuth(attachment.url, attachment.name);
         });
 
         // Image controls

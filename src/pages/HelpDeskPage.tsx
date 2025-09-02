@@ -238,21 +238,23 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
 
   const handleAddComment = async (commentData: { content: string; attachments: FileAttachment[]; isInternal: boolean }) => {
     try {
+      console.log('Creating comment with data:', {
+        ticketId: ticket.id,
+        content: commentData.content,
+        isInternal: commentData.isInternal,
+        attachmentsCount: commentData.attachments?.length || 0
+      });
+
       // Create the comment using the comment service
       const response = await CommentService.createComment({
         ticketId: ticket.id,
         content: commentData.content,
-        isInternal: commentData.isInternal
+        isInternal: commentData.isInternal,
+        attachments: commentData.attachments
       });
 
       if (response.success) {
-        // Handle file attachments if any
-        if (commentData.attachments && commentData.attachments.length > 0) {
-          // Upload attachments and associate them with the comment
-          // This would require additional backend support for comment attachments
-          console.log('Attachments to upload:', commentData.attachments);
-        }
-
+        console.log('Comment created successfully:', response.data);
         // Refresh the ticket details to show the new comment
         toast.success('Comment added successfully!');
         
@@ -261,6 +263,9 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
         
         // Refresh comments to show the new one
         await loadComments();
+      } else {
+        console.error('Comment creation failed:', response.message);
+        toast.error(response.message || 'Failed to create comment');
       }
     } catch (error) {
       console.error('Failed to add comment:', error);
@@ -831,6 +836,18 @@ const NewTicketDialog: FC<{
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Debug attachments state changes
+  useEffect(() => {
+    console.log('NewTicketDialog: attachments state changed to:', attachments);
+  }, [attachments]);
+
+  // Memoize the onFilesChange handler to prevent unnecessary re-renders
+  const handleFilesChange = useCallback((newAttachments: FileAttachment[]) => {
+    console.log('NewTicketDialog: handleFilesChange called with:', newAttachments);
+    console.log('Previous attachments:', attachments);
+    setAttachments(newAttachments);
+  }, [attachments]);
+
   useEffect(() => {
     if (autoOpen) {
       setOpen(true);
@@ -1019,11 +1036,13 @@ const NewTicketDialog: FC<{
             <Label>Attachments</Label>
             <FileUpload
               files={attachments}
-              onFilesChange={setAttachments}
+              onFilesChange={handleFilesChange}
               maxFiles={10}
               maxFileSize={10 * 1024 * 1024} // 10MB
               acceptedTypes={[
-                'image/*',
+                'image/jpeg',
+                'image/png',
+                'image/gif',
                 'application/pdf',
                 'application/msword',
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

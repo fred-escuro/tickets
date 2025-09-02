@@ -147,12 +147,21 @@ export class CommentService {
   // Create a new comment with attachments
   static async createComment(commentData: CreateCommentRequest): Promise<CommentResponse> {
     try {
+      console.log('CommentService: Creating comment with data:', {
+        ticketId: commentData.ticketId,
+        contentLength: commentData.content?.length || 0,
+        isInternal: commentData.isInternal,
+        attachmentsCount: commentData.attachments?.length || 0
+      });
+
       // First create the comment
       const commentResponse = await apiClient.post('/api/comments', {
         ticketId: commentData.ticketId,
         content: commentData.content,
         isInternal: commentData.isInternal || false
       });
+
+      console.log('CommentService: Comment creation response:', commentResponse);
 
       if (!commentResponse.success) {
         throw new Error(commentResponse.error || 'Failed to create comment');
@@ -162,18 +171,23 @@ export class CommentService {
 
       // If there are attachments, upload them
       if (commentData.attachments && commentData.attachments.length > 0) {
+        console.log('CommentService: Uploading attachments for comment:', comment.id);
         try {
           const uploadedAttachments = await AttachmentService.uploadFilesForComment(
             commentData.attachments,
             comment.id
           );
           
+          console.log('CommentService: Attachments uploaded successfully:', uploadedAttachments);
+          
           // Update the comment response to include attachments
           comment.attachments = uploadedAttachments;
         } catch (attachmentError) {
-          console.error('Failed to upload attachments:', attachmentError);
+          console.error('CommentService: Failed to upload attachments:', attachmentError);
           // Don't fail the comment creation if attachments fail
         }
+      } else {
+        console.log('CommentService: No attachments to upload');
       }
 
       return {
@@ -182,7 +196,7 @@ export class CommentService {
         message: 'Comment created successfully'
       };
     } catch (error) {
-      console.error('Create comment error:', error);
+      console.error('CommentService: Create comment error:', error);
       return {
         success: false,
         data: null as any,

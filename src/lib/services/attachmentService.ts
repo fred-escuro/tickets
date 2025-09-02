@@ -25,6 +25,9 @@ export class AttachmentService {
     formData.append('file', file);
     formData.append('ticketId', ticketId);
 
+    console.log('Uploading file:', file.name, 'Type:', file.type, 'Size:', file.size, 'To ticket:', ticketId);
+    console.log('FormData contents:', Array.from(formData.entries()));
+
     try {
       const response = await apiClient.post('/api/attachments/upload', formData);
       
@@ -32,6 +35,7 @@ export class AttachmentService {
         throw new Error(response.error || 'Failed to upload file');
       }
 
+      console.log('Upload successful:', response.data);
       return response.data as UploadedAttachment;
     } catch (error) {
       console.error('Upload error in AttachmentService:', error);
@@ -39,10 +43,43 @@ export class AttachmentService {
     }
   }
 
-    // Upload multiple files for a ticket
+  // Upload a single file for a comment
+  static async uploadFileForComment(file: File, commentId: string): Promise<UploadedAttachment> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('commentId', commentId);
+
+    console.log('Uploading file for comment:', file.name, 'Type:', file.type, 'Size:', file.size, 'To comment:', commentId);
+    console.log('FormData contents:', Array.from(formData.entries()));
+
+    try {
+      const response = await apiClient.post('/api/attachments/upload', formData);
+      
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to upload file');
+      }
+
+      console.log('Comment upload successful:', response.data);
+      return response.data as UploadedAttachment;
+    } catch (error) {
+      console.error('Upload error in AttachmentService:', error);
+      throw error;
+    }
+  }
+
+  // Upload multiple files for a ticket
   static async uploadFilesForTicket(files: FileAttachment[], ticketId: string): Promise<UploadedAttachment[]> {
     const uploadPromises = files.map(attachment => 
       this.uploadFileForTicket(attachment.file, ticketId)
+    );
+
+    return Promise.all(uploadPromises);
+  }
+
+  // Upload multiple files for a comment
+  static async uploadFilesForComment(files: FileAttachment[], commentId: string): Promise<UploadedAttachment[]> {
+    const uploadPromises = files.map(attachment => 
+      this.uploadFileForComment(attachment.file, commentId)
     );
 
     return Promise.all(uploadPromises);

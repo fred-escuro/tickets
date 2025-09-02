@@ -81,8 +81,14 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         return file.type === type;
       });
       
+      // Also check file extension as fallback
       if (!isAccepted) {
-        return `File type ${file.type} is not accepted`;
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+        const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip', 'rar'];
+        if (fileExtension && allowedExtensions.includes(fileExtension)) {
+          return null; // Allow by extension
+        }
+        return `File type ${file.type} (${fileExtension}) is not accepted`;
       }
     }
     
@@ -104,7 +110,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       const reader = new FileReader();
       reader.onload = (e) => {
         attachment.preview = e.target?.result as string;
-        onFilesChange([...files]);
+        // Don't call onFilesChange here - it causes race conditions
+        // The preview will be updated when the component re-renders
       };
       reader.readAsDataURL(file);
     }
@@ -115,27 +122,45 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const handleFileSelect = useCallback((selectedFiles: FileList | null) => {
     if (!selectedFiles) return;
 
+    console.log('File selection:', selectedFiles);
+    console.log('Current files before processing:', files);
     const newFiles: FileAttachment[] = [];
     const errors: string[] = [];
 
     Array.from(selectedFiles).forEach(file => {
+      console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size);
       const error = validateFile(file);
       if (error) {
+        console.log('File validation failed:', file.name, error);
         errors.push(`${file.name}: ${error}`);
       } else {
-        newFiles.push(createFileAttachment(file));
+        console.log('File validation passed:', file.name);
+        const attachment = createFileAttachment(file);
+        console.log('Created attachment:', attachment);
+        newFiles.push(attachment);
       }
     });
 
     if (errors.length > 0) {
+      console.log('File validation errors:', errors);
       alert('Some files could not be uploaded:\n' + errors.join('\n'));
     }
 
     if (newFiles.length > 0) {
       const updatedFiles = [...files, ...newFiles].slice(0, maxFiles);
-      onFilesChange(updatedFiles);
+      console.log('Updating files from', files.length, 'to', updatedFiles.length);
+      console.log('New files added:', newFiles.map(f => f.name));
+      console.log('Calling onFilesChange with:', updatedFiles);
+      try {
+        onFilesChange(updatedFiles);
+        console.log('onFilesChange called successfully');
+      } catch (error) {
+        console.error('Error calling onFilesChange:', error);
+      }
+    } else {
+      console.log('No new files to add');
     }
-  }, [files, maxFiles, maxFileSize, acceptedTypes, onFilesChange]);
+  }, [files, maxFiles, maxFileSize, acceptedTypes]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -145,7 +170,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     
     const droppedFiles = e.dataTransfer.files;
     handleFileSelect(droppedFiles);
-  }, [disabled, handleFileSelect]);
+  }, [disabled]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -196,8 +221,11 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           ref={fileInputRef}
           type="file"
           multiple
-          accept={acceptedTypes.join(',')}
-          onChange={(e) => handleFileSelect(e.target.files)}
+          accept={acceptedTypes.join(',') + ',.jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar'}
+          onChange={(e) => {
+            console.log('File input onChange triggered:', e.target.files);
+            handleFileSelect(e.target.files);
+          }}
           className="hidden"
           disabled={disabled}
         />
