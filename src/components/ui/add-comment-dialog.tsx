@@ -4,13 +4,14 @@ import { Label } from './label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './dialog';
 import { RichTextEditor } from './rich-text-editor';
 import { FileUpload, type FileAttachment } from './file-upload';
+import { Switch } from './switch';
 import { toast } from 'sonner';
-import { MessageSquare, X } from 'lucide-react';
+import { MessageSquare, X, Eye, EyeOff } from 'lucide-react';
 
 interface AddCommentDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (comment: { content: string; attachments: FileAttachment[] }) => Promise<void>;
+  onSubmit: (comment: { content: string; attachments: FileAttachment[]; isInternal: boolean }) => Promise<void>;
   ticketId?: string;
   ticketTitle?: string;
   placeholder?: string;
@@ -28,6 +29,7 @@ export const AddCommentDialog: React.FC<AddCommentDialogProps> = ({
 }) => {
   const [comment, setComment] = useState('');
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [isInternal, setIsInternal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
@@ -38,7 +40,7 @@ export const AddCommentDialog: React.FC<AddCommentDialogProps> = ({
 
     setIsSubmitting(true);
     try {
-      await onSubmit({ content: comment, attachments });
+      await onSubmit({ content: comment, attachments, isInternal });
       toast.success('Comment added successfully!');
       handleClose();
     } catch (error) {
@@ -51,6 +53,7 @@ export const AddCommentDialog: React.FC<AddCommentDialogProps> = ({
   const handleClose = () => {
     setComment('');
     setAttachments([]);
+    setIsInternal(false);
     setIsSubmitting(false);
     onClose();
   };
@@ -84,6 +87,23 @@ export const AddCommentDialog: React.FC<AddCommentDialogProps> = ({
               onChange={setComment}
               placeholder={placeholder}
               className="min-h-[200px]"
+            />
+          </div>
+
+          {/* Internal Comment Toggle */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label htmlFor="internal-comment" className="text-sm font-medium">
+                Internal Comment
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Internal comments are only visible to support team members
+              </p>
+            </div>
+            <Switch
+              id="internal-comment"
+              checked={isInternal}
+              onCheckedChange={setIsInternal}
             />
           </div>
 

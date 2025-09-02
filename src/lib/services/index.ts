@@ -3,3 +3,4 @@ export * from './authService';
 export * from './ticketService';
 export * from './userService';
 export * from './attachmentService';
+export * from './commentService';

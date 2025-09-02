@@ -17,6 +17,7 @@ import { openAttachmentViewer } from '@/lib/attachmentViewer';
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { TicketService, type Ticket } from '@/lib/services/ticketService';
 import { AttachmentService } from '@/lib/services/attachmentService';
+import { CommentService, type Comment } from '@/lib/services/commentService';
 import { useApi } from '@/hooks/useApi';
 import { 
   ArrowLeft, 
@@ -46,7 +47,7 @@ import {
   X,
   LogOut
 } from 'lucide-react';
-import { useState, useEffect, type FC } from 'react';
+import { useState, useEffect, useCallback, type FC } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -137,6 +138,15 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
   const [showAddComment, setShowAddComment] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+
+  // Load comments when ticket details are shown
+  useEffect(() => {
+    if (showDetails && ticket.id) {
+      loadComments();
+    }
+  }, [showDetails, ticket.id]);
 
   // Create a unified timeline including original issue and comments
   const createTimeline = () => {
@@ -156,7 +166,21 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
       timestamp: new Date(ticket.submittedAt)
     });
 
-    // For now, no comments - we can add this later when implementing comments API
+    // Add comments
+    comments.forEach(comment => {
+      const commentDateKey = new Date(comment.createdAt).toDateString();
+      timeline.push({
+        type: 'comment',
+        dateKey: commentDateKey,
+        data: {
+          ...comment,
+          author: comment.author ? `${comment.author.firstName} ${comment.author.lastName}` : 'Unknown User',
+          timestamp: comment.createdAt,
+          attachments: comment.attachments || []
+        },
+        timestamp: new Date(comment.createdAt)
+      });
+    });
 
     // Sort by timestamp (latest first)
     timeline.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
@@ -194,15 +218,55 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
     setExpandedDates(new Set());
   };
 
-  const handleAddComment = async (commentData: { content: string; attachments: FileAttachment[] }) => {
-    // Simulate comment submission
-    await new Promise(resolve => setTimeout(resolve, 1000));
+  // Load comments for the ticket
+  const loadComments = async () => {
+    if (!ticket.id) return;
     
-    // In a real app, you would submit the comment to your server
-    console.log('New comment for ticket', ticket.id, ':', commentData);
-    
-    // Refresh the ticket details or update the local state
-    // For now, we'll just show a success message
+    setIsLoadingComments(true);
+    try {
+      const response = await CommentService.getComments(ticket.id);
+      if (response.success) {
+        setComments(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to load comments:', error);
+      toast.error('Failed to load comments');
+    } finally {
+      setIsLoadingComments(false);
+    }
+  };
+
+  const handleAddComment = async (commentData: { content: string; attachments: FileAttachment[]; isInternal: boolean }) => {
+    try {
+      // Create the comment using the comment service
+      const response = await CommentService.createComment({
+        ticketId: ticket.id,
+        content: commentData.content,
+        isInternal: commentData.isInternal
+      });
+
+      if (response.success) {
+        // Handle file attachments if any
+        if (commentData.attachments && commentData.attachments.length > 0) {
+          // Upload attachments and associate them with the comment
+          // This would require additional backend support for comment attachments
+          console.log('Attachments to upload:', commentData.attachments);
+        }
+
+        // Refresh the ticket details to show the new comment
+        toast.success('Comment added successfully!');
+        
+        // Close the dialog and refresh comments
+        setShowAddComment(false);
+        
+        // Refresh comments to show the new one
+        await loadComments();
+      }
+    } catch (error) {
+      console.error('Failed to add comment:', error);
+      toast.error('Failed to add comment. Please try again.');
+      throw error; // Re-throw to let the dialog handle the error state
+    }
   };
 
   return (
@@ -217,16 +281,18 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
         
         <CardContent className="p-5 relative">
           <div className="space-y-4">
-            {/* Header with category, title, and ticket number */}
-            <div className="flex items-start gap-3">
-              <div className="group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg">
-                {getCategoryIcon(ticket.category)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="font-semibold text-base truncate group-hover:text-primary transition-colors duration-300">{ticket.title}</h3>
-                <p className="text-sm text-muted-foreground font-mono">#{ticket.id}</p>
-              </div>
-            </div>
+                         {/* Header with category, title, and ticket number */}
+             <div className="flex items-start gap-3">
+               <div className="group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg">
+                 {getCategoryIcon(ticket.category)}
+               </div>
+               <div className="min-w-0 flex-1">
+                 <h3 className="font-semibold text-base truncate group-hover:text-primary transition-colors duration-300">{ticket.title}</h3>
+                                   <div className="flex items-center gap-2 mt-1">
+                    <p className="text-sm text-muted-foreground font-mono">#{ticket.id}</p>
+                  </div>
+               </div>
+             </div>
             
             {/* Status badges row */}
             <div className="flex flex-row gap-2 items-center">
@@ -271,19 +337,28 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
             
             {/* Footer with metadata and action buttons */}
             <div className="flex items-center justify-between pt-2 border-t border-border/50">
-              <div className="flex items-center gap-4 text-xs text-muted-foreground group-hover:text-muted-foreground/80 transition-colors duration-300">
-                <span className="group-hover:translate-x-1 transition-transform duration-300 flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  {formatDate(ticket.submittedAt)}
-                </span>
-                {ticket.assignedTo && (
-                  <span className="group-hover:translate-x-1 transition-transform duration-300 flex items-center gap-1">
+                             <div className="flex flex-col gap-2 text-xs text-muted-foreground group-hover:text-muted-foreground/80 transition-colors duration-300">
+                 <span className="group-hover:translate-x-1 transition-transform duration-300 flex items-center gap-1">
+                   <Calendar className="h-3 w-3" />
+                   {formatDate(ticket.submittedAt)}
+                 </span>
+                                   <span className="group-hover:translate-x-1 transition-transform duration-300 flex items-center gap-1">
                     <User className="h-3 w-3" />
-                    {ticket.assignedTo}
+                    <span className="truncate">
+                      {ticket.submitter 
+                        ? `${ticket.submitter.firstName} ${ticket.submitter.lastName}`
+                        : ticket.submittedBy
+                      }
+                    </span>
                   </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                 {ticket.assignee && (
+                   <span className="group-hover:translate-x-1 transition-transform duration-300 flex items-center gap-1">
+                     <User className="h-3 w-3" />
+                     {`${ticket.assignee.firstName} ${ticket.assignee.lastName}`}
+                   </span>
+                 )}
+               </div>
+              <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -361,50 +436,61 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
               </div>
             </div>
             
-            {/* User and Date Info */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Created By</p>
-                <p className="text-sm font-medium">{ticket.submittedBy}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Date Created</p>
-                <p className="text-sm">{formatDate(ticket.submittedAt)}</p>
-              </div>
-              {ticket.assignedTo && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Assigned To</p>
-                  <p className="text-sm">{ticket.assignedTo}</p>
+                         {/* User and Date Info */}
+             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+               <div className="space-y-1">
+                 <p className="text-xs text-muted-foreground">Date Created</p>
+                 <p className="text-sm">{formatDate(ticket.submittedAt)}</p>
+               </div>
+                               <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Created By</p>
+                  <p className="text-sm font-medium">
+                    {ticket.submitter 
+                      ? `${ticket.submitter.firstName} ${ticket.submitter.lastName}`
+                      : ticket.submittedBy
+                    }
+                  </p>
                 </div>
-              )}
-              {ticket.dueDate && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Due Date</p>
-                  <p className="text-sm">{formatDate(ticket.dueDate)}</p>
-                </div>
-              )}
-            </div>
+                                {ticket.assignee && (
+                   <div className="space-y-1">
+                     <p className="text-xs text-muted-foreground">Assigned To</p>
+                     <p className="text-sm">
+                       {`${ticket.assignee.firstName} ${ticket.assignee.lastName}`}
+                     </p>
+                   </div>
+                 )}
+               {ticket.dueDate && (
+                 <div className="space-y-1">
+                   <p className="text-xs text-muted-foreground">Due Date</p>
+                   <p className="text-sm">{formatDate(ticket.dueDate)}</p>
+                 </div>
+               )}
+             </div>
           </div>
           
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6 rounded-b-lg">
 
-            {/* Timeline View - Comments and Original Issue */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium">
-                  Timeline ({Object.values(groupedTimeline).flat().length} items)
-                </h4>
-                <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => setShowAddComment(true)}
-                    className="flex items-center gap-2"
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    Add Comment
-                  </Button>
+                          {/* Timeline View - Comments and Original Issue */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium">
+                    Timeline ({Object.values(groupedTimeline).flat().length} items)
+                    {isLoadingComments && (
+                      <span className="text-xs text-muted-foreground ml-2">(Loading comments...)</span>
+                    )}
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => setShowAddComment(true)}
+                      className="flex items-center gap-2"
+                      disabled={isLoadingComments}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      Add Comment
+                    </Button>
+                  </div>
                 </div>
-              </div>
                
               {/* Timeline Controls */}
                 <div className="flex items-center justify-between">
