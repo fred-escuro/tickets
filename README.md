@@ -84,7 +84,7 @@ nexus/
 │   ├── pages/               # Page components
 │   │   ├── Dashboard.tsx
 │   │   ├── CalendarPage.tsx
-│   │   ├── EmployeeDirectoryPage.tsx
+│   │   ├── UsersPage.tsx
 │   │   └── ...
 │   ├── contexts/            # React contexts
 │   ├── hooks/               # Custom React hooks

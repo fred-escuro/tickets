@@ -16,7 +16,11 @@ import {
   Headphones,
   ChevronDown,
   Settings,
-  Shield
+  Shield,
+  Building2,
+  Ticket,
+  Bell,
+  Wrench
 } from 'lucide-react';
 import { type FC, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -89,7 +93,14 @@ export const Header: FC = () => {
     { path: '/reports', label: 'Reports', icon: BarChart3 },
     { path: '/knowledge-base', label: 'Knowledge Base', icon: Headphones },
     { path: '/admin/users', label: 'User Management', icon: Shield },
-    { path: '/settings', label: 'Settings', icon: Settings },
+  ];
+
+  // Settings navigation
+  const settingsNavItems = [
+    { path: '/settings', label: 'General', icon: Building2 },
+    { path: '/settings?tab=tickets', label: 'Tickets', icon: Ticket },
+    { path: '/settings?tab=users', label: 'Users', icon: Users },
+    { path: '/settings?tab=notifications', label: 'Notifications', icon: Bell },
   ];
 
   return (
@@ -196,13 +207,47 @@ export const Header: FC = () => {
                           : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                       }`}
                     >
-                      <Settings className="h-4 w-4" />
+                      <Wrench className="h-4 w-4" />
                       <span className="hidden sm:inline">Tools</span>
                       <ChevronDown className="h-3 w-3 opacity-50" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="center" className="w-48">
                     {managementNavItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <DropdownMenuItem key={item.path} asChild>
+                          <Link
+                            to={item.path}
+                            className="flex items-center gap-2 w-full"
+                          >
+                            <Icon className="h-4 w-4" />
+                            {item.label}
+                          </Link>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Settings Dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                        location.pathname === '/settings'
+                          ? 'bg-primary/10 text-primary shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                      }`}
+                    >
+                      <Settings className="h-4 w-4" />
+                      <span className="hidden sm:inline">Settings</span>
+                      <ChevronDown className="h-3 w-3 opacity-50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="center" className="w-48">
+                    {settingsNavItems.map((item) => {
                       const Icon = item.icon;
                       return (
                         <DropdownMenuItem key={item.path} asChild>

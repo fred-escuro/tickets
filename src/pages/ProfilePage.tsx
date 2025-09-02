@@ -31,15 +31,7 @@ export const ProfilePage: React.FC = () => {
     avatar: ''
   });
 
-  // Debug: Log formData changes
-  useEffect(() => {
-    console.log('formData changed:', formData);
-  }, [formData]);
 
-  // Debug: Log user changes
-  useEffect(() => {
-    console.log('user changed:', user);
-  }, [user]);
 
   useEffect(() => {
     fetchUserProfile();
@@ -49,42 +41,31 @@ export const ProfilePage: React.FC = () => {
     try {
       setLoading(true);
       const currentUser = AuthService.getCurrentUser();
-      console.log('Current user from localStorage:', currentUser);
-      
-      if (currentUser) {
-        console.log('Fetching user data for ID:', currentUser.id);
-        
-        // Get fresh user data from database
-        const response = await UserService.getUser(currentUser.id);
-        console.log('API response:', response);
-        
-                 if (response.success && response.data) {
-           const freshUser = response.data;
-           console.log('Fresh user data from DB:', freshUser);
-           console.log('Avatar from DB:', freshUser.avatar);
-           console.log('User ID from DB:', freshUser.id);
-           console.log('Current formData.avatar before update:', formData.avatar);
+             if (currentUser) {
+         // Get fresh user data from database
+         const response = await UserService.getUser(currentUser.id);
+         
+                  if (response.success && response.data) {
+            const freshUser = response.data;
            
-           // Update localStorage with fresh data
-           AuthService.setCurrentUser(freshUser);
-           
-           setUser(freshUser);
-           const newFormData = {
-             firstName: freshUser.firstName,
-             lastName: freshUser.lastName,
-             middleName: freshUser.middleName || '',
-             email: freshUser.email,
-             phone: freshUser.phone || '',
-             location: freshUser.location || '',
-             department: freshUser.department || '',
-             avatar: freshUser.avatar || formData.avatar || ''
-           };
-           console.log('Setting new formData:', newFormData);
-           setFormData(newFormData);
-        } else {
-          // Fallback to localStorage data if API fails
-          console.log('API failed, using localStorage data:', currentUser);
-          setUser(currentUser);
+                       // Update localStorage with fresh data
+            AuthService.setCurrentUser(freshUser);
+            
+            setUser(freshUser);
+            const newFormData = {
+              firstName: freshUser.firstName,
+              lastName: freshUser.lastName,
+              middleName: freshUser.middleName || '',
+              email: freshUser.email,
+              phone: freshUser.phone || '',
+              location: freshUser.location || '',
+              department: freshUser.department || '',
+              avatar: freshUser.avatar || ''
+            };
+            setFormData(newFormData);
+                 } else {
+           // Fallback to localStorage data if API fails
+           setUser(currentUser);
           setFormData({
             firstName: currentUser.firstName,
             lastName: currentUser.lastName,
@@ -115,14 +96,16 @@ export const ProfilePage: React.FC = () => {
         return;
       }
 
-      const response = await UserService.updateUser(user.id, {
+      const updateData = {
         firstName: formData.firstName,
         lastName: formData.lastName,
         middleName: formData.middleName || undefined,
         phone: formData.phone || undefined,
         avatar: formData.avatar || undefined,
         location: formData.location || undefined
-      });
+      };
+      
+             const response = await UserService.updateUser(user.id, updateData);
 
              if (response.success && response.data) {
          // Update local storage with new user data
@@ -145,10 +128,9 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
-  const handleCancel = () => {
-    if (user) {
-      console.log('Canceling edit, restoring user data:', user);
-      setFormData({
+     const handleCancel = () => {
+     if (user) {
+       setFormData({
         firstName: user.firstName,
         lastName: user.lastName,
         middleName: user.middleName || '',
@@ -156,7 +138,7 @@ export const ProfilePage: React.FC = () => {
         phone: user.phone || '',
         location: user.location || '',
         department: user.department || '',
-        avatar: user.avatar || formData.avatar || ''
+                 avatar: user.avatar || ''
       });
     }
     setIsEditing(false);
@@ -226,9 +208,44 @@ export const ProfilePage: React.FC = () => {
             {/* Profile Card */}
             <div className="lg:col-span-1">
               <Card>
-                                                   <CardHeader className="text-center">
-                    {/* Avatar section removed */}
-                   <CardTitle className="text-xl">
+                <CardHeader className="text-center">
+                  {/* Avatar Section */}
+                  <div className="flex justify-center mb-4">
+                    <div className="relative">
+                      {formData.avatar ? (
+                        <div className="h-24 w-24 rounded-full overflow-hidden border-4 border-primary/20">
+                          <img 
+                            src={formData.avatar} 
+                            alt={`${formData.firstName} ${formData.lastName}`}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              // Hide the image and show initials on error
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              const initialsDiv = target.parentElement?.querySelector('.avatar-initials') as HTMLElement;
+                              if (initialsDiv) {
+                                initialsDiv.style.display = 'flex';
+                              }
+                            }}
+                          />
+                          {/* Fallback initials - hidden by default when image is present */}
+                          <div 
+                            className="avatar-initials h-full w-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center text-white text-2xl font-bold"
+                            style={{ display: 'none' }}
+                          >
+                            {formData.firstName?.charAt(0)?.toUpperCase()}{formData.lastName?.charAt(0)?.toUpperCase()}
+                          </div>
+                        </div>
+                      ) : (
+                        /* Show initials when no avatar is set */
+                        <div className="h-24 w-24 rounded-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center text-white text-2xl font-bold border-4 border-primary/20">
+                          {formData.firstName?.charAt(0)?.toUpperCase()}{formData.lastName?.charAt(0)?.toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <CardTitle className="text-xl">
                     {formData.middleName ? `${formData.firstName} ${formData.middleName} ${formData.lastName}` : `${formData.firstName} ${formData.lastName}`}
                   </CardTitle>
                   <div className="space-y-2">
@@ -279,8 +296,11 @@ export const ProfilePage: React.FC = () => {
                 <CardContent className="space-y-6">
                   {isEditing ? (
                     <form className="space-y-4">
-                                             <div className="space-y-2">
+                                                                                          <div className="space-y-2">
                          <Label htmlFor="avatar">Avatar URL</Label>
+                         <p className="text-xs text-muted-foreground">
+                           Enter a direct image URL or use the buttons below to generate one
+                         </p>
                          <div className="flex gap-2">
                            <Input
                              id="avatar"
@@ -288,29 +308,54 @@ export const ProfilePage: React.FC = () => {
                              placeholder="https://example.com/avatar.jpg"
                              value={formData.avatar}
                              onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
+                             className="flex-1"
                            />
-                           <Button
-                             type="button"
-                             variant="outline"
-                             size="sm"
-                             onClick={() => {
-                               const generatedAvatar = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(formData.firstName + ' ' + formData.lastName)}&backgroundColor=1f2937&textColor=ffffff`;
-                               setFormData({ ...formData, avatar: generatedAvatar });
-                             }}
-                           >
-                             Generate
-                           </Button>
-                         </div>
-                                                   {formData.avatar && (
-                            <div className="flex items-center gap-2 mt-2">
-                              <span className="text-sm text-muted-foreground">Preview:</span>
-                              <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center border-2 border-border">
-                                <div className="text-xs font-bold text-muted-foreground">
-                                  {formData.firstName?.charAt(0)?.toUpperCase()}{formData.lastName?.charAt(0)?.toUpperCase()}
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                                                        <Button
+                               type="button"
+                               variant="outline"
+                               size="sm"
+                               onClick={() => {
+                                 const generatedAvatar = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(formData.firstName + ' ' + formData.lastName)}&backgroundColor=1f2937&textColor=ffffff`;
+                                 setFormData({ ...formData, avatar: generatedAvatar });
+                               }}
+                               title="Generate avatar with your initials"
+                             >
+                               Generate
+                             </Button>
+
+                           </div>
+                                                                                                      {formData.avatar && (
+                             <div className="flex items-center gap-2 mt-2">
+                               <span className="text-sm text-muted-foreground">Preview:</span>
+                               <div className="relative">
+                                 <div className="h-10 w-10 rounded-full overflow-hidden border-2 border-border">
+                                   <img 
+                                     src={formData.avatar} 
+                                     alt="Avatar preview"
+                                     className="h-full w-full object-cover"
+                                     onError={(e) => {
+                                       // Hide the image and show initials on error
+                                       const target = e.target as HTMLImageElement;
+                                       target.style.display = 'none';
+                                       const initialsDiv = target.parentElement?.querySelector('.preview-initials') as HTMLElement;
+                                       if (initialsDiv) {
+                                         initialsDiv.style.display = 'flex';
+                                       }
+                                     }}
+                                   />
+                                   {/* Fallback initials for preview */}
+                                   <div 
+                                     className="preview-initials h-full w-full bg-muted flex items-center justify-center border-2 border-border"
+                                     style={{ display: 'none' }}
+                                   >
+                                     <div className="text-xs font-bold text-muted-foreground">
+                                       {formData.firstName?.charAt(0)?.toUpperCase()}{formData.lastName?.charAt(0)?.toUpperCase()}
+                                     </div>
+                                   </div>
+                                 </div>
+                               </div>
+                             </div>
+                           )}
                        </div>
 
                       <div className="grid grid-cols-2 gap-4">

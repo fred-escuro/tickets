@@ -9,13 +9,13 @@ import { Header } from './components/Header';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Dashboard } from './pages/Dashboard';
 import { HelpDeskPage } from './pages/HelpDeskPage';
-import { EmployeeDirectoryPage } from './pages/EmployeeDirectoryPage';
+
 import { ProjectsPage } from './pages/ProjectsPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { ResourcesPage } from './pages/ResourcesPage';
 import SettingsPage from './pages/SettingsPage';
-import UsersPage from './pages/UsersPage';
+import { UsersPage } from './pages/UsersPage';
 import { ProfilePage } from './pages/ProfilePage';
 
 const AppRoutes: FC = () => {
@@ -40,8 +40,8 @@ const AppRoutes: FC = () => {
       <Route
         path="/users"
         element={
-          <ProtectedRoute pageTitle="Employee Directory" pageDescription="Please log in to view the employee directory and team information.">
-            <EmployeeDirectoryPage />
+          <ProtectedRoute pageTitle="User Management" pageDescription="Please log in to manage users and view the employee directory.">
+            <UsersPage />
           </ProtectedRoute>
         }
       />
@@ -49,7 +49,7 @@ const AppRoutes: FC = () => {
         path="/directory"
         element={
           <ProtectedRoute pageTitle="Employee Directory" pageDescription="Please log in to view the employee directory and team information.">
-            <EmployeeDirectoryPage />
+            <UsersPage />
           </ProtectedRoute>
         }
       />

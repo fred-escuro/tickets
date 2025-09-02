@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Settings, 
   Building2, 
@@ -27,14 +28,27 @@ import {
 import { settingsService, type SystemSettings } from '@/lib/settingsService';
 
 export default function SettingsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SystemSettings>(settingsService.getSettings());
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+
+  // Get the current tab from URL params, default to 'general'
+  const currentTab = searchParams.get('tab') || 'general';
 
   // Load settings on component mount
   useEffect(() => {
     setSettings(settingsService.getSettings());
   }, []);
+
+  // Handle tab changes
+  const handleTabChange = (value: string) => {
+    if (value === 'general') {
+      setSearchParams({}); // Remove tab param for general
+    } else {
+      setSearchParams({ tab: value });
+    }
+  };
 
   // Color mapping for categories
   const getCategoryColorClasses = (color: string) => {
@@ -115,7 +129,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Settings</h1>
@@ -131,7 +145,7 @@ export default function SettingsPage() {
         </Button>
       </div>
 
-      <Tabs defaultValue="general" className="space-y-6">
+      <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
