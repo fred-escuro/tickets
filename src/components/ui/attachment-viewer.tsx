@@ -326,7 +326,16 @@ export const AttachmentViewer: React.FC<AttachmentViewerProps> = ({
           if (response.ok) {
             const blob = await response.blob();
             downloadUrl = URL.createObjectURL(blob);
+          } else {
+            // If the authenticated request fails, don't fallback to original URL
+            // as it will also fail without authentication
+            console.error('Failed to download file with authentication:', response.status, response.statusText);
+            return;
           }
+        } else {
+          // No auth token available, cannot download the file
+          console.error('No authentication token available');
+          return;
         }
       }
 
@@ -343,13 +352,8 @@ export const AttachmentViewer: React.FC<AttachmentViewerProps> = ({
       }
     } catch (error) {
       console.error('Download failed:', error);
-      // Fallback to original URL
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Don't fallback to original URL as it will fail without authentication
+      // Instead, show an error message or handle gracefully
     }
   };
 
@@ -377,7 +381,16 @@ export const AttachmentViewer: React.FC<AttachmentViewerProps> = ({
           if (response.ok) {
             const blob = await response.blob();
             openUrl = URL.createObjectURL(blob);
+          } else {
+            // If the authenticated request fails, don't fallback to original URL
+            // as it will also fail without authentication
+            console.error('Failed to fetch file with authentication:', response.status, response.statusText);
+            return;
           }
+        } else {
+          // No auth token available, cannot open the file
+          console.error('No authentication token available');
+          return;
         }
       }
 
@@ -389,8 +402,8 @@ export const AttachmentViewer: React.FC<AttachmentViewerProps> = ({
       }
     } catch (error) {
       console.error('Open in new tab failed:', error);
-      // Fallback to original URL
-      window.open(url, '_blank');
+      // Don't fallback to original URL as it will fail without authentication
+      // Instead, show an error message or handle gracefully
     }
   };
 

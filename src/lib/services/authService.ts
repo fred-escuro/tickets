@@ -165,10 +165,71 @@ export class AuthService {
 
 // Auto-refresh token when it expires
 let refreshTimeout: NodeJS.Timeout | null = null;
+let expiryTimeout: NodeJS.Timeout | null = null;
+
+// Check if token is expired
+export const isTokenExpired = (token?: string): boolean => {
+  const authToken = token || AuthService.getAuthToken();
+  if (!authToken) return true;
+
+  try {
+    const payload = JSON.parse(atob(authToken.split('.')[1]));
+    const expiresAt = payload.exp * 1000; // Convert to milliseconds
+    const now = Date.now();
+    return now >= expiresAt;
+  } catch (error) {
+    console.error('Error checking token expiry:', error);
+    return true; // If we can't parse the token, consider it expired
+  }
+};
+
+// Get token expiry time in milliseconds
+export const getTokenExpiry = (token?: string): number | null => {
+  const authToken = token || AuthService.getAuthToken();
+  if (!authToken) return null;
+
+  try {
+    const payload = JSON.parse(atob(authToken.split('.')[1]));
+    return payload.exp * 1000; // Convert to milliseconds
+  } catch (error) {
+    console.error('Error getting token expiry:', error);
+    return null;
+  }
+};
+
+// Force logout and redirect to login
+export const forceLogout = () => {
+  console.log('Token expired - forcing logout');
+  
+  // Clear all auth data
+  AuthService.clearAuth();
+  
+  // Clear timeouts
+  clearTokenRefresh();
+  clearExpiryTimeout();
+  
+  // Dispatch custom event to notify components
+  window.dispatchEvent(new CustomEvent('auth-expired'));
+  
+  // Also dispatch the existing auth-change event for compatibility
+  window.dispatchEvent(new CustomEvent('auth-change'));
+};
+
+// Clear expiry timeout
+export const clearExpiryTimeout = () => {
+  if (expiryTimeout) {
+    clearTimeout(expiryTimeout);
+    expiryTimeout = null;
+  }
+};
 
 export const setupTokenRefresh = () => {
   const token = AuthService.getAuthToken();
   if (!token) return;
+
+  // Clear existing timeouts
+  clearTokenRefresh();
+  clearExpiryTimeout();
 
   try {
     // Decode JWT token to get expiration time
@@ -177,13 +238,30 @@ export const setupTokenRefresh = () => {
     const now = Date.now();
     const timeUntilExpiry = expiresAt - now;
 
-    // If token expires in less than 5 minutes, refresh it
+    // If token is already expired, force logout immediately
+    if (timeUntilExpiry <= 0) {
+      forceLogout();
+      return;
+    }
+
+    // Set timeout for actual expiry (force logout)
+    expiryTimeout = setTimeout(() => {
+      forceLogout();
+    }, timeUntilExpiry);
+
+    // If token expires in less than 5 minutes, try to refresh it
     if (timeUntilExpiry < 5 * 60 * 1000) {
       AuthService.refreshToken().then(response => {
         if (response.success && response.data) {
           AuthService.setAuthToken(response.data.token);
           setupTokenRefresh(); // Setup next refresh
+        } else {
+          // Refresh failed, force logout
+          forceLogout();
         }
+      }).catch(() => {
+        // Refresh failed, force logout
+        forceLogout();
       });
     } else {
       // Set timeout to refresh token 5 minutes before expiry
@@ -193,12 +271,19 @@ export const setupTokenRefresh = () => {
           if (response.success && response.data) {
             AuthService.setAuthToken(response.data.token);
             setupTokenRefresh(); // Setup next refresh
+          } else {
+            // Refresh failed, force logout
+            forceLogout();
           }
+        }).catch(() => {
+          // Refresh failed, force logout
+          forceLogout();
         });
       }, refreshTime);
     }
   } catch (error) {
     console.error('Error setting up token refresh:', error);
+    forceLogout();
   }
 };
 

@@ -1,4 +1,5 @@
 import { config } from '../config/environment';
+import { forceLogout } from './services/authService';
 
 // API Configuration
 export const API_BASE_URL = config.api.baseUrl;
@@ -34,6 +35,9 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/api/tickets/${id}`,
     ASSIGN: (id: string) => `/api/tickets/${id}/assign`,
     STATUS: (id: string) => `/api/tickets/${id}/status`,
+    STATS_OVERVIEW: '/api/tickets/stats/overview',
+    STATS_ACTIVITY: '/api/tickets/stats/activity',
+    STATS_METRICS: '/api/tickets/stats/metrics',
   },
   // Comments
   COMMENTS: {
@@ -146,6 +150,13 @@ export class ApiClient {
       });
 
       if (!response.ok) {
+        // Handle 401 Unauthorized responses globally
+        if (response.status === 401) {
+          console.log('API request returned 401 - token may be expired');
+          forceLogout();
+          throw new Error('Authentication expired. Please log in again.');
+        }
+        
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }

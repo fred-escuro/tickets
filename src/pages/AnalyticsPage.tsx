@@ -4,15 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
-import { 
-  ticketMetrics, 
-  ticketActivityData, 
-  departmentPerformanceData, 
-  ticketStatusData, 
-  ticketCategoryData,
-  ticketTrendData,
-  type TicketMetric 
-} from '@/data/mockData';
+import { AnalyticsService, type TicketMetric, type TicketActivityData } from '@/lib/services/analyticsService';
 import { 
   ArrowLeft, 
   TrendingUp, 
@@ -25,7 +17,7 @@ import {
   CheckCircle,
   Star
 } from 'lucide-react';
-import { useState, type FC } from 'react';
+import { useState, useEffect, type FC } from 'react';
 import { Link } from 'react-router-dom';
 import {
   LineChart,
@@ -112,6 +104,52 @@ const MetricCard: FC<{ metric: TicketMetric }> = ({ metric }) => (
 
 export const AnalyticsPage: FC = () => {
   const [timeRange, setTimeRange] = useState('7d');
+  const [ticketMetrics, setTicketMetrics] = useState<TicketMetric[]>([]);
+  const [ticketActivityData, setTicketActivityData] = useState<TicketActivityData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch analytics data
+  useEffect(() => {
+    const fetchAnalyticsData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const authToken = localStorage.getItem('auth-token');
+        if (!authToken) {
+          setError('Please log in to view analytics');
+          setLoading(false);
+          return;
+        }
+
+        const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
+        
+        const [metricsResponse, activityResponse] = await Promise.all([
+          AnalyticsService.getTicketMetrics(),
+          AnalyticsService.getTicketActivity(days)
+        ]);
+
+        console.log('AnalyticsPage API responses:', { metricsResponse, activityResponse });
+
+        if (metricsResponse.success && activityResponse.success) {
+          const transformedMetrics = AnalyticsService.transformMetricsToUI(metricsResponse.data);
+          setTicketMetrics(transformedMetrics);
+          setTicketActivityData(activityResponse.data);
+        } else {
+          console.error('AnalyticsPage API failed:', { metricsResponse, activityResponse });
+          setError('Failed to fetch analytics data');
+        }
+      } catch (err) {
+        console.error('Error fetching analytics data:', err);
+        setError(`Failed to load analytics data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAnalyticsData();
+  }, [timeRange]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -157,95 +195,165 @@ export const AnalyticsPage: FC = () => {
 
         {/* Key Metrics */}
         <PageSection index={1}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {ticketMetrics.map((metric, index) => (
-              <div 
-                key={metric.id}
-                className="animate-in fade-in slide-in-from-bottom-4 duration-300"
-                style={{ animationDelay: `${(index + 1) * 100}ms` }}
-              >
-                <MetricCard metric={metric} />
-              </div>
-            ))}
-          </div>
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {[...Array(4)].map((_, index) => (
+                <Card key={index}>
+                  <CardContent className="p-4 sm:p-6">
+                    <div className="animate-pulse">
+                      <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
+                      <div className="h-8 bg-muted rounded w-1/2 mb-2"></div>
+                      <div className="h-3 bg-muted rounded w-2/3"></div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : error ? (
+            <Card>
+              <CardContent className="p-6 text-center">
+                <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Unable to load analytics</h3>
+                <p className="text-muted-foreground mb-4">{error}</p>
+                <Button onClick={() => window.location.reload()}>
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {ticketMetrics.map((metric, index) => (
+                <div 
+                  key={metric.id}
+                  className="animate-in fade-in slide-in-from-bottom-4 duration-300"
+                  style={{ animationDelay: `${(index + 1) * 100}ms` }}
+                >
+                  <MetricCard metric={metric} />
+                </div>
+              ))}
+            </div>
+          )}
         </PageSection>
 
         {/* Charts Section */}
         <PageSection index={2}>
-          <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4 max-w-md">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="performance">Performance</TabsTrigger>
-              <TabsTrigger value="trends">Trends</TabsTrigger>
-              <TabsTrigger value="categories">Categories</TabsTrigger>
-            </TabsList>
-
-            {/* Overview Tab */}
-            <TabsContent value="overview" className="space-y-6">
+          {loading ? (
+            <div className="space-y-6">
+              <div className="h-10 bg-muted rounded animate-pulse"></div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Ticket Activity Chart */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Ticket Activity</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <AreaChart data={ticketActivityData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Area 
-                          type="monotone" 
-                          dataKey="ticketsCreated" 
-                          stackId="1" 
-                          stroke={chartColors.primary} 
-                          fill={chartColors.primary} 
-                          name="Created"
-                        />
-                        <Area 
-                          type="monotone" 
-                          dataKey="ticketsResolved" 
-                          stackId="1" 
-                          stroke={chartColors.secondary} 
-                          fill={chartColors.secondary} 
-                          name="Resolved"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-
-                {/* Ticket Status Distribution */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Ticket Status Distribution</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={ticketStatusData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="count"
-                        >
-                          {ticketStatusData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
+                {[...Array(2)].map((_, index) => (
+                  <Card key={index}>
+                    <CardHeader>
+                      <div className="h-6 bg-muted rounded animate-pulse"></div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[300px] bg-muted rounded animate-pulse"></div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-            </TabsContent>
+            </div>
+          ) : error ? (
+            <Card>
+              <CardContent className="p-6 text-center">
+                <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Unable to load charts</h3>
+                <p className="text-muted-foreground mb-4">{error}</p>
+                <Button onClick={() => window.location.reload()}>
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Tabs defaultValue="overview" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-4 max-w-md">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="performance">Performance</TabsTrigger>
+                <TabsTrigger value="trends">Trends</TabsTrigger>
+                <TabsTrigger value="categories">Categories</TabsTrigger>
+              </TabsList>
+
+              {/* Overview Tab */}
+              <TabsContent value="overview" className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Ticket Activity Chart */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Ticket Activity</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {ticketActivityData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                          <AreaChart data={ticketActivityData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="date" />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Area 
+                              type="monotone" 
+                              dataKey="ticketsCreated" 
+                              stackId="1" 
+                              stroke={chartColors.primary} 
+                              fill={chartColors.primary} 
+                              name="Created"
+                            />
+                            <Area 
+                              type="monotone" 
+                              dataKey="ticketsResolved" 
+                              stackId="1" 
+                              stroke={chartColors.secondary} 
+                              fill={chartColors.secondary} 
+                              name="Resolved"
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                          No activity data available
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Ticket Status Distribution - Using real data */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Ticket Status Distribution</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {ticketMetrics.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                          <PieChart>
+                            <Pie
+                              data={ticketMetrics.filter(m => m.name.includes('Status')).map(metric => ({
+                                name: metric.name.replace(' Status', ''),
+                                count: parseInt(metric.value.toString())
+                              }))}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                              outerRadius={80}
+                              fill="#8884d8"
+                              dataKey="count"
+                            >
+                              {ticketMetrics.filter(m => m.name.includes('Status')).map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                          No status data available
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
 
             {/* Performance Tab */}
             <TabsContent value="performance" className="space-y-6">
@@ -256,17 +364,9 @@ export const AnalyticsPage: FC = () => {
                     <CardTitle>Department Performance</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={departmentPerformanceData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="department" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="ticketsHandled" fill={chartColors.primary} name="Tickets Handled" />
-                        <Bar dataKey="slaCompliance" fill={chartColors.secondary} name="SLA Compliance %" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                      Department performance data coming soon
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -276,15 +376,9 @@ export const AnalyticsPage: FC = () => {
                     <CardTitle>Average Resolution Time</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={departmentPerformanceData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="department" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="avgResolutionTime" fill={chartColors.tertiary} name="Hours" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                      Resolution time data coming soon
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -299,27 +393,9 @@ export const AnalyticsPage: FC = () => {
                     <CardTitle>Monthly Ticket Trends</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={ticketTrendData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Line 
-                          type="monotone" 
-                          dataKey="ticketsCreated" 
-                          stroke={chartColors.primary} 
-                          name="Created"
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="ticketsResolved" 
-                          stroke={chartColors.secondary} 
-                          name="Resolved"
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                      Monthly trends data coming soon
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -329,27 +405,9 @@ export const AnalyticsPage: FC = () => {
                     <CardTitle>Response & Resolution Times</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={ticketTrendData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Line 
-                          type="monotone" 
-                          dataKey="avgResponseTime" 
-                          stroke={chartColors.tertiary} 
-                          name="Response Time (hrs)"
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="avgResolutionTime" 
-                          stroke={chartColors.danger} 
-                          name="Resolution Time (hrs)"
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                      Response time data coming soon
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -364,16 +422,9 @@ export const AnalyticsPage: FC = () => {
                     <CardTitle>Ticket Categories</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={ticketCategoryData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="category" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="count" fill={chartColors.primary} name="Ticket Count" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                      Category distribution data coming soon
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -383,22 +434,15 @@ export const AnalyticsPage: FC = () => {
                     <CardTitle>Category Performance</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={ticketCategoryData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="category" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="avgResolutionTime" fill={chartColors.secondary} name="Avg Resolution (hrs)" />
-                        <Bar dataKey="escalationRate" fill={chartColors.danger} name="Escalation Rate %" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                      Category performance data coming soon
+                    </div>
                   </CardContent>
                 </Card>
               </div>
             </TabsContent>
           </Tabs>
+          )}
         </PageSection>
       </PageWrapper>
     </div>

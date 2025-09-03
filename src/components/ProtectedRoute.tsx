@@ -35,11 +35,19 @@ export const ProtectedRoute: FC<ProtectedRouteProps> = ({
       checkAuth();
     };
     
+    const handleAuthExpired = () => {
+      console.log('ProtectedRoute: Auth expired event received');
+      setIsAuthenticated(false);
+      setShowLoginDialog(true);
+    };
+    
     window.addEventListener('auth-change', handleAuthChange);
+    window.addEventListener('auth-expired', handleAuthExpired);
     
     return () => {
       window.removeEventListener('storage', checkAuth);
       window.removeEventListener('auth-change', handleAuthChange);
+      window.removeEventListener('auth-expired', handleAuthExpired);
     };
   }, []);
 

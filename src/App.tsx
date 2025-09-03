@@ -1,5 +1,5 @@
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { type FC } from 'react';
+import { type FC, useEffect } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from './components/ThemeProvider';
@@ -9,6 +9,7 @@ import { Header } from './components/Header';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Dashboard } from './pages/Dashboard';
 import { HelpDeskPage } from './pages/HelpDeskPage';
+import { setupTokenRefresh } from './lib/services/authService';
 
 import { ProjectsPage } from './pages/ProjectsPage';
 import { CalendarPage } from './pages/CalendarPage';
@@ -106,6 +107,11 @@ const AppRoutes: FC = () => {
 };
 
 const App: FC = () => {
+  useEffect(() => {
+    // Initialize token refresh system when app starts
+    setupTokenRefresh();
+  }, []);
+
   return (
     <ThemeProvider defaultTheme="system" storageKey="nexus-ui-theme">
       <TooltipProvider>

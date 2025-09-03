@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { AuthService } from '@/lib/services/authService';
+import { AuthService, setupTokenRefresh } from '@/lib/services/authService';
 import { toast } from 'sonner';
 import { LogIn, User, Lock } from 'lucide-react';
 
@@ -42,6 +42,9 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
         AuthService.setAuthToken(response.data.token);
         AuthService.setCurrentUser(response.data.user);
         
+        // Setup token refresh system
+        setupTokenRefresh();
+        
         // Dispatch custom event to notify other components
         window.dispatchEvent(new Event('auth-change'));
         
@@ -78,6 +81,9 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
       if (response.success && response.data) {
         AuthService.setAuthToken(response.data.token);
         AuthService.setCurrentUser(response.data.user);
+        
+        // Setup token refresh system
+        setupTokenRefresh();
         
         // Dispatch custom event to notify other components
         window.dispatchEvent(new Event('auth-change'));

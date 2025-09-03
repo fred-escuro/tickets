@@ -437,4 +437,222 @@ router.get('/stats/overview', authenticate, async (req, res) => {
   }
 });
 
+// Get ticket activity data for charts
+router.get('/stats/activity', authenticate, async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    const isAgent = (req as any).user.isAgent;
+    const { days = '7' } = req.query;
+    
+    const daysCount = parseInt(days as string);
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysCount);
+
+    let whereClause: any = {
+      createdAt: {
+        gte: startDate
+      }
+    };
+
+    // If not an agent, only show user's own tickets
+    if (!isAgent) {
+      whereClause.OR = [
+        { submittedBy: userId },
+        { assignedTo: userId }
+      ];
+    }
+
+    // Get tickets created in the last N days
+    const tickets = await prisma.ticket.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        createdAt: true,
+        status: true,
+        resolvedAt: true,
+        priority: true
+      },
+      orderBy: {
+        createdAt: 'asc'
+      }
+    });
+
+    // Group by date and calculate metrics
+    const activityData: any[] = [];
+    const dateMap = new Map();
+
+    // Initialize all dates in range
+    for (let i = 0; i < daysCount; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - (daysCount - 1 - i));
+      const dateStr = date.toISOString().split('T')[0];
+      dateMap.set(dateStr, {
+        date: dateStr,
+        ticketsCreated: 0,
+        ticketsResolved: 0,
+        ticketsEscalated: 0,
+        avgResolutionTime: 0
+      });
+    }
+
+    // Process tickets
+    tickets.forEach(ticket => {
+      const dateStr = ticket.createdAt.toISOString().split('T')[0];
+      if (dateMap.has(dateStr)) {
+        dateMap.get(dateStr).ticketsCreated++;
+      }
+
+      // Check if resolved on this date
+      if (ticket.resolvedAt) {
+        const resolvedDateStr = ticket.resolvedAt.toISOString().split('T')[0];
+        if (dateMap.has(resolvedDateStr)) {
+          dateMap.get(resolvedDateStr).ticketsResolved++;
+        }
+      }
+
+      // Check for escalations (high priority tickets)
+      if (ticket.priority === 'HIGH' || ticket.priority === 'CRITICAL') {
+        const dateStr = ticket.createdAt.toISOString().split('T')[0];
+        if (dateMap.has(dateStr)) {
+          dateMap.get(dateStr).ticketsEscalated++;
+        }
+      }
+    });
+
+    // Calculate average resolution time for each day
+    for (const [dateStr, data] of dateMap) {
+      const dayTickets = tickets.filter(ticket => {
+        const createdDate = ticket.createdAt.toISOString().split('T')[0];
+        const resolvedDate = ticket.resolvedAt ? ticket.resolvedAt.toISOString().split('T')[0] : null;
+        return createdDate === dateStr && resolvedDate === dateStr;
+      });
+
+      if (dayTickets.length > 0) {
+        const totalResolutionTime = dayTickets.reduce((sum, ticket) => {
+          if (ticket.resolvedAt) {
+            const resolutionTime = ticket.resolvedAt.getTime() - ticket.createdAt.getTime();
+            return sum + (resolutionTime / (1000 * 60 * 60)); // Convert to hours
+          }
+          return sum;
+        }, 0);
+        data.avgResolutionTime = Math.round((totalResolutionTime / dayTickets.length) * 10) / 10;
+      }
+
+      activityData.push(data);
+    }
+
+    return res.json({
+      success: true,
+      data: activityData
+    });
+  } catch (error) {
+    console.error('Get activity stats error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to get ticket activity data'
+    });
+  }
+});
+
+// Get detailed ticket metrics
+router.get('/stats/metrics', authenticate, async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    const isAgent = (req as any).user.isAgent;
+
+    let whereClause: any = {};
+
+    // If not an agent, only show user's own tickets
+    if (!isAgent) {
+      whereClause.OR = [
+        { submittedBy: userId },
+        { assignedTo: userId }
+      ];
+    }
+
+    // Get current week and previous week data
+    const now = new Date();
+    const currentWeekStart = new Date(now);
+    currentWeekStart.setDate(now.getDate() - now.getDay());
+    currentWeekStart.setHours(0, 0, 0, 0);
+
+    const previousWeekStart = new Date(currentWeekStart);
+    previousWeekStart.setDate(currentWeekStart.getDate() - 7);
+
+    const previousWeekEnd = new Date(currentWeekStart);
+    previousWeekEnd.setMilliseconds(-1);
+
+    // Current week stats
+    const currentWeekStats = await prisma.ticket.count({
+      where: {
+        ...whereClause,
+        createdAt: {
+          gte: currentWeekStart
+        }
+      }
+    });
+
+    // Previous week stats
+    const previousWeekStats = await prisma.ticket.count({
+      where: {
+        ...whereClause,
+        createdAt: {
+          gte: previousWeekStart,
+          lte: previousWeekEnd
+        }
+      }
+    });
+
+    // Calculate percentage change
+    const change = previousWeekStats > 0 
+      ? Math.round(((currentWeekStats - previousWeekStats) / previousWeekStats) * 100)
+      : currentWeekStats > 0 ? 100 : 0;
+
+    // Get priority distribution
+    const priorityStats = await prisma.ticket.groupBy({
+      by: ['priority'],
+      where: whereClause,
+      _count: {
+        priority: true
+      }
+    });
+
+    // Get status distribution
+    const statusStats = await prisma.ticket.groupBy({
+      by: ['status'],
+      where: whereClause,
+      _count: {
+        status: true
+      }
+    });
+
+    const metrics = {
+      openTickets: await prisma.ticket.count({ where: { ...whereClause, status: 'OPEN' } }),
+      inProgressTickets: await prisma.ticket.count({ where: { ...whereClause, status: 'IN_PROGRESS' } }),
+      resolvedTickets: await prisma.ticket.count({ where: { ...whereClause, status: 'RESOLVED' } }),
+      closedTickets: await prisma.ticket.count({ where: { ...whereClause, status: 'CLOSED' } }),
+      weeklyChange: change,
+      priorityDistribution: priorityStats.reduce((acc, stat) => {
+        acc[stat.priority.toLowerCase()] = stat._count.priority;
+        return acc;
+      }, {} as any),
+      statusDistribution: statusStats.reduce((acc, stat) => {
+        acc[stat.status.toLowerCase()] = stat._count.status;
+        return acc;
+      }, {} as any)
+    };
+
+    return res.json({
+      success: true,
+      data: metrics
+    });
+  } catch (error) {
+    console.error('Get metrics error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to get ticket metrics'
+    });
+  }
+});
+
 export default router;

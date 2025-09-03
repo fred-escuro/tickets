@@ -1,8 +1,5 @@
-// Simple ticket service without complex dependencies
-// Use relative paths to trigger Vite proxy to backend
-const API_BASE_URL = '';
-
-// Basic types
+// Ticket service using the main API client
+import { apiClient, API_ENDPOINTS } from '../api';
 import type { User } from './authService';
 import { AttachmentService, type FileAttachment } from './attachmentService';
 
@@ -48,50 +45,7 @@ export interface TicketFilter {
   sortOrder?: 'asc' | 'desc';
 }
 
-// Simple API client
-const apiClient = {
-  async get<T>(endpoint: string): Promise<T> {
-    const headers: Record<string, string> = {};
-    
-    // Add auth token if available
-    const authToken = localStorage.getItem('auth-token');
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-    
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
-    }
-    
-    return response.json();
-  },
-
-  async post<T>(endpoint: string, data: any): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // Add auth token if available
-        ...(localStorage.getItem('auth-token') && {
-          'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
-        })
-      },
-      body: JSON.stringify(data)
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
-    }
-    
-    return response.json();
-  }
-};
+// Using the main API client from api.ts
 
 // Ticket service
 export class TicketService {
@@ -114,7 +68,7 @@ export class TicketService {
       }
     });
 
-    const endpoint = `/api/tickets?${queryParams.toString()}`;
+    const endpoint = `${API_ENDPOINTS.TICKETS.LIST}?${queryParams.toString()}`;
     return apiClient.get(endpoint);
   }
 
@@ -126,7 +80,7 @@ export class TicketService {
   }> {
     try {
       // First create the ticket
-      const ticketResponse = await apiClient.post('/api/tickets', {
+      const ticketResponse = await apiClient.post(API_ENDPOINTS.TICKETS.CREATE, {
         title: ticketData.title,
         description: ticketData.description,
         category: ticketData.category,
@@ -183,6 +137,6 @@ export class TicketService {
       closed: number;
     };
   }> {
-    return apiClient.get('/api/tickets/stats/overview');
+    return apiClient.get('/api/tickets/stats/overview'); // This endpoint might not be in API_ENDPOINTS yet
   }
 }
