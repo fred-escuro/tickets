@@ -50,6 +50,7 @@ import {
 import { useState, useEffect, useCallback, type FC } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ticketSystemService, type TicketCategory } from '@/lib/services/ticketSystemService';
 
 
 const getStatusColor = (status: string) => {
@@ -84,7 +85,38 @@ const getStatusIcon = (status: string) => {
   }
 };
 
-const getCategoryIcon = (category: string) => {
+const getCategoryIcon = (category: string, categoryInfo?: { color: string; icon?: string }) => {
+  // If we have category info with an icon, use it
+  if (categoryInfo?.icon) {
+    // Map common icon names to Lucide icons
+    const iconMap: Record<string, React.ComponentType<any>> = {
+      'laptop': Monitor,
+      'monitor': Monitor,
+      'server': Settings,
+      'wifi': Wifi,
+      'network': Wifi,
+      'smartphone': Smartphone,
+      'mobile': Smartphone,
+      'phone': Smartphone,
+      'help': HelpCircle,
+      'general': HelpCircle,
+      'settings': Settings,
+      'gear': Settings
+    };
+    
+    const IconComponent = iconMap[categoryInfo.icon.toLowerCase()] || HelpCircle;
+    const colorClass = categoryInfo.color === 'blue' ? 'text-blue-600' :
+                      categoryInfo.color === 'green' ? 'text-green-600' :
+                      categoryInfo.color === 'red' ? 'text-red-600' :
+                      categoryInfo.color === 'yellow' ? 'text-yellow-600' :
+                      categoryInfo.color === 'orange' ? 'text-orange-600' :
+                      categoryInfo.color === 'purple' ? 'text-purple-600' :
+                      'text-gray-600';
+    
+    return <IconComponent className={`h-4 w-4 ${colorClass}`} />;
+  }
+  
+  // Fallback to old category mapping
   switch (category) {
     case 'hardware':
       return <Monitor className="h-4 w-4 text-blue-600" />;
@@ -292,7 +324,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
                          {/* Header with category, title, and ticket number */}
              <div className="flex items-start gap-3">
                <div className="group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg">
-                 {getCategoryIcon(ticket.category)}
+                 {getCategoryIcon(ticket.category, ticket.categoryInfo)}
                </div>
                <div className="min-w-0 flex-1">
                  <h3 className="font-semibold text-base truncate group-hover:text-primary transition-colors duration-300">{ticket.title}</h3>
@@ -425,7 +457,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
             <div className="flex items-start justify-between">
               <DialogHeader className="flex-1">
                 <DialogTitle className="flex items-center gap-2">
-                  {getCategoryIcon(ticket.category)}
+                  {getCategoryIcon(ticket.category, ticket.categoryInfo)}
                   {ticket.title}
                 </DialogTitle>
               </DialogHeader>
@@ -460,7 +492,26 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Category</p>
-                <p className="text-sm">{ticket.category}</p>
+                <div className="flex items-center gap-2">
+                  {ticket.categoryInfo ? (
+                    <>
+                      <div 
+                        className={`w-3 h-3 rounded-full ${
+                          ticket.categoryInfo.color === 'blue' ? 'bg-blue-500' :
+                          ticket.categoryInfo.color === 'green' ? 'bg-green-500' :
+                          ticket.categoryInfo.color === 'red' ? 'bg-red-500' :
+                          ticket.categoryInfo.color === 'yellow' ? 'bg-yellow-500' :
+                          ticket.categoryInfo.color === 'orange' ? 'bg-orange-500' :
+                          ticket.categoryInfo.color === 'purple' ? 'bg-purple-500' :
+                          'bg-gray-500'
+                        }`}
+                      />
+                      <p className="text-sm">{ticket.categoryInfo.name}</p>
+                    </>
+                  ) : (
+                    <p className="text-sm">{ticket.category}</p>
+                  )}
+                </div>
               </div>
             </div>
             
@@ -835,11 +886,33 @@ const NewTicketDialog: FC<{
   });
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [categories, setCategories] = useState<TicketCategory[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
 
   // Debug attachments state changes
   useEffect(() => {
     console.log('NewTicketDialog: attachments state changed to:', attachments);
   }, [attachments]);
+
+  // Load categories when dialog opens
+  useEffect(() => {
+    if (open && isAuthenticated) {
+      loadCategories();
+    }
+  }, [open, isAuthenticated]);
+
+  const loadCategories = async () => {
+    try {
+      setLoadingCategories(true);
+      const categoriesData = await ticketSystemService.getCategories();
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      toast.error('Failed to load categories');
+    } finally {
+      setLoadingCategories(false);
+    }
+  };
 
   // Memoize the onFilesChange handler to prevent unnecessary re-renders
   const handleFilesChange = useCallback((newAttachments: FileAttachment[]) => {
@@ -969,14 +1042,31 @@ const NewTicketDialog: FC<{
               <Label htmlFor="category">Category *</Label>
               <Select value={formData.category} onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder={loadingCategories ? "Loading categories..." : "Select category"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {['hardware', 'software', 'network', 'mobile', 'general'].map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category.charAt(0).toUpperCase() + category.slice(1)}
-                    </SelectItem>
-                  ))}
+                  {loadingCategories ? (
+                    <SelectItem value="loading" disabled>Loading categories...</SelectItem>
+                  ) : (
+                    categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className={`w-3 h-3 rounded-full ${
+                              category.color === 'blue' ? 'bg-blue-500' :
+                              category.color === 'green' ? 'bg-green-500' :
+                              category.color === 'red' ? 'bg-red-500' :
+                              category.color === 'yellow' ? 'bg-yellow-500' :
+                              category.color === 'orange' ? 'bg-orange-500' :
+                              category.color === 'purple' ? 'bg-purple-500' :
+                              'bg-gray-500'
+                            }`}
+                          />
+                          {category.name}
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1103,7 +1193,7 @@ export const HelpDeskPage: FC = () => {
     }
   }, [searchParams]);
   
-  const filteredTickets = tickets.filter(ticket => {
+  const filteredTickets = tickets.filter((ticket: Ticket) => {
     const matchesFilter = ticketFilter === 'all' || 
       (ticketFilter === 'open' && ticket.status === 'OPEN') ||
       (ticketFilter === 'in-progress' && ticket.status === 'IN_PROGRESS') ||
@@ -1118,9 +1208,9 @@ export const HelpDeskPage: FC = () => {
   // For now, we'll use empty knowledge base until we implement that API
   const filteredKnowledgeBase: any[] = [];
 
-  const openTickets = tickets.filter(t => t.status === 'OPEN').length;
-  const inProgressTickets = tickets.filter(t => t.status === 'IN_PROGRESS').length;
-  const resolvedTickets = tickets.filter(t => t.status === 'RESOLVED').length;
+  const openTickets = tickets.filter((t: Ticket) => t.status === 'OPEN').length;
+  const inProgressTickets = tickets.filter((t: Ticket) => t.status === 'IN_PROGRESS').length;
+  const resolvedTickets = tickets.filter((t: Ticket) => t.status === 'RESOLVED').length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -1225,7 +1315,7 @@ export const HelpDeskPage: FC = () => {
             
             <PageSection index={4}>
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {filteredTickets.map((ticket, index) => (
+                {filteredTickets.map((ticket: Ticket, index: number) => (
                   <TicketCard key={ticket.id} ticket={ticket} index={index} />
                 ))}
               </div>

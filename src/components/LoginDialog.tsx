@@ -67,9 +67,9 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
 
   const handleDemoLogin = async (type: 'admin' | 'agent' | 'user') => {
     const demoCredentials = {
-      admin: { email: 'admin@company.com', password: 'admin123' },
-      agent: { email: 'john.support@company.com', password: 'agent123' },
-      user: { email: 'alice.user@company.com', password: 'user123' }
+      admin: { email: 'admin@tickethub.com', password: 'password123' },
+      agent: { email: 'agent@tickethub.com', password: 'password123' },
+      user: { email: 'user@tickethub.com', password: 'password123' }
     };
 
     setCredentials(demoCredentials[type]);

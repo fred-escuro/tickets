@@ -101,13 +101,18 @@ async function main() {
   });
 
   // Create sample tickets
+  // Get default category, priority, and status IDs
+  const defaultCategory = await prisma.ticketCategory.findFirst({ where: { name: 'Technical Support' } });
+  const defaultPriority = await prisma.ticketPriority.findFirst({ where: { name: 'High' } });
+  const defaultStatus = await prisma.ticketStatus.findFirst({ where: { name: 'Open' } });
+
   const ticket1 = await prisma.ticket.create({
     data: {
       title: 'Printer not working',
       description: 'The office printer is showing an error message and won\'t print any documents. Error code: E-04.',
-      category: 'hardware',
-      priority: 'HIGH',
-      status: 'OPEN',
+      categoryId: defaultCategory?.id || 'default-category',
+      priorityId: defaultPriority?.id || 'default-priority',
+      statusId: defaultStatus?.id || 'default-status',
       submittedBy: alice.id,
       tags: ['printer', 'hardware', 'urgent']
     }
@@ -117,9 +122,9 @@ async function main() {
     data: {
       title: 'Email access issues',
       description: 'I cannot access my email account. Getting "authentication failed" error when trying to log in.',
-      category: 'software',
-      priority: 'MEDIUM',
-      status: 'IN_PROGRESS',
+      categoryId: defaultCategory?.id || 'default-category',
+      priorityId: defaultPriority?.id || 'default-priority',
+      statusId: defaultStatus?.id || 'default-status',
       submittedBy: bob.id,
       assignedTo: john.id,
       assignedAt: new Date(),
@@ -131,9 +136,9 @@ async function main() {
     data: {
       title: 'WiFi connection problems',
       description: 'WiFi keeps disconnecting every few minutes. This is affecting my ability to work remotely.',
-      category: 'network',
-      priority: 'HIGH',
-      status: 'OPEN',
+      categoryId: defaultCategory?.id || 'default-category',
+      priorityId: defaultPriority?.id || 'default-priority',
+      statusId: defaultStatus?.id || 'default-status',
       submittedBy: alice.id,
       tags: ['wifi', 'network', 'remote-work']
     }

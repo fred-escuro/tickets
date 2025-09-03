@@ -13,6 +13,7 @@ import attachmentRoutes from './routes/attachments';
 import knowledgeBaseRoutes from './routes/knowledgeBase';
 import searchRoutes from './routes/search';
 import commentRoutes from './routes/comments';
+import ticketSystemRoutes from './routes/ticketSystem';
 
 // Load environment variables
 dotenv.config();
@@ -44,6 +45,7 @@ app.use('/api/attachments', attachmentRoutes);
 app.use('/api/knowledge', knowledgeBaseRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/comments', commentRoutes);
+app.use('/api/ticket-system', ticketSystemRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

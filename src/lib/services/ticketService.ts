@@ -11,6 +11,13 @@ export interface Ticket {
   status: string;
   priority: string;
   category: string;
+  categoryId?: string;
+  categoryInfo?: {
+    id: string;
+    name: string;
+    color: string;
+    icon?: string;
+  };
   assignedTo?: string;
   submittedBy: string;
   submittedAt: string;
@@ -27,7 +34,7 @@ export interface Ticket {
 export interface CreateTicketRequest {
   title: string;
   description: string;
-  category: string;
+  category: string; // This will be the categoryId
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   dueDate?: string;
   tags?: string[];
@@ -50,16 +57,7 @@ export interface TicketFilter {
 // Ticket service
 export class TicketService {
   // Get all tickets with optional filtering
-  static async getTickets(filters: TicketFilter = {}): Promise<{
-    success: boolean;
-    data: Ticket[];
-    pagination: {
-      page: number;
-      limit: number;
-      total: number;
-      totalPages: number;
-    };
-  }> {
+  static async getTickets(filters: TicketFilter = {}): Promise<any> {
     const queryParams = new URLSearchParams();
     
     Object.entries(filters).forEach(([key, value]) => {
@@ -93,7 +91,7 @@ export class TicketService {
         throw new Error(ticketResponse.error || 'Failed to create ticket');
       }
 
-      const ticket = ticketResponse.data;
+      const ticket = ticketResponse.data as Ticket;
 
       // If there are attachments, upload them
       if (ticketData.attachments && ticketData.attachments.length > 0) {
@@ -127,16 +125,7 @@ export class TicketService {
   }
 
   // Get ticket statistics
-  static async getTicketStats(): Promise<{
-    success: boolean;
-    data: {
-      total: number;
-      open: number;
-      inProgress: number;
-      resolved: number;
-      closed: number;
-    };
-  }> {
+  static async getTicketStats(): Promise<any> {
     return apiClient.get('/api/tickets/stats/overview'); // This endpoint might not be in API_ENDPOINTS yet
   }
 }

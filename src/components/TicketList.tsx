@@ -139,8 +139,25 @@ export const TicketList = () => {
                         {ticket.priority}
                       </span>
                     </TableCell>
-                    <TableCell className="capitalize">
-                      {ticket.category}
+                    <TableCell>
+                      {ticket.categoryInfo ? (
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className={`w-3 h-3 rounded-full ${
+                              ticket.categoryInfo.color === 'blue' ? 'bg-blue-500' :
+                              ticket.categoryInfo.color === 'green' ? 'bg-green-500' :
+                              ticket.categoryInfo.color === 'red' ? 'bg-red-500' :
+                              ticket.categoryInfo.color === 'yellow' ? 'bg-yellow-500' :
+                              ticket.categoryInfo.color === 'orange' ? 'bg-orange-500' :
+                              ticket.categoryInfo.color === 'purple' ? 'bg-purple-500' :
+                              'bg-gray-500'
+                            }`}
+                          />
+                          <span className="capitalize">{ticket.categoryInfo.name}</span>
+                        </div>
+                      ) : (
+                        <span className="capitalize">{ticket.category}</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {new Date(ticket.submittedAt).toLocaleDateString()}

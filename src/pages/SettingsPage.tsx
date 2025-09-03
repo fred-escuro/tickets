@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useSearchParams } from 'react-router-dom';
 import { 
   Settings, 
@@ -23,15 +24,38 @@ import {
   RefreshCw,
   AlertCircle,
   CheckCircle,
+  Plus,
+  Edit,
+  Trash2,
   Info
 } from 'lucide-react';
 import { settingsService, type SystemSettings } from '@/lib/settingsService';
+import { ticketSystemService, type TicketCategory, type TicketPriority, type TicketStatus } from '@/lib/services/ticketSystemService';
+import { AuthService } from '@/lib/services/authService';
+import { toast } from 'sonner';
 
 export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SystemSettings>(settingsService.getSettings());
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  
+  // Ticket system state
+  const [categories, setCategories] = useState<TicketCategory[]>([]);
+  const [priorities, setPriorities] = useState<TicketPriority[]>([]);
+  const [statuses, setStatuses] = useState<TicketStatus[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Category management state
+  const [showCategoryDialog, setShowCategoryDialog] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<TicketCategory | null>(null);
+  const [categoryForm, setCategoryForm] = useState({
+    name: '',
+    description: '',
+    color: 'blue',
+    icon: '',
+    parentId: ''
+  });
 
   // Get the current tab from URL params, default to 'general'
   const currentTab = searchParams.get('tab') || 'general';
@@ -39,7 +63,36 @@ export default function SettingsPage() {
   // Load settings on component mount
   useEffect(() => {
     setSettings(settingsService.getSettings());
+    loadTicketSystemData();
+    
+    // Log current user info for debugging
+    const currentUser = AuthService.getCurrentUser();
+    console.log('Current user:', currentUser);
+    console.log('User role:', currentUser?.role);
   }, []);
+
+  const loadTicketSystemData = async () => {
+    try {
+      setLoading(true);
+      console.log('Loading ticket system data...');
+      const [categoriesData, prioritiesData, statusesData] = await Promise.all([
+        ticketSystemService.getCategories(),
+        ticketSystemService.getPriorities(),
+        ticketSystemService.getStatuses()
+      ]);
+      console.log('Categories loaded:', categoriesData);
+      console.log('Priorities loaded:', prioritiesData);
+      console.log('Statuses loaded:', statusesData);
+      setCategories(categoriesData);
+      setPriorities(prioritiesData);
+      setStatuses(statusesData);
+    } catch (error) {
+      console.error('Error loading ticket system data:', error);
+      toast.error('Failed to load ticket system data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Handle tab changes
   const handleTabChange = (value: string) => {
@@ -100,6 +153,86 @@ export default function SettingsPage() {
         }
       }
     }));
+  };
+
+  // Category management functions
+  const handleCreateCategory = async () => {
+    try {
+      console.log('Creating category with form data:', categoryForm);
+      const newCategory = await ticketSystemService.createCategory({
+        name: categoryForm.name,
+        description: categoryForm.description,
+        color: categoryForm.color,
+        icon: categoryForm.icon || undefined,
+        parentId: categoryForm.parentId === 'none' ? undefined : categoryForm.parentId || undefined,
+        customFields: { fields: [] },
+        autoAssignRules: { rules: [] },
+        slaRules: { rules: [] }
+      });
+      
+      console.log('Category created successfully:', newCategory);
+      setCategories(prev => [...prev, newCategory]);
+      setShowCategoryDialog(false);
+      setCategoryForm({ name: '', description: '', color: 'blue', icon: '', parentId: 'none' });
+      toast.success('Category created successfully');
+    } catch (error) {
+      console.error('Error creating category:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create category';
+      toast.error(errorMessage);
+    }
+  };
+
+  const handleUpdateCategory = async () => {
+    if (!editingCategory) return;
+    
+    try {
+      const updatedCategory = await ticketSystemService.updateCategory(editingCategory.id, {
+        name: categoryForm.name,
+        description: categoryForm.description,
+        color: categoryForm.color,
+        icon: categoryForm.icon || undefined,
+        parentId: categoryForm.parentId === 'none' ? undefined : categoryForm.parentId || undefined
+      });
+      
+      setCategories(prev => prev.map(cat => cat.id === editingCategory.id ? updatedCategory : cat));
+      setShowCategoryDialog(false);
+      setEditingCategory(null);
+      setCategoryForm({ name: '', description: '', color: 'blue', icon: '', parentId: 'none' });
+      toast.success('Category updated successfully');
+    } catch (error) {
+      console.error('Error updating category:', error);
+      toast.error('Failed to update category');
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    if (!confirm('Are you sure you want to delete this category?')) return;
+    
+    try {
+      await ticketSystemService.deleteCategory(categoryId);
+      setCategories(prev => prev.filter(cat => cat.id !== categoryId));
+      toast.success('Category deleted successfully');
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      toast.error('Failed to delete category');
+    }
+  };
+
+  const openCategoryDialog = (category?: TicketCategory) => {
+    if (category) {
+      setEditingCategory(category);
+      setCategoryForm({
+        name: category.name,
+        description: category.description || '',
+        color: category.color,
+        icon: category.icon || '',
+        parentId: category.parentId || 'none'
+      });
+    } else {
+      setEditingCategory(null);
+      setCategoryForm({ name: '', description: '', color: 'blue', icon: '', parentId: 'none' });
+    }
+    setShowCategoryDialog(true);
   };
 
   const getStatusIcon = () => {
@@ -318,21 +451,57 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                                 {settings.tickets.categories.map((category) => (
-                   <div key={category.id} className="flex items-center justify-between p-3 border rounded-lg">
-                     <div className="flex items-center gap-3">
-                       <Badge 
-                         variant="outline" 
-                         className={getCategoryColorClasses(category.color)}
-                       >
-                         {category.name}
-                       </Badge>
-                       <span className="text-sm text-muted-foreground">{category.description}</span>
-                     </div>
-                     <Button variant="outline" size="sm">Edit</Button>
-                   </div>
-                 ))}
-                <Button variant="outline" className="w-full">Add New Category</Button>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin" />
+                    <span className="ml-2">Loading categories...</span>
+                  </div>
+                ) : (
+                  <>
+                    {categories.map((category) => (
+                      <div key={category.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <Badge 
+                            variant="outline" 
+                            className={getCategoryColorClasses(category.color)}
+                          >
+                            {category.name}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">{category.description}</span>
+                          {category._count && (
+                            <span className="text-xs text-muted-foreground">
+                              ({category._count.tickets} tickets)
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => openCategoryDialog(category)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDeleteCategory(category.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => openCategoryDialog()}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add New Category
+                    </Button>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -564,6 +733,106 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Category Management Dialog */}
+      <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editingCategory ? 'Edit Category' : 'Create New Category'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingCategory ? 'Update the category details below.' : 'Add a new ticket category to organize your tickets.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="categoryName">Name *</Label>
+              <Input
+                id="categoryName"
+                value={categoryForm.name}
+                onChange={(e) => setCategoryForm(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="e.g., Hardware, Software, Network"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="categoryDescription">Description</Label>
+              <Textarea
+                id="categoryDescription"
+                value={categoryForm.description}
+                onChange={(e) => setCategoryForm(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Brief description of this category"
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="categoryColor">Color</Label>
+                <Select 
+                  value={categoryForm.color}
+                  onValueChange={(value) => setCategoryForm(prev => ({ ...prev, color: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="blue">Blue</SelectItem>
+                    <SelectItem value="green">Green</SelectItem>
+                    <SelectItem value="red">Red</SelectItem>
+                    <SelectItem value="yellow">Yellow</SelectItem>
+                    <SelectItem value="orange">Orange</SelectItem>
+                    <SelectItem value="purple">Purple</SelectItem>
+                    <SelectItem value="gray">Gray</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="categoryIcon">Icon</Label>
+                <Input
+                  id="categoryIcon"
+                  value={categoryForm.icon}
+                  onChange={(e) => setCategoryForm(prev => ({ ...prev, icon: e.target.value }))}
+                  placeholder="e.g., laptop, server, wifi"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="parentCategory">Parent Category (Optional)</Label>
+              <Select 
+                value={categoryForm.parentId}
+                onValueChange={(value) => setCategoryForm(prev => ({ ...prev, parentId: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select parent category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {categories.filter(cat => !cat.parentId).map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowCategoryDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={editingCategory ? handleUpdateCategory : handleCreateCategory}
+              disabled={!categoryForm.name.trim()}
+            >
+              {editingCategory ? 'Update' : 'Create'} Category
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

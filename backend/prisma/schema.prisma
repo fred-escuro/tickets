@@ -30,9 +30,11 @@ model User {
   // Relations
   submittedTickets Ticket[] @relation("SubmittedBy")
   assignedTickets  Ticket[] @relation("AssignedTo")
+  escalatedTickets Ticket[] @relation("EscalatedBy")
   comments        Comment[]
   attachments     Attachment[]
   knowledgeBase   KnowledgeBase[]
+  statusHistory   TicketStatusHistory[]
 
   @@map("users")
 }
@@ -42,9 +44,9 @@ model Ticket {
   ticketNumber  Int       @unique @default(autoincrement())
   title         String
   description   String
-  category      String
-  priority      Priority  @default(MEDIUM)
-  status        Status    @default(OPEN)
+  categoryId    String
+  priorityId    String
+  statusId      String
   submittedBy   String
   submittedAt   DateTime  @default(now())
   assignedTo    String?
@@ -54,16 +56,26 @@ model Ticket {
   resolution    String?
   satisfaction  Int?      @db.SmallInt
   tags          Json?
+  customFields  Json?     // For dynamic fields per category
+  slaResponseAt DateTime? // When SLA response time is due
+  slaResolveAt  DateTime? // When SLA resolution time is due
+  escalatedAt   DateTime? // When ticket was escalated
+  escalatedBy   String?   // Who escalated the ticket
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   // Relations
   submitter     User      @relation("SubmittedBy", fields: [submittedBy], references: [id])
   assignee      User?     @relation("AssignedTo", fields: [assignedTo], references: [id])
+  escalator     User?     @relation("EscalatedBy", fields: [escalatedBy], references: [id])
+  category      TicketCategory @relation(fields: [categoryId], references: [id])
+  priority      TicketPriority @relation(fields: [priorityId], references: [id])
+  status        TicketStatus @relation(fields: [statusId], references: [id])
   comments      Comment[]
   attachments   Attachment[]
   tasks         TicketTask[]
   events        TicketEvent[]
+  statusHistory TicketStatusHistory[]
 
   @@map("tickets")
 }
@@ -159,6 +171,129 @@ model KnowledgeBase {
   author      User?    @relation(fields: [authorId], references: [id])
 
   @@map("knowledge_base")
+}
+
+// Enhanced Ticket Management Models
+model TicketCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  color       String   @default("blue")
+  icon        String?  // Icon identifier for UI
+  parentId    String?  // For hierarchical categories
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  customFields Json?   // Dynamic form fields for this category
+  autoAssignRules Json? // Rules for auto-assignment
+  slaRules    Json?    // Category-specific SLA rules
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  parent      TicketCategory? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    TicketCategory[] @relation("CategoryHierarchy")
+  tickets     Ticket[]
+  templates   TicketTemplate[]
+  workflows   TicketWorkflow[]
+
+  @@map("ticket_categories")
+}
+
+model TicketPriority {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  color       String   @default("blue")
+  icon        String?  // Icon identifier for UI
+  level       Int      @unique // 1-10 scale for sorting
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  slaResponseHours Int @default(24) // Response time in hours
+  slaResolveHours  Int @default(72) // Resolution time in hours
+  escalationRules  Json? // Auto-escalation rules
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tickets     Ticket[]
+  workflows   TicketWorkflow[]
+
+  @@map("ticket_priorities")
+}
+
+model TicketStatus {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  color       String   @default("blue")
+  icon        String?  // Icon identifier for UI
+  isActive    Boolean  @default(true)
+  isClosed    Boolean  @default(false) // Whether this status closes the ticket
+  isResolved  Boolean  @default(false) // Whether this status resolves the ticket
+  sortOrder   Int      @default(0)
+  allowedTransitions Json? // Which statuses can transition to this one
+  permissions Json?    // Who can set this status
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tickets     Ticket[]
+  statusHistory TicketStatusHistory[]
+
+  @@map("ticket_statuses")
+}
+
+model TicketStatusHistory {
+  id          String   @id @default(cuid())
+  ticketId    String
+  statusId    String
+  changedBy   String
+  changedAt   DateTime @default(now())
+  reason      String?  // Optional reason for status change
+  comment     String?  // Optional comment about the change
+
+  // Relations
+  ticket      Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  status      TicketStatus @relation(fields: [statusId], references: [id])
+  user        User @relation(fields: [changedBy], references: [id])
+
+  @@map("ticket_status_history")
+}
+
+model TicketTemplate {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  categoryId  String
+  title       String
+  templateDescription String
+  customFields Json?   // Pre-filled custom fields
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  category    TicketCategory @relation(fields: [categoryId], references: [id])
+
+  @@map("ticket_templates")
+}
+
+model TicketWorkflow {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  categoryId  String?  // Optional: workflow for specific category
+  priorityId  String?  // Optional: workflow for specific priority
+  rules       Json     // Workflow automation rules
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  category    TicketCategory? @relation(fields: [categoryId], references: [id])
+  priority    TicketPriority? @relation(fields: [priorityId], references: [id])
+
+  @@map("ticket_workflows")
 }
 
 // Enums

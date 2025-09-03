@@ -214,8 +214,9 @@ router.post('/', authenticate, async (req, res) => {
       data: {
         title,
         description,
-        category,
-        priority: priority || 'MEDIUM',
+        categoryId: category,
+        priorityId: priority || 'MEDIUM',
+        statusId: 'OPEN', // Default status
         submittedBy: userId,
         dueDate: dueDate ? new Date(dueDate) : undefined,
         tags: tags || []
@@ -280,19 +281,19 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 
     // Handle status changes
-    if (updateData.status && updateData.status !== existingTicket.status) {
-      if (updateData.status === 'RESOLVED' && !updateData.resolution) {
+    if (updateData.statusId && updateData.statusId !== existingTicket.statusId) {
+      if (updateData.statusId === 'RESOLVED' && !updateData.resolution) {
         return res.status(400).json({
           success: false,
           error: 'Resolution is required when closing a ticket'
         });
       }
 
-      if (updateData.status === 'RESOLVED') {
+      if (updateData.statusId === 'RESOLVED') {
         updateData.resolvedAt = new Date();
       }
 
-      if (updateData.status === 'IN_PROGRESS' && !existingTicket.assignedTo) {
+      if (updateData.statusId === 'IN_PROGRESS' && !existingTicket.assignedTo) {
         updateData.assignedTo = userId;
         updateData.assignedAt = new Date();
       }
@@ -303,9 +304,24 @@ router.put('/:id', authenticate, async (req, res) => {
       updateData.assignedAt = new Date();
     }
 
+    // Create proper update data object for Prisma
+    const prismaUpdateData: any = {};
+    if (updateData.title !== undefined) prismaUpdateData.title = updateData.title;
+    if (updateData.description !== undefined) prismaUpdateData.description = updateData.description;
+    if (updateData.categoryId !== undefined) prismaUpdateData.categoryId = updateData.categoryId;
+    if (updateData.priorityId !== undefined) prismaUpdateData.priorityId = updateData.priorityId;
+    if (updateData.statusId !== undefined) prismaUpdateData.statusId = updateData.statusId;
+    if (updateData.assignedTo !== undefined) prismaUpdateData.assignedTo = updateData.assignedTo;
+    if (updateData.dueDate !== undefined) prismaUpdateData.dueDate = updateData.dueDate;
+    if (updateData.resolution !== undefined) prismaUpdateData.resolution = updateData.resolution;
+    if (updateData.satisfaction !== undefined) prismaUpdateData.satisfaction = updateData.satisfaction;
+    if (updateData.tags !== undefined) prismaUpdateData.tags = updateData.tags;
+    if (updateData.resolvedAt !== undefined) prismaUpdateData.resolvedAt = updateData.resolvedAt;
+    if (updateData.assignedAt !== undefined) prismaUpdateData.assignedAt = updateData.assignedAt;
+
     const updatedTicket = await prisma.ticket.update({
       where: { id },
-      data: updateData,
+      data: prismaUpdateData,
       include: {
         submitter: {
           select: {
@@ -511,7 +527,7 @@ router.get('/stats/activity', authenticate, async (req, res) => {
       }
 
       // Check for escalations (high priority tickets)
-      if (ticket.priority === 'HIGH' || ticket.priority === 'CRITICAL') {
+      if (ticket.priority && (ticket.priority.level >= 7)) {
         const dateStr = ticket.createdAt.toISOString().split('T')[0];
         if (dateMap.has(dateStr)) {
           dateMap.get(dateStr).ticketsEscalated++;
@@ -610,34 +626,40 @@ router.get('/stats/metrics', authenticate, async (req, res) => {
 
     // Get priority distribution
     const priorityStats = await prisma.ticket.groupBy({
-      by: ['priority'],
+      by: ['priorityId'],
       where: whereClause,
       _count: {
-        priority: true
+        priorityId: true
       }
     });
 
     // Get status distribution
     const statusStats = await prisma.ticket.groupBy({
-      by: ['status'],
+      by: ['statusId'],
       where: whereClause,
       _count: {
-        status: true
+        statusId: true
       }
     });
 
+    // Get status counts using relations
+    const openStatus = await prisma.ticketStatus.findFirst({ where: { name: 'Open' } });
+    const inProgressStatus = await prisma.ticketStatus.findFirst({ where: { name: 'In Progress' } });
+    const resolvedStatus = await prisma.ticketStatus.findFirst({ where: { name: 'Resolved' } });
+    const closedStatus = await prisma.ticketStatus.findFirst({ where: { name: 'Closed' } });
+
     const metrics = {
-      openTickets: await prisma.ticket.count({ where: { ...whereClause, status: 'OPEN' } }),
-      inProgressTickets: await prisma.ticket.count({ where: { ...whereClause, status: 'IN_PROGRESS' } }),
-      resolvedTickets: await prisma.ticket.count({ where: { ...whereClause, status: 'RESOLVED' } }),
-      closedTickets: await prisma.ticket.count({ where: { ...whereClause, status: 'CLOSED' } }),
+      openTickets: openStatus ? await prisma.ticket.count({ where: { ...whereClause, statusId: openStatus.id } }) : 0,
+      inProgressTickets: inProgressStatus ? await prisma.ticket.count({ where: { ...whereClause, statusId: inProgressStatus.id } }) : 0,
+      resolvedTickets: resolvedStatus ? await prisma.ticket.count({ where: { ...whereClause, statusId: resolvedStatus.id } }) : 0,
+      closedTickets: closedStatus ? await prisma.ticket.count({ where: { ...whereClause, statusId: closedStatus.id } }) : 0,
       weeklyChange: change,
       priorityDistribution: priorityStats.reduce((acc, stat) => {
-        acc[stat.priority.toLowerCase()] = stat._count.priority;
+        acc[stat.priorityId] = stat._count?.priorityId || 0;
         return acc;
       }, {} as any),
       statusDistribution: statusStats.reduce((acc, stat) => {
-        acc[stat.status.toLowerCase()] = stat._count.status;
+        acc[stat.statusId] = stat._count?.statusId || 0;
         return acc;
       }, {} as any)
     };

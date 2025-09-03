@@ -100,9 +100,9 @@ export interface CreateTicketRequest {
 export interface UpdateTicketRequest {
   title?: string;
   description?: string;
-  category?: string;
-  priority?: Priority;
-  status?: Status;
+  categoryId?: string;
+  priorityId?: string;
+  statusId?: string;
   assignedTo?: string;
   dueDate?: Date;
   resolution?: string;

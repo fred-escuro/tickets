@@ -221,14 +221,22 @@ router.get('/suggestions', authenticate, async (req, res) => {
         where: {
           OR: [
             { title: { contains: searchTerm, mode: 'insensitive' } },
-            { category: { contains: searchTerm, mode: 'insensitive' } }
+            { category: { name: { contains: searchTerm, mode: 'insensitive' } } }
           ]
         },
         select: {
           id: true,
           title: true,
-          category: true,
-          status: true
+          category: {
+            select: {
+              name: true
+            }
+          },
+          status: {
+            select: {
+              name: true
+            }
+          }
         },
         take: 5
       });
@@ -236,7 +244,7 @@ router.get('/suggestions', authenticate, async (req, res) => {
       suggestions.push(...ticketSuggestions.map(t => ({
         ...t,
         type: 'ticket',
-        display: `${t.title} (${t.category})`
+        display: `${t.title} (${t.category?.name || 'Unknown'})`
       })));
     }
 
