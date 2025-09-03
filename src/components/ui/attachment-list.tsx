@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from './button';
 import { Badge } from './badge';
 import { 
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { type TicketAttachment } from '@/data/mockData';
-import { openAttachmentViewer } from '@/lib/attachmentViewer';
+import { AttachmentViewer } from './attachment-viewer';
 
 interface AttachmentListProps {
   attachments: TicketAttachment[];
@@ -37,6 +37,9 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
   maxVisible = 3,
   compact = false
 }) => {
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [selectedAttachmentIndex, setSelectedAttachmentIndex] = useState(0);
+
   if (attachments.length === 0) {
     return null;
   }
@@ -45,7 +48,8 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
   const remainingCount = attachments.length - maxVisible;
 
   const handlePreview = (index: number) => {
-    openAttachmentViewer(attachments, index);
+    setSelectedAttachmentIndex(index);
+    setIsViewerOpen(true);
   };
 
   if (compact) {
@@ -63,8 +67,14 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
         >
           <Eye className="h-3 w-3" />
         </Button>
-        
 
+        {/* Attachment Viewer Modal */}
+        <AttachmentViewer
+          attachments={attachments}
+          isOpen={isViewerOpen}
+          onClose={() => setIsViewerOpen(false)}
+          initialIndex={selectedAttachmentIndex}
+        />
       </div>
     );
   }
@@ -101,7 +111,13 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
         )}
       </div>
 
-      
+      {/* Attachment Viewer Modal */}
+      <AttachmentViewer
+        attachments={attachments}
+        isOpen={isViewerOpen}
+        onClose={() => setIsViewerOpen(false)}
+        initialIndex={selectedAttachmentIndex}
+      />
     </div>
   );
 };

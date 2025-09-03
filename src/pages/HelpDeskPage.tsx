@@ -12,13 +12,13 @@ import { FileUpload, type FileAttachment } from '@/components/ui/file-upload';
 import { RichTextDisplay } from '@/components/ui/rich-text-display';
 import { AttachmentDisplay } from '@/components/ui/attachment-display';
 import { AddCommentDialog } from '@/components/ui/add-comment-dialog';
-import { openAttachmentViewer } from '@/lib/attachmentViewer';
 
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { TicketService, type Ticket } from '@/lib/services/ticketService';
 import { AttachmentService } from '@/lib/services/attachmentService';
 import { CommentService, type Comment } from '@/lib/services/commentService';
 import { useApi } from '@/hooks/useApi';
+import { type TicketAttachment } from '@/data/mockData';
 import { 
   ArrowLeft, 
   HelpCircle, 
@@ -140,6 +140,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
+  // Attachment viewing is now handled by AttachmentDisplay component
 
   // Load comments when ticket details are shown
   useEffect(() => {
@@ -273,6 +274,8 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
       throw error; // Re-throw to let the dialog handle the error state
     }
   };
+
+  // Attachment viewing is now handled by AttachmentDisplay component
 
   return (
     <>
@@ -548,9 +551,9 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
                      return (
                        <div key={itemKey} className="border border-border rounded-lg overflow-hidden bg-background/80 shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/30 hover:bg-muted/30 dark:hover:bg-white/[0.04] group">
                          {/* Item Header */}
-                         <button
+                         <div
                            onClick={() => toggleDateExpansion(itemKey)}
-                           className="w-full flex items-center justify-between p-4 bg-transparent group-hover:bg-muted/30 dark:group-hover:bg-white/[0.04] hover:shadow-sm transition-all duration-200 border-b border-border group-hover:border-primary/20 relative before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-primary/0 group-hover:before:bg-primary/40"
+                           className="w-full flex items-center justify-between p-4 bg-transparent group-hover:bg-muted/30 dark:group-hover:bg-white/[0.04] hover:shadow-sm transition-all duration-200 border-b border-border group-hover:border-primary/20 relative before:absolute before:left-0 before:top-0 before:h-full before:w-1 before:bg-primary/0 group-hover:before:bg-primary/40 cursor-pointer"
                          >
                            <div className="flex items-center gap-3">
                              <div className="flex items-center gap-2">
@@ -576,20 +579,15 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
                              </div>
                            </div>
                            <div className="flex items-center gap-2">
-                             {/* Attachment Icon */}
+                             {/* Attachment Icon - Removed duplicate viewer, let AttachmentDisplay handle viewing */}
                              {((item.type === 'issue' && item.data.attachments && item.data.attachments.length > 0) ||
                                (item.type === 'comment' && item.data.attachments && item.data.attachments.length > 0)) && (
-                               <button
-                                 onClick={(e) => {
-                                   e.stopPropagation();
-                                   const attachments = item.data.attachments || [];
-                                   openAttachmentViewer(attachments, 0);
-                                 }}
-                                 className="p-1 hover:bg-muted/50 rounded transition-colors duration-200"
-                                 title={`View ${item.data.attachments?.length || 0} attachment${(item.data.attachments?.length || 0) !== 1 ? 's' : ''}`}
+                               <div
+                                 className="p-1 text-muted-foreground"
+                                 title={`${item.data.attachments?.length || 0} attachment${(item.data.attachments?.length || 0) !== 1 ? 's' : ''} available`}
                                >
-                                 <Paperclip className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors duration-200" />
-                               </button>
+                                 <Paperclip className="h-4 w-4" />
+                               </div>
                              )}
                              {isExpanded ? (
                                <ChevronDown className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-200" />
@@ -597,7 +595,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
                                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all duration-200" />
                              )}
                            </div>
-                         </button>
+                         </div>
                          
                          {/* Item Content */}
                          {isExpanded && (
@@ -770,6 +768,8 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Attachment viewing is now handled by AttachmentDisplay component */}
     </>
   );
 };

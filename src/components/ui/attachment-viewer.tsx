@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Button } from './button';
 import { Card, CardContent } from './card';
 import { Badge } from './badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './dialog';
 import { 
   File as FileIcon, 
   FileText, 
@@ -39,6 +40,15 @@ const getFileIcon = (type: string) => {
   return <FileIcon className="h-4 w-4" />;
 };
 
+const getFileIconText = (type: string) => {
+  if (type.startsWith('image/')) return '🖼️';
+  if (type.startsWith('video/')) return '🎥';
+  if (type.startsWith('audio/')) return '🎵';
+  if (type.includes('zip') || type.includes('rar') || type.includes('tar')) return '📦';
+  if (type.includes('pdf') || type.includes('document')) return '📄';
+  return '📎';
+};
+
 const formatFileSize = (bytes: number) => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
@@ -57,338 +67,465 @@ const formatDate = (date: Date) => {
   }).format(date);
 };
 
-// Function to open attachment viewer in a new window
-export const openAttachmentViewer = (
-  attachments: TicketAttachment[],
-  initialIndex: number = 0
-) => {
-  const windowFeatures = [
-    'width=1200',
-    'height=800',
-    'scrollbars=yes',
-    'resizable=yes',
-    'toolbar=no',
-    'menubar=no',
-    'location=no',
-    'status=no'
-  ].join(',');
+// Function to load authenticated images
+const loadAuthenticatedImage = async (url: string): Promise<string> => {
+  try {
+    const authToken = localStorage.getItem('auth-token') || 
+                     localStorage.getItem('token') || 
+                     localStorage.getItem('access_token') || 
+                     localStorage.getItem('accessToken');
 
-  const viewerWindow = window.open(
-    '',
-    'attachment-viewer',
-    windowFeatures
-  );
+    if (!authToken) {
+      throw new Error('Authentication token not found');
+    }
 
-  if (!viewerWindow) {
-    alert('Please allow popups to view attachments');
-    return null;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to load image: ${response.statusText}`);
+    }
+
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    return blobUrl;
+  } catch (error) {
+    console.error('Failed to load authenticated image:', error);
+    throw error;
   }
-
-  // Create the HTML content for the popup window
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Attachment Viewer</title>
-      <script src="https://cdn.tailwindcss.com"></script>
-      <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-        .attachment-viewer { height: 100vh; display: flex; flex-direction: column; }
-        .header { padding: 1rem; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; background: white; }
-        .content { flex: 1; display: flex; align-items: center; justify-content: center; padding: 1rem; position: relative; overflow: hidden; }
-        .navigation-arrow { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.9); border: none; border-radius: 0.5rem; padding: 0.5rem; cursor: pointer; }
-        .navigation-arrow:hover { background: rgba(255,255,255,1); }
-        .navigation-arrow.left { left: 1rem; }
-        .navigation-arrow.right { right: 1rem; }
-        .thumbnail-nav { padding: 1rem; border-top: 1px solid #e5e7eb; background: white; }
-        .thumbnail-container { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.5rem; }
-        .thumbnail { flex-shrink: 0; width: 4rem; height: 4rem; border-radius: 0.5rem; border: 2px solid #e5e7eb; overflow: hidden; cursor: pointer; }
-        .thumbnail.active { border-color: #3b82f6; }
-        .thumbnail img { width: 100%; height: 100%; object-fit: cover; }
-        .thumbnail-icon { width: 100%; height: 100%; background: #f3f4f6; display: flex; align-items: center; justify-content: center; }
-        .btn { padding: 0.5rem; border: none; border-radius: 0.375rem; cursor: pointer; background: #f3f4f6; margin-left: 0.25rem; }
-        .btn:hover { background: #e5e7eb; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .image-container { max-width: 100%; max-height: 100%; overflow: auto; }
-        .image-container img { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.2s ease-in-out; }
-        .file-info { text-align: center; }
-        .file-icon { width: 8rem; height: 8rem; background: #f3f4f6; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; }
-        .file-actions { display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem; }
-        .action-btn { padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 0.375rem; background: white; cursor: pointer; }
-        .action-btn:hover { background: #f9fafb; }
-        .action-btn.primary { background: #3b82f6; color: white; border-color: #3b82f6; }
-        .action-btn.primary:hover { background: #2563eb; }
-      </style>
-    </head>
-    <body>
-      <div class="attachment-viewer">
-        <div class="header">
-          <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <div id="file-icon"></div>
-            <div>
-              <h3 id="file-name" style="font-weight: 500; margin: 0; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></h3>
-              <p id="file-info" style="font-size: 0.875rem; color: #6b7280; margin: 0;"></p>
-            </div>
-            <span id="file-counter" style="background: #f3f4f6; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; border: 1px solid #e5e7eb;"></span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <div id="image-controls" style="display: none;">
-              <button class="btn" id="zoom-out" title="Zoom Out">−</button>
-              <button class="btn" id="zoom-in" title="Zoom In">+</button>
-              <button class="btn" id="rotate" title="Rotate">↻</button>
-            </div>
-            <button class="btn" id="download" title="Download">⬇</button>
-            <button class="btn" id="close" title="Close">✕</button>
-          </div>
-        </div>
-        
-        <div class="content">
-          <button class="navigation-arrow left" id="prev-btn" style="display: none;">‹</button>
-          <button class="navigation-arrow right" id="next-btn" style="display: none;">›</button>
-          <div id="file-content"></div>
-        </div>
-        
-        <div class="thumbnail-nav" id="thumbnail-nav" style="display: none;">
-          <div class="thumbnail-container" id="thumbnail-container"></div>
-        </div>
-      </div>
-
-      <script>
-        const attachments = ${JSON.stringify(attachments)};
-        let currentIndex = ${initialIndex};
-        let imageZoom = 1;
-        let imageRotation = 0;
-
-        function getFileIcon(type) {
-          if (type.startsWith('image/')) return '🖼️';
-          if (type.startsWith('video/')) return '🎥';
-          if (type.startsWith('audio/')) return '🎵';
-          if (type.includes('zip') || type.includes('rar') || type.includes('tar')) return '📦';
-          if (type.includes('pdf') || type.includes('document')) return '📄';
-          return '📎';
-        }
-
-        function formatFileSize(bytes) {
-          if (bytes === 0) return '0 Bytes';
-          const k = 1024;
-          const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-          const i = Math.floor(Math.log(bytes) / Math.log(k));
-          return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
-
-        function formatDate(date) {
-          return new Date(date).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          });
-        }
-
-        function updateDisplay() {
-          const attachment = attachments[currentIndex];
-          if (!attachment) return;
-
-          // Update header
-          document.getElementById('file-icon').textContent = getFileIcon(attachment.type);
-          document.getElementById('file-name').textContent = attachment.name;
-          document.getElementById('file-info').textContent = \`\${formatFileSize(attachment.size)} • \${formatDate(attachment.uploadedAt)}\`;
-          document.getElementById('file-counter').textContent = \`\${currentIndex + 1} of \${attachments.length}\`;
-
-          // Update content
-          const content = document.getElementById('file-content');
-          const isImage = attachment.type.startsWith('image/');
-          const isVideo = attachment.type.startsWith('video/');
-          const isAudio = attachment.type.startsWith('audio/');
-
-          // Show/hide image controls
-          document.getElementById('image-controls').style.display = isImage ? 'flex' : 'none';
-
-          if (isImage) {
-            content.innerHTML = \`
-              <div class="image-container">
-                <img src="\${attachment.url}" alt="\${attachment.name}" 
-                     style="transform: scale(\${imageZoom}) rotate(\${imageRotation}deg);">
-              </div>
-            \`;
-          } else if (isVideo) {
-            content.innerHTML = \`
-              <video src="\${attachment.url}" controls autoplay style="max-width: 100%; max-height: 100%;">
-                Your browser does not support the video tag.
-              </video>
-            \`;
-          } else if (isAudio) {
-            content.innerHTML = \`
-              <div class="file-info">
-                <div class="file-icon">🎵</div>
-                <audio src="\${attachment.url}" controls autoplay style="width: 100%; max-width: 400px;">
-                  Your browser does not support the audio tag.
-                </audio>
-              </div>
-            \`;
-          } else {
-            content.innerHTML = \`
-              <div class="file-info">
-                <div class="file-icon">\${getFileIcon(attachment.type)}</div>
-                <div>
-                  <p style="font-size: 1.125rem; font-weight: 500; margin: 0 0 0.5rem 0;">\${attachment.name}</p>
-                  <p style="font-size: 0.875rem; color: #6b7280; margin: 0;">\${formatFileSize(attachment.size)}</p>
-                </div>
-                <div class="file-actions">
-                  <button class="action-btn" onclick="window.open('\${attachment.url}', '_blank')">
-                    👁️ Open in New Tab
-                  </button>
-                  <button class="action-btn primary" onclick="downloadFile('\${attachment.url}', '\${attachment.name}')">
-                    ⬇ Download
-                  </button>
-                </div>
-              </div>
-            \`;
-          }
-
-          // Update navigation
-          const canNavigate = attachments.length > 1;
-          document.getElementById('prev-btn').style.display = canNavigate ? 'block' : 'none';
-          document.getElementById('next-btn').style.display = canNavigate ? 'block' : 'none';
-          document.getElementById('thumbnail-nav').style.display = canNavigate ? 'block' : 'none';
-
-          // Update thumbnails
-          if (canNavigate) {
-            const container = document.getElementById('thumbnail-container');
-            container.innerHTML = attachments.map((att, index) => \`
-              <div class="thumbnail \${index === currentIndex ? 'active' : ''}" 
-                   onclick="goToIndex(\${index})" 
-                   style="cursor: pointer;">
-                \${att.type.startsWith('image/') 
-                  ? \`<img src="\${att.url}" alt="\${att.name}">\`
-                  : \`<div class="thumbnail-icon">\${getFileIcon(att.type)}</div>\`
-                }
-              </div>
-            \`).join('');
-          }
-        }
-
-        function goToIndex(index) {
-          currentIndex = index;
-          imageZoom = 1;
-          imageRotation = 0;
-          updateDisplay();
-        }
-
-        function nextFile() {
-          currentIndex = (currentIndex + 1) % attachments.length;
-          imageZoom = 1;
-          imageRotation = 0;
-          updateDisplay();
-        }
-
-        function prevFile() {
-          currentIndex = currentIndex > 0 ? currentIndex - 1 : attachments.length - 1;
-          imageZoom = 1;
-          imageRotation = 0;
-          updateDisplay();
-        }
-
-        function downloadFile(url, filename) {
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = filename;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }
-
-        function handleKeyDown(e) {
-          switch (e.key) {
-            case 'Escape':
-              window.close();
-              break;
-            case 'ArrowLeft':
-              prevFile();
-              break;
-            case 'ArrowRight':
-              nextFile();
-              break;
-          }
-        }
-
-        // Event listeners
-        document.addEventListener('keydown', handleKeyDown);
-        document.getElementById('prev-btn').addEventListener('click', prevFile);
-        document.getElementById('next-btn').addEventListener('click', nextFile);
-        document.getElementById('close').addEventListener('click', () => window.close());
-        document.getElementById('download').addEventListener('click', () => {
-          const attachment = attachments[currentIndex];
-          downloadFile(attachment.url, attachment.name);
-        });
-
-        // Image controls
-        document.getElementById('zoom-out').addEventListener('click', () => {
-          imageZoom = Math.max(0.5, imageZoom - 0.25);
-          updateDisplay();
-        });
-
-        document.getElementById('zoom-in').addEventListener('click', () => {
-          imageZoom = Math.min(3, imageZoom + 0.25);
-          updateDisplay();
-        });
-
-        document.getElementById('rotate').addEventListener('click', () => {
-          imageRotation = (imageRotation + 90) % 360;
-          updateDisplay();
-        });
-
-        // Initialize display
-        updateDisplay();
-
-        // Focus the window
-        window.focus();
-      </script>
-    </body>
-    </html>
-  `;
-
-  viewerWindow.document.write(htmlContent);
-  viewerWindow.document.close();
-
-  return viewerWindow;
 };
 
-// The original component now just handles opening the popup
 export const AttachmentViewer: React.FC<AttachmentViewerProps> = ({
   attachments,
   isOpen,
   onClose,
   initialIndex = 0
 }) => {
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [imageZoom, setImageZoom] = useState(1);
+  const [imageRotation, setImageRotation] = useState(0);
+  const [blobUrls, setBlobUrls] = useState<Record<number, string>>({});
+  const [isLoadingImage, setIsLoadingImage] = useState(false);
+
+  const blobUrlsRef = useRef<Record<number, string>>({});
+
+  // Update ref when blobUrls changes
   useEffect(() => {
-    if (isOpen && attachments.length > 0) {
-      const popupWindow = openAttachmentViewer(attachments, initialIndex);
-      
-      if (popupWindow) {
-        // Listen for window close
-        const checkClosed = setInterval(() => {
-          if (popupWindow.closed) {
-            clearInterval(checkClosed);
-            onClose();
-          }
-        }, 500);
+    blobUrlsRef.current = blobUrls;
+  }, [blobUrls]);
 
-        return () => {
-          clearInterval(checkClosed);
-          if (!popupWindow.closed) {
-            popupWindow.close();
-          }
-        };
-      } else {
-        onClose();
-      }
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentIndex(initialIndex);
+      setImageZoom(1);
+      setImageRotation(0);
+      setBlobUrls({});
+      blobUrlsRef.current = {};
     }
-  }, [isOpen, attachments, initialIndex, onClose]);
+  }, [isOpen, initialIndex]);
 
-  // This component doesn't render anything visible
-  return null;
+  const currentAttachment = attachments[currentIndex];
+  
+  // Debug logging
+  console.log('Current index:', currentIndex);
+  console.log('Current attachment:', currentAttachment);
+  console.log('Current blob URL:', blobUrls[currentIndex]);
+  console.log('All blob URLs:', blobUrls);
+
+  // Load authenticated image when current attachment changes
+  useEffect(() => {
+    if (currentAttachment && currentAttachment.type.startsWith('image/')) {
+      const loadImage = async () => {
+        // Clear any existing blob URL for this index first
+        if (blobUrlsRef.current[currentIndex]) {
+          URL.revokeObjectURL(blobUrlsRef.current[currentIndex]);
+        }
+        
+        setIsLoadingImage(true);
+        try {
+          const authenticatedUrl = await loadAuthenticatedImage(currentAttachment.url);
+          setBlobUrls(prev => ({ ...prev, [currentIndex]: authenticatedUrl }));
+          blobUrlsRef.current[currentIndex] = authenticatedUrl;
+        } catch (error) {
+          console.error('Failed to load image:', error);
+        } finally {
+          setIsLoadingImage(false);
+        }
+      };
+
+      loadImage();
+    }
+  }, [currentAttachment, currentIndex]);
+
+  // Cleanup blob URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      Object.values(blobUrlsRef.current).forEach(url => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+  }, []); // Empty dependency array - only run on unmount
+
+  // Cleanup when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      // Clean up all blob URLs when modal closes
+      setBlobUrls(prev => {
+        Object.values(prev).forEach(url => {
+          if (url.startsWith('blob:')) {
+            URL.revokeObjectURL(url);
+          }
+        });
+        return {};
+      });
+      blobUrlsRef.current = {};
+    }
+  }, [isOpen]); // Only depend on isOpen
+
+  const goToIndex = (index: number) => {
+    setCurrentIndex(index);
+    setImageZoom(1);
+    setImageRotation(0);
+    
+    // Clear the current blob URL to force reload
+    if (blobUrls[currentIndex]) {
+      URL.revokeObjectURL(blobUrls[currentIndex]);
+      setBlobUrls(prev => {
+        const newUrls = { ...prev };
+        delete newUrls[currentIndex];
+        return newUrls;
+      });
+    }
+  };
+
+  const nextFile = () => {
+    const nextIndex = (currentIndex + 1) % attachments.length;
+    goToIndex(nextIndex);
+  };
+
+  const prevFile = () => {
+    const prevIndex = currentIndex > 0 ? currentIndex - 1 : attachments.length - 1;
+    goToIndex(prevIndex);
+  };
+
+  const downloadFile = (url: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const openFileInNewTab = (url: string) => {
+    window.open(url, '_blank');
+  };
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (!isOpen) return;
+    
+    switch (e.key) {
+      case 'Escape':
+        onClose();
+        break;
+      case 'ArrowLeft':
+        prevFile();
+        break;
+      case 'ArrowRight':
+        nextFile();
+        break;
+    }
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
+  if (!currentAttachment) return null;
+
+  const isImage = currentAttachment.type.startsWith('image/');
+  const isVideo = currentAttachment.type.startsWith('video/');
+  const isAudio = currentAttachment.type.startsWith('audio/');
+  const canNavigate = attachments.length > 1;
+  const currentImageUrl = blobUrls[currentIndex];
+
+
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+             <DialogContent className="max-w-[90vw] w-[600px] min-w-[600px] max-h-[80vh] min-h-[500px] p-0 flex flex-col overflow-hidden">
+        <DialogHeader className="p-6 pb-4 border-b flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="text-2xl">{getFileIconText(currentAttachment.type)}</div>
+              <div>
+                <DialogTitle className="text-lg font-medium max-w-[500px] truncate">
+                  {currentAttachment.name}
+                </DialogTitle>
+                <p className="text-sm text-muted-foreground">
+                  {formatFileSize(currentAttachment.size)} • {formatDate(currentAttachment.uploadedAt)}
+                </p>
+              </div>
+              {canNavigate && (
+                <Badge variant="secondary" className="ml-2">
+                  {currentIndex + 1} of {attachments.length}
+                </Badge>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {isImage && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setImageZoom(Math.max(0.5, imageZoom - 0.25))}
+                    disabled={imageZoom <= 0.5}
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setImageZoom(Math.min(3, imageZoom + 0.25))}
+                    disabled={imageZoom >= 3}
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setImageRotation((imageRotation + 90) % 360)}
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => downloadFile(currentAttachment.url, currentAttachment.name)}
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="flex-1 relative overflow-auto" style={{ minHeight: '300px', maxHeight: '300px' }}>
+                     {/* Navigation arrows */}
+           {canNavigate && (
+             <>
+                               <Button
+                  variant="outline"
+                  size="sm"
+                  className="absolute left-6 top-1/2 -translate-y-1/2 z-[60] bg-background border-2 shadow-lg hover:bg-accent"
+                  onClick={prevFile}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="absolute right-6 top-1/2 -translate-y-1/2 z-[60] bg-background border-2 shadow-lg hover:bg-accent"
+                  onClick={nextFile}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+             </>
+           )}
+
+                                           {/* File content */}
+             <div className="w-full h-full flex items-center justify-center">
+              {isImage && (
+                <>
+                  {isLoadingImage ? (
+                    <div className="flex items-center justify-center h-64">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                        <p className="text-sm text-muted-foreground">Loading image...</p>
+                      </div>
+                    </div>
+                  ) : currentImageUrl ? (
+                                                             <img
+                      src={currentImageUrl}
+                      alt={currentAttachment.name}
+                      className="w-auto h-auto max-w-full max-h-full object-contain"
+                      style={{
+                        transform: `scale(${imageZoom}) rotate(${imageRotation}deg)`,
+                        transition: 'transform 0.2s ease-in-out'
+                      }}
+                    />
+                  ) : (
+                    <div className="text-center">
+                      <div className="w-32 h-32 bg-muted rounded-full flex items-center justify-center mx-auto mb-4 text-4xl">
+                        ❌
+                      </div>
+                      <p className="text-sm text-muted-foreground">Failed to load image</p>
+                    </div>
+                  )}
+                </>
+              )}
+            
+            {isVideo && (
+              <video
+                src={currentAttachment.url}
+                controls
+                autoPlay
+                className="max-w-full max-h-full"
+              >
+                Your browser does not support the video tag.
+              </video>
+            )}
+            
+            {isAudio && (
+              <div className="text-center">
+                <div className="w-32 h-32 bg-muted rounded-full flex items-center justify-center mx-auto mb-4 text-4xl">
+                  🎵
+                </div>
+                <audio
+                  src={currentAttachment.url}
+                  controls
+                  autoPlay
+                  className="w-full max-w-md"
+                >
+                  Your browser does not support the audio tag.
+                </audio>
+              </div>
+            )}
+            
+            {!isImage && !isVideo && !isAudio && (
+              <div className="text-center">
+                <div className="w-32 h-32 bg-muted rounded-full flex items-center justify-center mx-auto mb-4 text-4xl">
+                  {getFileIconText(currentAttachment.type)}
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-lg font-medium">{currentAttachment.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatFileSize(currentAttachment.size)}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 justify-center">
+                    <Button
+                      variant="outline"
+                      onClick={() => openFileInNewTab(currentAttachment.url)}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      Open in New Tab
+                    </Button>
+                    <Button
+                      onClick={() => downloadFile(currentAttachment.url, currentAttachment.name)}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Thumbnail navigation */}
+        <div className="p-6 border-t flex-shrink-0 bg-background" style={{ minHeight: '120px' }}>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {attachments && Array.isArray(attachments) && attachments.length > 0 ? (
+              attachments.map((attachment, index) => (
+                <div
+                  key={index}
+                                     className={cn(
+                     "flex-shrink-0 w-20 h-20 rounded-lg border-2 cursor-pointer overflow-hidden transition-all duration-200",
+                     index === currentIndex
+                       ? "border-primary shadow-md"
+                       : "border-border hover:border-primary/50 hover:shadow-sm"
+                   )}
+                  onClick={() => goToIndex(index)}
+                >
+                  {attachment.type.startsWith('image/') ? (
+                    <AuthenticatedThumbnail 
+                      url={attachment.url} 
+                      alt={attachment.name} 
+                      index={index}
+                      blobUrls={blobUrls}
+                      setBlobUrls={setBlobUrls}
+                      currentIndex={currentIndex}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-muted flex items-center justify-center text-lg">
+                      {getFileIconText(attachment.type)}
+                    </div>
+                  )}
+                </div>
+              ))
+                         ) : null}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Component for authenticated thumbnail loading
+const AuthenticatedThumbnail: React.FC<{
+  url: string;
+  alt: string;
+  index: number;
+  blobUrls: Record<number, string>;
+  setBlobUrls: React.Dispatch<React.SetStateAction<Record<number, string>>>;
+  currentIndex: number;
+}> = ({ url, alt, index, blobUrls, setBlobUrls, currentIndex }) => {
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (blobUrls[index]) return; // Already loaded
+    
+    const loadThumbnail = async () => {
+      setIsLoading(true);
+      try {
+        const authenticatedUrl = await loadAuthenticatedImage(url);
+        setBlobUrls(prev => ({ ...prev, [index]: authenticatedUrl }));
+      } catch (error) {
+        console.error('Failed to load thumbnail:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadThumbnail();
+  }, [url, index, setBlobUrls, blobUrls]);
+
+  if (isLoading) {
+    return (
+      <div className="w-full h-full bg-muted flex items-center justify-center">
+        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (blobUrls[index]) {
+    return (
+      <img
+        src={blobUrls[index]}
+        alt={alt}
+        className="w-full h-full object-cover"
+        style={{
+          objectFit: 'cover'
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="w-full h-full bg-muted flex items-center justify-center text-lg">
+      ❌
+    </div>
+  );
 };

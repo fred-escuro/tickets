@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from './button';
 import { Card, CardContent } from './card';
 import { Badge } from './badge';
@@ -13,7 +13,7 @@ import {
   X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { openAttachmentViewer } from '@/lib/attachmentViewer';
+import { AttachmentViewer } from './attachment-viewer';
 import { AttachmentService } from '@/lib/services/attachmentService';
 
 // Backend attachment type
@@ -84,6 +84,9 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
   showDownload = true,
   showPreview = true
 }) => {
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [selectedAttachmentIndex, setSelectedAttachmentIndex] = useState(0);
+
   if (attachments.length === 0) {
     return null;
   }
@@ -94,13 +97,20 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
       const downloadUrl = AttachmentService.getDownloadUrl(attachment.id);
       
       // Get the auth token
-      const token = localStorage.getItem('auth-token');
-      
-      // Fetch the file with authentication
+      const authToken = localStorage.getItem('auth-token') || 
+                       localStorage.getItem('token') || 
+                       localStorage.getItem('access_token') || 
+                       localStorage.getItem('accessToken');
+
+      if (!authToken) {
+        throw new Error('Authentication token not found');
+      }
+
+      // Make authenticated request to download the file
       const response = await fetch(downloadUrl, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${authToken}`,
         },
       });
       
@@ -132,18 +142,20 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
   };
 
   const handlePreview = (attachment: BackendAttachment, index: number) => {
-    // Convert backend attachment to frontend format for the viewer
-    const frontendAttachments = attachments.map(att => ({
-      id: att.id,
-      name: att.name,
-      size: att.fileSize,
-      type: att.mimeType,
-      url: AttachmentService.getDownloadUrl(att.id),
-      uploadedAt: typeof att.uploadedAt === 'string' ? new Date(att.uploadedAt) : att.uploadedAt,
-      uploadedBy: att.uploader ? `${att.uploader.firstName} ${att.uploader.lastName}` : 'Unknown'
-    }));
-    openAttachmentViewer(frontendAttachments, index);
+    setSelectedAttachmentIndex(index);
+    setIsViewerOpen(true);
   };
+
+  // Convert backend attachments to frontend format for the viewer
+  const frontendAttachments = attachments.map(att => ({
+    id: att.id,
+    name: att.name,
+    size: att.fileSize,
+    type: att.mimeType,
+    url: AttachmentService.getDownloadUrl(att.id),
+    uploadedAt: typeof att.uploadedAt === 'string' ? new Date(att.uploadedAt) : att.uploadedAt,
+    uploadedBy: att.uploader ? `${att.uploader.firstName} ${att.uploader.lastName}` : 'Unknown'
+  }));
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -151,52 +163,58 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
         <h4 className="text-sm font-medium">Attachments ({attachments.length})</h4>
       </div>
       
-             <div className="grid gap-2">
-         {attachments.map((attachment, index) => (
-           <Card 
-             key={attachment.id} 
-             className="p-3 hover:bg-muted/30 hover:shadow-sm transition-all duration-200 cursor-pointer"
-             onClick={() => handlePreview(attachment, index)}
-           >
-             <CardContent className="p-0">
-               <div className="flex items-center gap-3">
-                 <div className="h-10 w-10 bg-muted rounded flex items-center justify-center">
-                   {getFileIcon(attachment.mimeType)}
-                 </div>
-                 
-                 <div className="flex-1 min-w-0">
-                   <p className="text-sm font-medium truncate">{attachment.name}</p>
-                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                     <span>{formatFileSize(attachment.fileSize)}</span>
-                     <span>•</span>
-                     <span>{formatDate(attachment.uploadedAt)}</span>
-                     <span>•</span>
-                     <span>{attachment.uploadedBy}</span>
-                   </div>
-                 </div>
-                 
-                 <div className="flex items-center gap-1">
-                   {showDownload && (
-                     <Button
-                       variant="ghost"
-                       size="sm"
-                       onClick={(e) => {
-                         e.stopPropagation();
-                         handleDownload(attachment);
-                       }}
-                       className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                     >
-                       <Download className="h-3 w-3" />
-                     </Button>
-                   )}
-                 </div>
-               </div>
-             </CardContent>
-           </Card>
-         ))}
-       </div>
+      <div className="grid gap-2">
+        {attachments.map((attachment, index) => (
+          <Card 
+            key={attachment.id} 
+            className="p-3 hover:bg-muted/30 hover:shadow-sm transition-all duration-200 cursor-pointer"
+            onClick={() => handlePreview(attachment, index)}
+          >
+            <CardContent className="p-0">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-muted rounded flex items-center justify-center">
+                  {getFileIcon(attachment.mimeType)}
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{attachment.name}</p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{formatFileSize(attachment.fileSize)}</span>
+                    <span>•</span>
+                    <span>{formatDate(attachment.uploadedAt)}</span>
+                    <span>•</span>
+                    <span>{attachment.uploadedBy}</span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-1">
+                  {showDownload && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownload(attachment);
+                      }}
+                      className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <Download className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-       
+      {/* Attachment Viewer Modal */}
+      <AttachmentViewer
+        attachments={frontendAttachments}
+        isOpen={isViewerOpen}
+        onClose={() => setIsViewerOpen(false)}
+        initialIndex={selectedAttachmentIndex}
+      />
     </div>
   );
 };
