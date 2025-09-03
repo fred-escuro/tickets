@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 .vercel
 backend/uploads/*
+backend/backup/*.sql
 
 # Local Netlify folder
 .netlify
