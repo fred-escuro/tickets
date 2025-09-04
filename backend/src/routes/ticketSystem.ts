@@ -198,6 +198,18 @@ router.post('/priorities', authenticate, authorize('admin'), async (req, res) =>
       });
     }
 
+    // Check if level already exists
+    const existingPriority = await prisma.ticketPriority.findFirst({
+      where: { level }
+    });
+
+    if (existingPriority) {
+      return res.status(400).json({
+        success: false,
+        error: `Priority level ${level} already exists`
+      });
+    }
+
     // Get the next sort order
     const lastPriority = await prisma.ticketPriority.findFirst({
       orderBy: { sortOrder: 'desc' }
@@ -252,6 +264,40 @@ router.put('/priorities/:id', authenticate, authorize('admin'), async (req, res)
     return res.status(500).json({
       success: false,
       error: 'Failed to update priority'
+    });
+  }
+});
+
+// Delete priority
+router.delete('/priorities/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if priority is being used by any tickets
+    const ticketsUsingPriority = await prisma.ticket.count({
+      where: { priorityId: id }
+    });
+
+    if (ticketsUsingPriority > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot delete priority. It is currently being used by ${ticketsUsingPriority} ticket(s).`
+      });
+    }
+
+    await prisma.ticketPriority.delete({
+      where: { id }
+    });
+
+    return res.json({
+      success: true,
+      message: 'Priority deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete priority error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to delete priority'
     });
   }
 });
@@ -345,6 +391,40 @@ router.put('/statuses/:id', authenticate, authorize('admin'), async (req, res) =
     return res.status(500).json({
       success: false,
       error: 'Failed to update status'
+    });
+  }
+});
+
+// Delete status
+router.delete('/statuses/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if status is being used by any tickets
+    const ticketsUsingStatus = await prisma.ticket.count({
+      where: { statusId: id }
+    });
+
+    if (ticketsUsingStatus > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot delete status. It is currently being used by ${ticketsUsingStatus} ticket(s).`
+      });
+    }
+
+    await prisma.ticketStatus.delete({
+      where: { id }
+    });
+
+    return res.json({
+      success: true,
+      message: 'Status deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete status error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to delete status'
     });
   }
 });

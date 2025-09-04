@@ -53,7 +53,9 @@ import { toast } from 'sonner';
 import { ticketSystemService, type TicketCategory } from '@/lib/services/ticketSystemService';
 
 
-const getStatusColor = (status: string) => {
+const getStatusColor = (status: string | undefined) => {
+  if (!status) return 'bg-gray-100 text-gray-700 border-gray-200';
+  
   switch (status.toLowerCase()) {
     case 'open':
       return 'bg-blue-100 text-blue-700 border-blue-200';
@@ -69,7 +71,9 @@ const getStatusColor = (status: string) => {
   }
 };
 
-const getStatusIcon = (status: string) => {
+const getStatusIcon = (status: string | undefined) => {
+  if (!status) return <AlertCircle className="h-4 w-4" />;
+  
   switch (status.toLowerCase()) {
     case 'open':
       return <AlertCircle className="h-4 w-4" />;
@@ -82,6 +86,23 @@ const getStatusIcon = (status: string) => {
       return <XCircle className="h-4 w-4" />;
     default:
       return <HelpCircle className="h-4 w-4" />;
+  }
+};
+
+const getPriorityColor = (priority: string | undefined) => {
+  if (!priority) return 'bg-gray-100 text-gray-700 border-gray-200';
+  
+  switch (priority.toLowerCase()) {
+    case 'low':
+      return 'bg-green-100 text-green-700 border-green-200';
+    case 'medium':
+      return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+    case 'high':
+      return 'bg-orange-100 text-orange-700 border-orange-200';
+    case 'critical':
+      return 'bg-red-100 text-red-700 border-red-200';
+    default:
+      return 'bg-gray-100 text-gray-700 border-gray-200';
   }
 };
 
@@ -133,20 +154,7 @@ const getCategoryIcon = (category: string, categoryInfo?: { color: string; icon?
   }
 };
 
-const getPriorityColor = (priority: string) => {
-  switch (priority.toLowerCase()) {
-    case 'low':
-      return 'bg-green-100 text-green-700';
-    case 'medium':
-      return 'bg-yellow-100 text-yellow-700';
-    case 'high':
-      return 'bg-orange-100 text-orange-700';
-    case 'critical':
-      return 'bg-red-100 text-red-700';
-    default:
-      return 'bg-gray-100 text-gray-700';
-  }
-};
+
 
 const formatDate = (date: Date | string) => {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
@@ -336,14 +344,14 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
             
             {/* Status badges row */}
             <div className="flex flex-row gap-2 items-center">
-              <Badge className={`${getStatusColor(ticket.status)} border text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
+              <Badge className={`${getStatusColor(typeof ticket.status === 'string' ? ticket.status : ticket.status?.name)} border text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
                 <div className="flex items-center gap-1">
-                  {getStatusIcon(ticket.status)}
-                  <span className="capitalize font-medium">{ticket.status}</span>
+                  {getStatusIcon(typeof ticket.status === 'string' ? ticket.status : ticket.status?.name)}
+                  <span className="capitalize font-medium">{typeof ticket.status === 'string' ? ticket.status : ticket.status?.name || 'Unknown'}</span>
                 </div>
               </Badge>
-              <Badge className={`${getPriorityColor(ticket.priority)} text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm font-medium`}>
-                {ticket.priority.toUpperCase()}
+              <Badge className={`${getPriorityColor(typeof ticket.priority === 'string' ? ticket.priority : ticket.priority?.name)} text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm font-medium`}>
+                {(typeof ticket.priority === 'string' ? ticket.priority : ticket.priority?.name || 'Unknown').toUpperCase()}
               </Badge>
               {ticket.comments && ticket.comments.length > 0 && (
                 <Badge variant="secondary" className="text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm">
@@ -480,14 +488,14 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Status</p>
-                <Badge className={`${getStatusColor(ticket.status)} text-xs`}>
-                  {ticket.status}
+                <Badge className={`${getStatusColor(typeof ticket.status === 'string' ? ticket.status : ticket.status?.name)} text-xs`}>
+                  {typeof ticket.status === 'string' ? ticket.status : ticket.status?.name || 'Unknown'}
                 </Badge>
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Priority</p>
-                <Badge className={`${getPriorityColor(ticket.priority)} text-xs`}>
-                  {ticket.priority}
+                <Badge className={`${getPriorityColor(typeof ticket.priority === 'string' ? ticket.priority : ticket.priority?.name)} text-xs`}>
+                  {typeof ticket.priority === 'string' ? ticket.priority : ticket.priority?.name || 'Unknown'}
                 </Badge>
               </div>
               <div className="space-y-1">

@@ -254,7 +254,9 @@ class TicketSystemService {
     });
     
     if (!response.ok) {
-      throw new Error('Failed to create priority');
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+      throw new Error(`Failed to create priority: ${errorMessage}`);
     }
     
     const data = await response.json();
@@ -277,6 +279,19 @@ class TicketSystemService {
     
     const data = await response.json();
     return data.data;
+  }
+
+  async deletePriority(id: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/priorities/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete priority');
+    }
   }
 
   // Statuses
@@ -329,6 +344,19 @@ class TicketSystemService {
     
     const data = await response.json();
     return data.data;
+  }
+
+  async deleteStatus(id: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/statuses/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete status');
+    }
   }
 
   // Templates

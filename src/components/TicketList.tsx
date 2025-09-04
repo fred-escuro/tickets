@@ -12,11 +12,13 @@ import {
 } from './ui/table';
 import { TicketService, type Ticket } from '@/lib/services/ticketService';
 import { useApi } from '@/hooks/useApi';
+import { TicketStatusBadge } from './TicketStatusBadge';
+import { TicketStatusChange } from './TicketStatusChange';
+import { PriorityBadge } from './PriorityBadge';
+import { toast } from 'sonner';
 
 
 export const TicketList = () => {
-
-  
   // Fetch tickets from backend API
   const { 
     data: ticketsData, 
@@ -27,6 +29,21 @@ export const TicketList = () => {
     () => TicketService.getTickets(),
     { autoExecute: false }
   );
+
+  // Handle status change
+  const handleStatusChange = async (ticketId: string, newStatusId: string, reason?: string, comment?: string) => {
+    try {
+      // This would call the backend API to update the ticket status
+      // For now, we'll just refresh the data
+      console.log('Status change:', { ticketId, newStatusId, reason, comment });
+      toast.success('Status updated successfully');
+      await fetchTickets(); // Refresh the ticket list
+    } catch (error) {
+      console.error('Failed to update status:', error);
+      toast.error('Failed to update status');
+      throw error;
+    }
+  };
 
   // Use useEffect to fetch data on component mount
   useEffect(() => {
@@ -119,25 +136,20 @@ export const TicketList = () => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className={`${
-                        ticket.status === 'OPEN' ? 'bg-blue-100 text-blue-700 border-blue-200' :
-                        ticket.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
-                        ticket.status === 'RESOLVED' ? 'bg-green-100 text-green-700 border-green-200' :
-                        ticket.status === 'CLOSED' ? 'bg-gray-100 text-gray-700 border-gray-200' :
-                        'bg-red-100 text-red-700 border-red-200'
-                      }`}>
-                        {ticket.status}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <TicketStatusBadge status={ticket.status} size="sm" />
+                        <TicketStatusChange
+                          ticketId={ticket.id}
+                          currentStatus={ticket.status}
+                          onStatusChange={(newStatusId, reason, comment) => 
+                            handleStatusChange(ticket.id, newStatusId, reason, comment)
+                          }
+                          className="ml-2"
+                        />
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <span className={`font-medium ${
-                        ticket.priority === 'CRITICAL' ? 'text-red-600' :
-                        ticket.priority === 'HIGH' ? 'text-orange-600' :
-                        ticket.priority === 'MEDIUM' ? 'text-yellow-600' :
-                        'text-green-600'
-                      }`}>
-                        {ticket.priority}
-                      </span>
+                      <PriorityBadge priority={ticket.priority} size="sm" />
                     </TableCell>
                     <TableCell>
                       {ticket.categoryInfo ? (

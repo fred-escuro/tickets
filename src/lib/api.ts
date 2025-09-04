@@ -158,7 +158,21 @@ export class ApiClient {
         }
         
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        const errorMessage = errorData.message || errorData.error || `HTTP error! status: ${response.status}`;
+        
+        // Log more details for 500 errors
+        if (response.status === 500) {
+          console.error('Server Error Details:', {
+            url,
+            method,
+            status: response.status,
+            statusText: response.statusText,
+            errorData,
+            body: body instanceof FormData ? 'FormData' : body
+          });
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Switch } from '@/components/ui/switch';
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { ticketSystemService, type TicketCategory, type TicketPriority, type TicketStatus, type TicketTemplate, type TicketWorkflow } from '@/lib/services/ticketSystemService';
+import { TicketStatusWorkflow } from '@/components/TicketStatusWorkflow';
 import { 
   Settings, 
   Plus, 
@@ -424,7 +425,7 @@ export const TicketSystemAdminPage: FC = () => {
             </TabsContent>
 
             {/* Statuses Tab */}
-            <TabsContent value="statuses" className="space-y-4">
+            <TabsContent value="statuses" className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold">Ticket Statuses</h2>
                 <Button onClick={() => setShowStatusDialog(true)}>
@@ -433,6 +434,10 @@ export const TicketSystemAdminPage: FC = () => {
                 </Button>
               </div>
 
+              {/* Status Workflow Visualization */}
+              <TicketStatusWorkflow statuses={statuses} />
+
+              {/* Status Cards */}
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {statuses.map((status) => (
                   <Card key={status.id} className="hover:shadow-md transition-shadow">
@@ -449,24 +454,96 @@ export const TicketSystemAdminPage: FC = () => {
                             {status.isResolved && <CheckCircle className="h-4 w-4 text-green-600" />}
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog('status', status)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDialog('status', status)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDialog('status', status)}
+                            className="text-orange-600 hover:text-orange-700"
+                          >
+                            <Workflow className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>
                       <p className="text-sm text-muted-foreground mb-3">
                         {status.description || 'No description'}
                       </p>
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">Transitions:</span>
-                        <span className="font-medium">
-                          {status.allowedTransitions?.transitions?.length || 0}
-                        </span>
+                      
+                      {/* Status Properties */}
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">Properties:</span>
+                          <div className="flex items-center gap-1">
+                            {status.isClosed && (
+                              <Badge variant="outline" className="text-xs text-red-600 border-red-200">
+                                Closes Ticket
+                              </Badge>
+                            )}
+                            {status.isResolved && (
+                              <Badge variant="outline" className="text-xs text-green-600 border-green-200">
+                                Resolves Ticket
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Allowed Transitions */}
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">Allowed Transitions:</span>
+                            <span className="font-medium">
+                              {status.allowedTransitions?.transitions?.length || 0}
+                            </span>
+                          </div>
+                          {status.allowedTransitions?.transitions && status.allowedTransitions.transitions.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {status.allowedTransitions.transitions.map((transitionId) => {
+                                const transitionStatus = statuses.find(s => s.id === transitionId);
+                                return transitionStatus ? (
+                                  <Badge 
+                                    key={transitionId} 
+                                    variant="outline" 
+                                    className="text-xs"
+                                    style={{ 
+                                      borderColor: transitionStatus.color === 'blue' ? '#3b82f6' :
+                                                  transitionStatus.color === 'green' ? '#10b981' :
+                                                  transitionStatus.color === 'red' ? '#ef4444' :
+                                                  transitionStatus.color === 'yellow' ? '#f59e0b' :
+                                                  transitionStatus.color === 'orange' ? '#f97316' :
+                                                  transitionStatus.color === 'purple' ? '#8b5cf6' :
+                                                  '#6b7280'
+                                    }}
+                                  >
+                                    {transitionStatus.name}
+                                  </Badge>
+                                ) : null;
+                              })}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Permissions */}
+                        {status.permissions?.roles && status.permissions.roles.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">Roles:</span>
+                            <div className="flex flex-wrap gap-1">
+                              {status.permissions.roles.map((role) => (
+                                <Badge key={role} variant="outline" className="text-xs">
+                                  {role}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -733,7 +810,7 @@ export const TicketSystemAdminPage: FC = () => {
                   placeholder="Status description"
                 />
               </div>
-              <div className="flex items-center gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="is-closed"
@@ -749,6 +826,68 @@ export const TicketSystemAdminPage: FC = () => {
                     onCheckedChange={(checked) => setStatusForm({ ...statusForm, isResolved: checked })}
                   />
                   <Label htmlFor="is-resolved">Resolves ticket</Label>
+                </div>
+              </div>
+              
+              {/* Allowed Transitions */}
+              <div>
+                <Label htmlFor="transitions">Allowed Transitions</Label>
+                <div className="mt-2 space-y-2">
+                  {statuses.filter(s => s.id !== editingItem?.id).map((status) => (
+                    <div key={status.id} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={`transition-${status.id}`}
+                        checked={statusForm.allowedTransitions?.transitions?.includes(status.id) || false}
+                        onChange={(e) => {
+                          const currentTransitions = statusForm.allowedTransitions?.transitions || [];
+                          const newTransitions = e.target.checked
+                            ? [...currentTransitions, status.id]
+                            : currentTransitions.filter(id => id !== status.id);
+                          
+                          setStatusForm({
+                            ...statusForm,
+                            allowedTransitions: { transitions: newTransitions }
+                          });
+                        }}
+                      />
+                      <Label htmlFor={`transition-${status.id}`} className="text-sm">
+                        <Badge className={`${ticketSystemService.getStatusColorClass(status.color)} text-xs`}>
+                          {status.name}
+                        </Badge>
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Permissions */}
+              <div>
+                <Label htmlFor="permissions">Required Roles</Label>
+                <div className="mt-2 space-y-2">
+                  {['admin', 'manager', 'agent', 'user'].map((role) => (
+                    <div key={role} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={`role-${role}`}
+                        checked={statusForm.permissions?.roles?.includes(role) || false}
+                        onChange={(e) => {
+                          const currentRoles = statusForm.permissions?.roles || [];
+                          const newRoles = e.target.checked
+                            ? [...currentRoles, role]
+                            : currentRoles.filter(r => r !== role);
+                          
+                          setStatusForm({
+                            ...statusForm,
+                            permissions: { roles: newRoles }
+                          });
+                        }}
+                      />
+                      <Label htmlFor={`role-${role}`} className="text-sm capitalize">
+                        {role}
+                      </Label>
+                    </div>
+                  ))}
                 </div>
               </div>
               <div className="flex justify-end gap-2">

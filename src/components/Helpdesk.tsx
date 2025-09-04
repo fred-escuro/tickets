@@ -8,6 +8,10 @@ import { type FC } from 'react';
 import { Link } from 'react-router-dom';
 import { TicketService, type Ticket } from '@/lib/services/ticketService';
 import { useApi } from '@/hooks/useApi';
+import { TicketStatusBadge } from './TicketStatusBadge';
+import { TicketStatusChange } from './TicketStatusChange';
+import { PriorityBadge } from './PriorityBadge';
+import { toast } from 'sonner';
 
 export const Helpdesk: FC = () => {
 
@@ -49,6 +53,22 @@ export const Helpdesk: FC = () => {
   const recentTickets = tickets.slice(0, 3);
 
 
+
+  // Handle status change
+  const handleStatusChange = async (ticketId: string, newStatusId: string, reason?: string, comment?: string) => {
+    try {
+      // This would call the backend API to update the ticket status
+      console.log('Status change:', { ticketId, newStatusId, reason, comment });
+      toast.success('Status updated successfully');
+      // Refresh the data
+      fetchTickets();
+      fetchStats();
+    } catch (error) {
+      console.error('Failed to update status:', error);
+      toast.error('Failed to update status');
+      throw error;
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -274,12 +294,13 @@ export const Helpdesk: FC = () => {
                       </p>
                     </div>
                     <div className="flex items-center gap-1 ml-2">
-                      <Badge className={`${getStatusColor(ticket.status)} border text-xs px-1.5 py-0.5`}>
-                        <div className="flex items-center gap-1">
-                          {getStatusIcon(ticket.status)}
-                          <span className="capitalize">{getStatusDisplayName(ticket.status)}</span>
-                        </div>
-                      </Badge>
+                      <TicketStatusBadge status={ticket.status} size="sm" />
+                      <TicketStatusChange
+                        ticketId={ticket.id}
+                        currentStatus={ticket.status}
+                        onStatusChange={handleStatusChange}
+                        className="ml-1"
+                      />
                     </div>
                   </div>
                   

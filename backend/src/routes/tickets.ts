@@ -210,13 +210,36 @@ router.post('/', authenticate, async (req, res) => {
       });
     }
 
+    // Get default priority and status IDs
+    const defaultPriority = await prisma.ticketPriority.findFirst({ 
+      where: { name: 'Medium' } 
+    }) || await prisma.ticketPriority.findFirst();
+    
+    const defaultStatus = await prisma.ticketStatus.findFirst({ 
+      where: { name: 'Open' } 
+    }) || await prisma.ticketStatus.findFirst();
+
+    if (!defaultPriority) {
+      return res.status(500).json({
+        success: false,
+        error: 'No priority levels configured. Please set up priorities first.'
+      });
+    }
+
+    if (!defaultStatus) {
+      return res.status(500).json({
+        success: false,
+        error: 'No status levels configured. Please set up statuses first.'
+      });
+    }
+
     const ticket = await prisma.ticket.create({
       data: {
         title,
         description,
         categoryId: category,
-        priorityId: priority || 'MEDIUM',
-        statusId: 'OPEN', // Default status
+        priorityId: priority || defaultPriority.id,
+        statusId: defaultStatus.id,
         submittedBy: userId,
         dueDate: dueDate ? new Date(dueDate) : undefined,
         tags: tags || []
@@ -282,18 +305,24 @@ router.put('/:id', authenticate, async (req, res) => {
 
     // Handle status changes
     if (updateData.statusId && updateData.statusId !== existingTicket.statusId) {
-      if (updateData.statusId === 'RESOLVED' && !updateData.resolution) {
+      // Get the status details to check if it's resolved or closed
+      const newStatus = await prisma.ticketStatus.findUnique({
+        where: { id: updateData.statusId }
+      });
+
+      if (newStatus?.isResolved && !updateData.resolution) {
         return res.status(400).json({
           success: false,
-          error: 'Resolution is required when closing a ticket'
+          error: 'Resolution is required when resolving a ticket'
         });
       }
 
-      if (updateData.statusId === 'RESOLVED') {
+      if (newStatus?.isResolved) {
         updateData.resolvedAt = new Date();
       }
 
-      if (updateData.statusId === 'IN_PROGRESS' && !existingTicket.assignedTo) {
+      // Check if status name indicates "in progress" and auto-assign if needed
+      if (newStatus?.name.toLowerCase().includes('progress') && !existingTicket.assignedTo) {
         updateData.assignedTo = userId;
         updateData.assignedAt = new Date();
       }
@@ -418,6 +447,16 @@ router.get('/stats/overview', authenticate, async (req, res) => {
       ];
     }
 
+    // Get status IDs first
+    const statuses = await prisma.ticketStatus.findMany({
+      select: { id: true, name: true }
+    });
+    
+    const statusMap = statuses.reduce((acc, status) => {
+      acc[status.name.toLowerCase().replace(/\s+/g, '')] = status.id;
+      return acc;
+    }, {} as Record<string, string>);
+
     const [
       totalTickets,
       openTickets,
@@ -426,10 +465,10 @@ router.get('/stats/overview', authenticate, async (req, res) => {
       closedTickets
     ] = await Promise.all([
       prisma.ticket.count({ where: whereClause }),
-      prisma.ticket.count({ where: { ...whereClause, status: 'OPEN' } }),
-      prisma.ticket.count({ where: { ...whereClause, status: 'IN_PROGRESS' } }),
-      prisma.ticket.count({ where: { ...whereClause, status: 'RESOLVED' } }),
-      prisma.ticket.count({ where: { ...whereClause, status: 'CLOSED' } })
+      prisma.ticket.count({ where: { ...whereClause, statusId: statusMap.open || statusMap['open'] } }),
+      prisma.ticket.count({ where: { ...whereClause, statusId: statusMap.inprogress || statusMap['inprogress'] } }),
+      prisma.ticket.count({ where: { ...whereClause, statusId: statusMap.resolved || statusMap['resolved'] } }),
+      prisma.ticket.count({ where: { ...whereClause, statusId: statusMap.closed || statusMap['closed'] } })
     ]);
 
     const stats = {
