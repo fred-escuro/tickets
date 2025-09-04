@@ -172,7 +172,7 @@ export const TicketStatusChange: React.FC<TicketStatusChangeProps> = ({
           </div>
         </DialogTrigger>
         
-        <DialogContent className="max-w-2xl">
+        <DialogContent overlayClassName="!z-[140]" overlayStyle={{ zIndex: 140 }} contentStyle={{ zIndex: 150 }} className="max-w-2xl !z-[150]">
           <DialogHeader>
             <DialogTitle>Change Ticket Status</DialogTitle>
           </DialogHeader>

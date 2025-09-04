@@ -18,6 +18,7 @@ import { ResourcesPage } from './pages/ResourcesPage';
 import SettingsPage from './pages/SettingsPage';
 import { UsersPage } from './pages/UsersPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { TicketDetailPage } from './pages/TicketDetailPage';
 
 const AppRoutes: FC = () => {
   return (
@@ -35,6 +36,14 @@ const AppRoutes: FC = () => {
         element={
           <ProtectedRoute pageTitle="Welcome to TicketHub" pageDescription="Please log in to access the help desk and support system.">
             <HelpDeskPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tickets/:id"
+        element={
+          <ProtectedRoute pageTitle="Ticket Detail" pageDescription="View and update ticket details.">
+            <TicketDetailPage />
           </ProtectedRoute>
         }
       />

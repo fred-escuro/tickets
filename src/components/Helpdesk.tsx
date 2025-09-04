@@ -44,12 +44,15 @@ export const Helpdesk: FC = () => {
 
 
   // Filter tickets for display
-  const openTickets = tickets.filter(ticket => 
-    ticket.status === 'OPEN' || ticket.status === 'IN_PROGRESS'
-  );
-  const resolvedTickets = tickets.filter(ticket => 
-    ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'
-  );
+  const getStatusName = (t: any) => (typeof t.status === 'string' ? t.status : t.status?.name || '');
+  const openTickets = tickets.filter(t => {
+    const s = getStatusName(t).toUpperCase();
+    return s === 'OPEN' || s === 'IN_PROGRESS';
+  });
+  const resolvedTickets = tickets.filter(t => {
+    const s = getStatusName(t).toUpperCase();
+    return s === 'RESOLVED' || s === 'CLOSED';
+  });
   const recentTickets = tickets.slice(0, 3);
 
 
@@ -57,10 +60,8 @@ export const Helpdesk: FC = () => {
   // Handle status change
   const handleStatusChange = async (ticketId: string, newStatusId: string, reason?: string, comment?: string) => {
     try {
-      // This would call the backend API to update the ticket status
-      console.log('Status change:', { ticketId, newStatusId, reason, comment });
+      await TicketService.updateTicket(ticketId, { statusId: newStatusId });
       toast.success('Status updated successfully');
-      // Refresh the data
       fetchTickets();
       fetchStats();
     } catch (error) {
@@ -294,10 +295,11 @@ export const Helpdesk: FC = () => {
                       </p>
                     </div>
                     <div className="flex items-center gap-1 ml-2">
-                      <TicketStatusBadge status={ticket.status} size="sm" />
+                      <TicketStatusBadge status={(ticket as any).status as any} size="sm" />
                       <TicketStatusChange
                         ticketId={ticket.id}
-                        currentStatus={ticket.status}
+                        currentStatus={typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name}
+                        currentStatusId={typeof (ticket as any).status === 'object' ? (ticket as any).status?.id : undefined}
                         onStatusChange={handleStatusChange}
                         className="ml-1"
                       />
@@ -305,8 +307,8 @@ export const Helpdesk: FC = () => {
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <span className={`text-xs font-medium capitalize ${getPriorityColor(ticket.priority)}`}>
-                      {getPriorityDisplayName(ticket.priority)} Priority
+                    <span className={`text-xs font-medium capitalize ${getPriorityColor(typeof (ticket as any).priority === 'string' ? (ticket as any).priority : (ticket as any).priority?.name || '')}`}>
+                      {getPriorityDisplayName(typeof (ticket as any).priority === 'string' ? (ticket as any).priority : (ticket as any).priority?.name || '')} Priority
                     </span>
                     <span className="text-xs text-muted-foreground capitalize">
                       {ticket.category}

@@ -33,11 +33,10 @@ export const TicketList = () => {
   // Handle status change
   const handleStatusChange = async (ticketId: string, newStatusId: string, reason?: string, comment?: string) => {
     try {
-      // This would call the backend API to update the ticket status
-      // For now, we'll just refresh the data
-      console.log('Status change:', { ticketId, newStatusId, reason, comment });
+      // Persist status change to backend
+      await TicketService.updateTicket(ticketId, { statusId: newStatusId });
       toast.success('Status updated successfully');
-      await fetchTickets(); // Refresh the ticket list
+      await fetchTickets();
     } catch (error) {
       console.error('Failed to update status:', error);
       toast.error('Failed to update status');
@@ -137,10 +136,11 @@ export const TicketList = () => {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <TicketStatusBadge status={ticket.status} size="sm" />
+                        <TicketStatusBadge status={ticket.status as any} size="sm" />
                         <TicketStatusChange
                           ticketId={ticket.id}
-                          currentStatus={ticket.status}
+                          currentStatus={typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name}
+                          currentStatusId={typeof (ticket as any).status === 'object' ? (ticket as any).status?.id : undefined}
                           onStatusChange={(newStatusId, reason, comment) => 
                             handleStatusChange(ticket.id, newStatusId, reason, comment)
                           }
@@ -149,7 +149,7 @@ export const TicketList = () => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <PriorityBadge priority={ticket.priority} size="sm" />
+                      <PriorityBadge priority={ticket.priority as any} size="sm" />
                     </TableCell>
                     <TableCell>
                       {ticket.categoryInfo ? (

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { TicketDetailPanel } from '@/components/TicketDetailPanel';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { FileUpload, type FileAttachment } from '@/components/ui/file-upload';
 import { RichTextDisplay } from '@/components/ui/rich-text-display';
@@ -50,7 +51,7 @@ import {
 import { useState, useEffect, useCallback, type FC } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ticketSystemService, type TicketCategory } from '@/lib/services/ticketSystemService';
+import { ticketSystemService, type TicketCategory, type TicketPriority, type TicketStatus } from '@/lib/services/ticketSystemService';
 
 
 const getStatusColor = (status: string | undefined) => {
@@ -173,13 +174,15 @@ const formatDate = (date: Date | string) => {
   }).format(dateObj);
 };
 
-const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 }) => {
+const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[]; onTicketUpdated?: () => void }> = ({ ticket, index = 0, statuses, onTicketUpdated }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [showAddComment, setShowAddComment] = useState(false);
+  const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   // Attachment viewing is now handled by AttachmentDisplay component
 
   // Load comments when ticket details are shown
@@ -320,15 +323,15 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
   return (
     <>
       <Card 
-        className="group hover:shadow-xl hover:bg-gradient-to-br hover:from-blue-50/60 hover:to-blue-100/30 dark:hover:from-white/5 dark:hover:to-white/[0.03] hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 duration-300 cursor-pointer border-border hover:border-primary/20 dark:hover:border-white/10 hover:ring-2 hover:ring-primary/10 dark:hover:ring-white/10 relative overflow-hidden"
+        className="h-full group hover:shadow-xl hover:bg-gradient-to-br hover:from-blue-50/60 hover:to-blue-100/30 dark:hover:from-white/5 dark:hover:to-white/[0.03] hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 duration-300 cursor-pointer border-border hover:border-primary/20 dark:hover:border-white/10 hover:ring-2 hover:ring-primary/10 dark:hover:ring-white/10 relative overflow-hidden flex flex-col"
         style={{ animationDelay: `${(index + 1) * 100}ms` }}
         onClick={() => setShowDetails(true)}
       >
         {/* Gradient overlay on hover */}
         <div className="absolute inset-0 bg-gradient-to-br from-blue-200/20 to-transparent dark:from-white/5 dark:to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
         
-        <CardContent className="p-5 relative">
-          <div className="space-y-4">
+        <CardContent className="p-5 relative h-full flex flex-col">
+          <div className="space-y-4 flex-1 flex flex-col">
                          {/* Header with category, title, and ticket number */}
              <div className="flex items-start gap-3">
                <div className="group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg">
@@ -344,14 +347,14 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
             
             {/* Status badges row */}
             <div className="flex flex-row gap-2 items-center">
-              <Badge className={`${getStatusColor(typeof ticket.status === 'string' ? ticket.status : ticket.status?.name)} border text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
+              <Badge className={`${getStatusColor(typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name)} border text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
                 <div className="flex items-center gap-1">
-                  {getStatusIcon(typeof ticket.status === 'string' ? ticket.status : ticket.status?.name)}
-                  <span className="capitalize font-medium">{typeof ticket.status === 'string' ? ticket.status : ticket.status?.name || 'Unknown'}</span>
+                  {getStatusIcon(typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name)}
+                  <span className="capitalize font-medium">{typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name || 'Unknown'}</span>
                 </div>
               </Badge>
-              <Badge className={`${getPriorityColor(typeof ticket.priority === 'string' ? ticket.priority : ticket.priority?.name)} text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm font-medium`}>
-                {(typeof ticket.priority === 'string' ? ticket.priority : ticket.priority?.name || 'Unknown').toUpperCase()}
+              <Badge className={`${getPriorityColor(typeof (ticket as any).priority === 'string' ? (ticket as any).priority : (ticket as any).priority?.name)} text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm font-medium`}>
+                {(typeof (ticket as any).priority === 'string' ? (ticket as any).priority : (ticket as any).priority?.name || 'Unknown').toUpperCase()}
               </Badge>
               {ticket.comments && ticket.comments.length > 0 && (
                 <Badge variant="secondary" className="text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm">
@@ -409,7 +412,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
             </div>
             
             {/* Footer with metadata and action buttons */}
-            <div className="flex items-center justify-between pt-2 border-t border-border/50">
+            <div className="mt-auto flex items-center justify-between pt-2 border-t border-border/50">
                              <div className="flex flex-col gap-2 text-xs text-muted-foreground group-hover:text-muted-foreground/80 transition-colors duration-300">
                  <span className="group-hover:translate-x-1 transition-transform duration-300 flex items-center gap-1">
                    <Calendar className="h-3 w-3" />
@@ -426,7 +429,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
                   </span>
 
                </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -451,6 +454,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
                 >
                   <CheckSquare className="h-3 w-3" />
                 </Button>
+                
               </div>
             </div>
           </div>
@@ -575,6 +579,14 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
                     >
                       <MessageSquare className="h-4 w-4" />
                       Add Comment
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowDetailPanel(true)}
+                      className="flex items-center gap-2"
+                    >
+                      Open Panel
                     </Button>
                   </div>
                 </div>
@@ -744,6 +756,17 @@ const TicketCard: FC<{ ticket: Ticket; index?: number }> = ({ ticket, index = 0 
                  </div>
                </div>
              </div>
+          {/* Popup Ticket Detail Panel */}
+          <Dialog open={showDetailPanel} onOpenChange={setShowDetailPanel}>
+            <DialogContent overlayClassName="!z-[120]" overlayStyle={{ zIndex: 120 }} contentStyle={{ zIndex: 130 }} className="sm:max-w-3xl w-[95vw] max-h-[90vh] p-0 overflow-hidden flex flex-col !z-[130]">
+              <DialogHeader className="px-6 pt-4">
+                <DialogTitle>Ticket Detail</DialogTitle>
+              </DialogHeader>
+              <div className="flex-1 overflow-auto px-4 pb-4">
+                <TicketDetailPanel ticketId={ticket.id} />
+              </div>
+            </DialogContent>
+          </Dialog>
         </DialogContent>
       </Dialog>
 
@@ -896,16 +919,17 @@ const NewTicketDialog: FC<{
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [categories, setCategories] = useState<TicketCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+  const [priorities, setPriorities] = useState<TicketPriority[]>([]);
+  const [loadingPriorities, setLoadingPriorities] = useState(false);
 
   // Debug attachments state changes
-  useEffect(() => {
-    console.log('NewTicketDialog: attachments state changed to:', attachments);
-  }, [attachments]);
+  // Debug log removed to reduce console noise
 
-  // Load categories when dialog opens
+  // Load categories and priorities when dialog opens
   useEffect(() => {
     if (open && isAuthenticated) {
       loadCategories();
+      loadPriorities();
     }
   }, [open, isAuthenticated]);
 
@@ -919,6 +943,24 @@ const NewTicketDialog: FC<{
       toast.error('Failed to load categories');
     } finally {
       setLoadingCategories(false);
+    }
+  };
+
+  const loadPriorities = async () => {
+    try {
+      setLoadingPriorities(true);
+      const prioritiesData = await ticketSystemService.getPriorities();
+      setPriorities(prioritiesData);
+      // If no priority selected yet, default to Medium if present, else first
+      if (!formData.priority && prioritiesData.length > 0) {
+        const medium = prioritiesData.find(p => p.name.toLowerCase() === 'medium');
+        setFormData(prev => ({ ...prev, priority: (medium ? 'MEDIUM' : (prioritiesData[0].name.toUpperCase() as any)) }));
+      }
+    } catch (error) {
+      console.error('Error loading priorities:', error);
+      toast.error('Failed to load priorities');
+    } finally {
+      setLoadingPriorities(false);
     }
   };
 
@@ -971,11 +1013,13 @@ const NewTicketDialog: FC<{
     
     try {
       // Create ticket data for backend
+      const selectedPriority = priorities.find(p => p.name.toUpperCase() === formData.priority);
       const ticketData = {
         title: formData.title.trim(),
         description: formData.description,
         category: formData.category,
-        priority: formData.priority,
+        // Prefer sending priorityId for precise mapping in backend
+        ...(selectedPriority ? { priorityId: selectedPriority.id } : { priority: formData.priority }),
         dueDate: formData.dueDate || undefined,
         tags: formData.tags
       };
@@ -1082,13 +1126,18 @@ const NewTicketDialog: FC<{
               <Label htmlFor="priority">Priority</Label>
               <Select value={formData.priority} onValueChange={(value: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL') => setFormData(prev => ({ ...prev, priority: value }))}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder={loadingPriorities ? 'Loading priorities...' : 'Select priority'} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="LOW">Low</SelectItem>
-                  <SelectItem value="MEDIUM">Medium</SelectItem>
-                  <SelectItem value="HIGH">High</SelectItem>
-                  <SelectItem value="CRITICAL">Critical</SelectItem>
+                  {loadingPriorities ? (
+                    <SelectItem value="loading" disabled>Loading priorities...</SelectItem>
+                  ) : (
+                    priorities.map((p) => (
+                      <SelectItem key={p.id} value={p.name.toUpperCase()}>
+                        {p.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1185,6 +1234,23 @@ export const HelpDeskPage: FC = () => {
   );
 
   const tickets = ticketsData?.data || [];
+  const [statuses, setStatuses] = useState<TicketStatus[]>([]);
+  const [loadingStatuses, setLoadingStatuses] = useState(false);
+
+  useEffect(() => {
+    const loadStatuses = async () => {
+      try {
+        setLoadingStatuses(true);
+        const s = await ticketSystemService.getStatuses();
+        setStatuses(s);
+      } catch (e) {
+        console.error('Failed to load statuses:', e);
+      } finally {
+        setLoadingStatuses(false);
+      }
+    };
+    loadStatuses();
+  }, []);
   
   // Handle URL parameters on component mount
   useEffect(() => {
@@ -1324,7 +1390,7 @@ export const HelpDeskPage: FC = () => {
             <PageSection index={4}>
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredTickets.map((ticket: Ticket, index: number) => (
-                  <TicketCard key={ticket.id} ticket={ticket} index={index} />
+                  <TicketCard key={ticket.id} ticket={ticket} index={index} statuses={statuses} onTicketUpdated={fetchTickets} />
                 ))}
               </div>
             </PageSection>

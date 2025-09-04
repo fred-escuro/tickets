@@ -76,6 +76,19 @@ router.get('/', authenticate, async (req, res) => {
             avatar: true
           }
         },
+        status: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        priority: {
+          select: {
+            id: true,
+            name: true,
+            level: true
+          }
+        },
         attachments: {
           select: {
             id: true,
@@ -150,6 +163,12 @@ router.get('/:id', authenticate, async (req, res) => {
             department: true
           }
         },
+        status: {
+          select: { id: true, name: true, isResolved: true, isClosed: true }
+        },
+        priority: {
+          select: { id: true, name: true, level: true }
+        },
         comments: {
           include: {
             author: {
@@ -199,7 +218,8 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create new ticket
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { title, description, category, priority, dueDate, tags }: CreateTicketRequest = req.body;
+    const { title, description, category, priority, dueDate, tags }: CreateTicketRequest = req.body as any;
+    const { priorityId } = (req.body as any);
     const userId = (req as any).user.id;
 
     // Validate required fields
@@ -210,8 +230,22 @@ router.post('/', authenticate, async (req, res) => {
       });
     }
 
+    // Resolve priority: accept explicit priorityId, or legacy string enum name
+    let resolvedPriority = null as null | { id: string };
+    if (priorityId) {
+      resolvedPriority = await prisma.ticketPriority.findUnique({ where: { id: priorityId } });
+      if (!resolvedPriority) {
+        return res.status(400).json({ success: false, error: 'Invalid priorityId' });
+      }
+    } else if (priority) {
+      const normalized = priority.toString().trim().toLowerCase();
+      const nameMap: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' };
+      const name = nameMap[normalized] || priority;
+      resolvedPriority = await prisma.ticketPriority.findFirst({ where: { name } });
+    }
+
     // Get default priority and status IDs
-    const defaultPriority = await prisma.ticketPriority.findFirst({ 
+    const defaultPriority = resolvedPriority || await prisma.ticketPriority.findFirst({ 
       where: { name: 'Medium' } 
     }) || await prisma.ticketPriority.findFirst();
     
@@ -238,7 +272,7 @@ router.post('/', authenticate, async (req, res) => {
         title,
         description,
         categoryId: category,
-        priorityId: priority || defaultPriority.id,
+        priorityId: (resolvedPriority?.id) || defaultPriority.id,
         statusId: defaultStatus.id,
         submittedBy: userId,
         dueDate: dueDate ? new Date(dueDate) : undefined,

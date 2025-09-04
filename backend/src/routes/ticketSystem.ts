@@ -337,6 +337,18 @@ router.post('/statuses', authenticate, authorize('admin'), async (req, res) => {
       });
     }
 
+    // Prevent duplicate names early
+    const existingByName = await prisma.ticketStatus.findUnique({
+      where: { name }
+    });
+
+    if (existingByName) {
+      return res.status(400).json({
+        success: false,
+        error: `Status with name "${name}" already exists`
+      });
+    }
+
     // Get the next sort order
     const lastStatus = await prisma.ticketStatus.findFirst({
       orderBy: { sortOrder: 'desc' }
@@ -361,7 +373,15 @@ router.post('/statuses', authenticate, authorize('admin'), async (req, res) => {
       data: status,
       message: 'Status created successfully'
     });
-  } catch (error) {
+  } catch (error: any) {
+    // Handle Prisma unique constraint error gracefully
+    if (error?.code === 'P2002' && Array.isArray(error?.meta?.target) && error.meta.target.includes('name')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Status name must be unique'
+      });
+    }
+
     console.error('Create status error:', error);
     return res.status(500).json({
       success: false,

@@ -36,6 +36,7 @@ export interface CreateTicketRequest {
   description: string;
   category: string; // This will be the categoryId
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  priorityId?: string; // New: backend accepts priorityId directly
   dueDate?: string;
   tags?: string[];
   attachments?: FileAttachment[];
@@ -82,7 +83,8 @@ export class TicketService {
         title: ticketData.title,
         description: ticketData.description,
         category: ticketData.category,
-        priority: ticketData.priority || 'MEDIUM',
+        // Prefer priorityId when provided; keep legacy priority for backward compatibility
+        ...(ticketData.priorityId ? { priorityId: ticketData.priorityId } : { priority: ticketData.priority || 'MEDIUM' }),
         dueDate: ticketData.dueDate,
         tags: ticketData.tags || []
       });
@@ -127,5 +129,32 @@ export class TicketService {
   // Get ticket statistics
   static async getTicketStats(): Promise<any> {
     return apiClient.get('/api/tickets/stats/overview'); // This endpoint might not be in API_ENDPOINTS yet
+  }
+
+  // Update an existing ticket (including priority changes)
+  static async updateTicket(
+    id: string,
+    updates: Partial<{
+      title: string;
+      description: string;
+      categoryId: string;
+      priorityId: string;
+      statusId: string;
+      assignedTo: string;
+      dueDate: string;
+      resolution: string;
+      satisfaction: number;
+      tags: string[];
+    }>
+  ): Promise<{
+    success: boolean;
+    data: Ticket;
+    message: string;
+  }> {
+    const response = await apiClient.put(API_ENDPOINTS.TICKETS.UPDATE(id), updates);
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to update ticket');
+    }
+    return response as any;
   }
 }
