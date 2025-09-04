@@ -298,23 +298,35 @@ export const TicketStatusWorkflow: React.FC<TicketStatusWorkflowProps> = ({
                     <g key={`${fromNode.id}-${toNode.id}`}>
                       <path
                         d={getConnectionPath(fromNode, toNode)}
-                        stroke={isValid ? "#3b82f6" : "#ef4444"}
-                        strokeWidth="3"
+                        stroke={isValid ? "#2563eb" : "#ef4444"}
+                        strokeWidth="5"
                         fill="none"
                         strokeDasharray={isValid ? "none" : "8,4"}
-                        opacity={isValid ? 0.8 : 0.6}
+                        opacity={isValid ? 0.9 : 0.7}
+                        filter="url(#softGlow)"
                       />
                       {/* Arrow head */}
                       <polygon
-                        points="0,0 -8,-4 -8,4"
-                        fill={isValid ? "#3b82f6" : "#ef4444"}
+                        points="0,0 -14,-7 -14,7"
+                        fill={isValid ? "#2563eb" : "#ef4444"}
                         transform={`translate(${toNode.x}, ${toNode.y + 40}) rotate(${toNode.x > fromNode.x ? 0 : 180})`}
-                        opacity={isValid ? 0.8 : 0.6}
+                        opacity={isValid ? 0.95 : 0.75}
+                        filter="url(#softGlow)"
                       />
                     </g>
                   );
                 })
               )}
+              {/* defs for subtle glow to improve visibility */}
+              <defs>
+                <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+                  <feMerge>
+                    <feMergeNode in="coloredBlur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
             </svg>
 
             {/* Status nodes */}

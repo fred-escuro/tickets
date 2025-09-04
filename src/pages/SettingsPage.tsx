@@ -324,6 +324,8 @@ export default function SettingsPage() {
   // Status management functions
   const openStatusDialog = (status?: TicketStatus) => {
     if (status) {
+      const raw = (status as any).allowedTransitions;
+      const normalized = Array.isArray(raw) ? raw : (raw?.transitions || []);
       setEditingStatus(status);
       setStatusForm({
         name: status.name,
@@ -331,7 +333,7 @@ export default function SettingsPage() {
         color: status.color,
         isClosed: status.isClosed || false,
         isResolved: status.isResolved || false,
-        allowedTransitions: status.allowedTransitions?.transitions || [],
+        allowedTransitions: normalized,
         permissions: {
           roles: status.permissions?.roles || [],
           users: status.permissions?.users || []
@@ -1528,12 +1530,15 @@ export default function SettingsPage() {
                          <div className="space-y-3">
                <Label className="text-sm font-medium">Allowed Transitions</Label>
                <div className="grid grid-cols-2 gap-1 max-h-32 overflow-y-auto border rounded p-2 bg-muted/30">
-                 {statuses.map((status) => (
+                 {statuses.filter(s => !editingStatus || s.id !== editingStatus.id).map((status) => (
                    <div key={status.id} className="flex items-center space-x-2">
                      <input
                        type="checkbox"
                        id={`transition-${status.id}`}
-                       checked={statusForm.allowedTransitions.includes(status.id)}
+                       checked={
+                         statusForm.allowedTransitions.includes(status.id) ||
+                         statusForm.allowedTransitions.includes(status.name)
+                       }
                        onChange={(e) => {
                          if (e.target.checked) {
                            setStatusForm(prev => ({

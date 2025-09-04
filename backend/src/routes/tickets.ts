@@ -337,26 +337,44 @@ router.put('/:id', authenticate, async (req, res) => {
       });
     }
 
-    // Handle status changes
+    // Handle status changes (validate allowed transitions server-side)
     if (updateData.statusId && updateData.statusId !== existingTicket.statusId) {
-      // Get the status details to check if it's resolved or closed
-      const newStatus = await prisma.ticketStatus.findUnique({
-        where: { id: updateData.statusId }
-      });
+      const [currentStatus, targetStatus] = await Promise.all([
+        prisma.ticketStatus.findUnique({ where: { id: existingTicket.statusId } }),
+        prisma.ticketStatus.findUnique({ where: { id: updateData.statusId } })
+      ]);
 
-      if (newStatus?.isResolved && !updateData.resolution) {
+      if (!targetStatus) {
+        return res.status(400).json({ success: false, error: 'Invalid statusId' });
+      }
+
+      // Validate transition using DB-configured allowedTransitions on current status
+      const normalize = (v: any) => (v ?? '').toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const raw = (currentStatus as any)?.allowedTransitions;
+      const configured: string[] = Array.isArray(raw) ? raw : (raw?.transitions || []);
+      const allowedSet = new Set(configured.map(x => normalize(x)));
+
+      if (configured.length === 0 || (!allowedSet.has(updateData.statusId) && !allowedSet.has(normalize(targetStatus.name)))) {
+        return res.status(400).json({
+          success: false,
+          error: `Transition from "${currentStatus?.name || 'Unknown'}" to "${targetStatus.name}" is not permitted`
+        });
+      }
+
+      // Additional requirements for resolved statuses
+      if (targetStatus.isResolved && !updateData.resolution) {
         return res.status(400).json({
           success: false,
           error: 'Resolution is required when resolving a ticket'
         });
       }
 
-      if (newStatus?.isResolved) {
+      if (targetStatus.isResolved) {
         updateData.resolvedAt = new Date();
       }
 
-      // Check if status name indicates "in progress" and auto-assign if needed
-      if (newStatus?.name.toLowerCase().includes('progress') && !existingTicket.assignedTo) {
+      // Auto-assign if moving into an "in progress" state and unassigned
+      if (targetStatus.name.toLowerCase().includes('progress') && !existingTicket.assignedTo) {
         updateData.assignedTo = userId;
         updateData.assignedAt = new Date();
       }

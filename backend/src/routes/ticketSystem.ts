@@ -305,8 +305,8 @@ router.delete('/priorities/:id', authenticate, authorize('admin'), async (req, r
 // Get all ticket statuses
 router.get('/statuses', authenticate, async (req, res) => {
   try {
+    // Return all statuses (active and inactive) so UIs can resolve configured transitions reliably
     const statuses = await prisma.ticketStatus.findMany({
-      where: { isActive: true },
       orderBy: { sortOrder: 'asc' }
     });
 

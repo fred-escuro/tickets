@@ -232,6 +232,10 @@ export const TicketSystemAdminPage: FC = () => {
       });
       setShowPriorityDialog(true);
     } else if (type === 'status') {
+      const raw = item.allowedTransitions;
+      const normalized = Array.isArray(raw)
+        ? { transitions: raw }
+        : (raw && Array.isArray(raw.transitions) ? raw : { transitions: [] });
       setStatusForm({
         name: item.name,
         description: item.description || '',
@@ -239,7 +243,7 @@ export const TicketSystemAdminPage: FC = () => {
         icon: item.icon || '',
         isClosed: item.isClosed,
         isResolved: item.isResolved,
-        allowedTransitions: item.allowedTransitions || { transitions: [] },
+        allowedTransitions: normalized,
         permissions: item.permissions || { roles: ['admin', 'manager', 'agent'] }
       });
       setShowStatusDialog(true);
