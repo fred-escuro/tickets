@@ -219,8 +219,8 @@ export const UsersPage: FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <PageWrapper className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6">
+    <div className="relative z-0 min-h-screen bg-background">
+      <PageWrapper className="max-w-[1500px] lg:pl-[calc(var(--sidebar-width,14rem)+1.5rem)] py-6">
         {/* Header Section */}
         <PageSection index={0} className="mb-6">
           <div className="flex items-center gap-4 mb-4">

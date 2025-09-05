@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -49,7 +50,7 @@ import {
 import { useState, useEffect, useCallback, type FC } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ticketSystemService, type TicketCategory, type TicketPriority, type TicketStatus } from '@/lib/services/ticketSystemService';
+import { ticketSystemService, type TicketCategory, type TicketPriority, type TicketStatus, type TicketTemplate } from '@/lib/services/ticketSystemService';
 
 
 const getStatusColor = (status: string | undefined) => {
@@ -541,6 +542,9 @@ const NewTicketDialog: FC<{
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [priorities, setPriorities] = useState<TicketPriority[]>([]);
   const [loadingPriorities, setLoadingPriorities] = useState(false);
+  const [templates, setTemplates] = useState<TicketTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
   // Debug attachments state changes
   // Debug log removed to reduce console noise
@@ -584,6 +588,18 @@ const NewTicketDialog: FC<{
     }
   };
 
+  const loadTemplates = async (categoryId?: string) => {
+    try {
+      setLoadingTemplates(true);
+      const t = await ticketSystemService.getTemplates(categoryId);
+      setTemplates(t);
+    } catch (error) {
+      console.error('Error loading templates:', error);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
   // Memoize the onFilesChange handler to prevent unnecessary re-renders
   const handleFilesChange = useCallback((newAttachments: FileAttachment[]) => {
     console.log('NewTicketDialog: handleFilesChange called with:', newAttachments);
@@ -609,8 +625,47 @@ const NewTicketDialog: FC<{
         tags: []
       });
       setAttachments([]);
+      setSelectedTemplateId('');
+      loadTemplates();
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (formData.category) {
+      loadTemplates(formData.category);
+    } else {
+      loadTemplates();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.category]);
+
+  const applyTemplate = (template: TicketTemplate) => {
+    const fields = (template.customFields || {}) as Record<string, any>;
+    const escapeHtml = (s: any) => String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    const descriptionText = (template as any).templateDescription || template.description || '';
+    const descriptionHtml = descriptionText
+      ? `<p>${escapeHtml(descriptionText).replace(/\n/g, '<br/>')}</p>`
+      : '';
+
+    // Render only data rows, no captions or extra separators
+    const fieldLines = Object.entries(fields)
+      .map(([k, v]) => `<p><strong>${escapeHtml(k)}</strong>: ${escapeHtml(v)}</p>`)
+      .join('');
+
+    setFormData(prev => ({
+      ...prev,
+      title: template.title || prev.title,
+      description: `${descriptionHtml}${fieldLines}` || prev.description,
+      category: template.categoryId || prev.category
+    }));
+  };
 
   const handleOpenChange = (newOpen: boolean) => {
     if (newOpen && !isAuthenticated) {
@@ -619,6 +674,19 @@ const NewTicketDialog: FC<{
     }
     setOpen(newOpen);
     onOpenChange?.(newOpen);
+  };
+
+  const resetFormFields = () => {
+    setFormData({
+      title: '',
+      description: '',
+      category: '',
+      priority: 'MEDIUM',
+      dueDate: '',
+      tags: []
+    });
+    setAttachments([]);
+    setSelectedTemplateId('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -698,6 +766,29 @@ const NewTicketDialog: FC<{
           <DialogTitle>Create Support Ticket</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6 rounded-b-lg">
+          {/* Template selector */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="template">Template</Label>
+              <div className="flex items-start gap-2">
+                <div className="flex-1">
+                  <SearchableSelect
+                    value={selectedTemplateId}
+                    options={templates.map(t => ({ value: t.id, label: t.name }))}
+                    placeholder={loadingTemplates ? 'Loading templates...' : 'Type to search templates'}
+                    onChange={(value: string) => {
+                      setSelectedTemplateId(value);
+                      const tpl = templates.find(t => t.id === value);
+                      if (tpl) applyTemplate(tpl);
+                    }}
+                  />
+                </div>
+                <Button type="button" variant="outline" onClick={resetFormFields}>
+                  Reset Fields
+                </Button>
+              </div>
+            </div>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="title">Issue Title *</Label>
             <Input
@@ -712,35 +803,12 @@ const NewTicketDialog: FC<{
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="category">Category *</Label>
-              <Select value={formData.category} onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder={loadingCategories ? "Loading categories..." : "Select category"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {loadingCategories ? (
-                    <SelectItem value="loading" disabled>Loading categories...</SelectItem>
-                  ) : (
-                    categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className={`w-3 h-3 rounded-full ${
-                              category.color === 'blue' ? 'bg-blue-500' :
-                              category.color === 'green' ? 'bg-green-500' :
-                              category.color === 'red' ? 'bg-red-500' :
-                              category.color === 'yellow' ? 'bg-yellow-500' :
-                              category.color === 'orange' ? 'bg-orange-500' :
-                              category.color === 'purple' ? 'bg-purple-500' :
-                              'bg-gray-500'
-                            }`}
-                          />
-                          {category.name}
-                        </div>
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={formData.category}
+                options={categories.map(c => ({ value: c.id, label: c.name }))}
+                placeholder={loadingCategories ? 'Loading categories...' : 'Type to search categories'}
+                onChange={(value: string) => setFormData(prev => ({ ...prev, category: value }))}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="priority">Priority</Label>
@@ -907,8 +975,8 @@ export const HelpDeskPage: FC = () => {
   const resolvedTickets = tickets.filter((t: Ticket) => t.status === 'RESOLVED').length;
 
   return (
-    <div className="min-h-screen bg-background">
-      <PageWrapper className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+    <div className="relative z-0 min-h-screen bg-background">
+      <PageWrapper className="max-w-[1500px] lg:pl-[calc(var(--sidebar-width,14rem)+1.5rem)] py-6 transition-[padding]">
         {/* Header Section */}
         <PageSection index={0} className="mb-6">
           <div className="flex items-center gap-4 mb-4">
@@ -936,27 +1004,7 @@ export const HelpDeskPage: FC = () => {
           </div>
         </PageSection>
 
-        {/* Summary Stats */}
-        <PageSection index={1} className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300" style={{ animationDelay: '100ms' }}>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-blue-600">{openTickets}</div>
-              <p className="text-sm text-muted-foreground">Open Tickets</p>
-            </CardContent>
-          </Card>
-          <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300" style={{ animationDelay: '200ms' }}>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-yellow-600">{inProgressTickets}</div>
-              <p className="text-sm text-muted-foreground">In Progress</p>
-            </CardContent>
-          </Card>
-          <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300" style={{ animationDelay: '300ms' }}>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-green-600">{resolvedTickets}</div>
-              <p className="text-sm text-muted-foreground">Resolved Today</p>
-            </CardContent>
-          </Card>
-        </PageSection>
+        {/* Summary Stats removed */}
 
         {/* Search Bar */}
         <PageSection index={2} className="mb-6">

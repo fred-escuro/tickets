@@ -145,7 +145,7 @@ export const CalendarPage: FC = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageWrapper className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6">
+      <PageWrapper className="relative z-0 max-w-[1500px] lg:pl-[calc(var(--sidebar-width,14rem)+1.5rem)] py-6">
         {/* Header Section */}
         <PageSection index={0}>
           <div className="mb-6">

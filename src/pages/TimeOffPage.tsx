@@ -359,7 +359,7 @@ export const TimeOffPage: FC = () => {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <PageWrapper className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+      <PageWrapper className="py-6">
         {/* Header Section */}
         <PageSection index={0} className="mb-6">
           <div className="flex items-center gap-4 mb-4">

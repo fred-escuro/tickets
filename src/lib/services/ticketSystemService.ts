@@ -397,6 +397,37 @@ class TicketSystemService {
     return data.data;
   }
 
+  async updateTemplate(id: string, updates: Partial<TicketTemplate>): Promise<TicketTemplate> {
+    const response = await fetch(`${this.baseUrl}/templates/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
+      },
+      body: JSON.stringify(updates)
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to update template');
+    }
+    
+    const data = await response.json();
+    return data.data;
+  }
+
+  async deleteTemplate(id: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/templates/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete template');
+    }
+  }
+
   // Workflows
   async getWorkflows(): Promise<TicketWorkflow[]> {
     const response = await fetch(`${this.baseUrl}/workflows`, {

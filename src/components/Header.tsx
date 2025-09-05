@@ -20,7 +20,8 @@ import {
   Building2,
   Ticket,
   Bell,
-  Wrench
+  Wrench,
+  Menu
 } from 'lucide-react';
 import { type FC, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -33,6 +34,20 @@ export const Header: FC = () => {
   const location = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(AuthService.getCurrentUser());
+  // Pinned/click state for collapsed sidebar
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('sidebar-collapsed') === '1';
+    } catch { return false; }
+  });
+  // Hover state to temporarily expand when collapsed
+  const [sidebarHover, setSidebarHover] = useState(false);
+  const [sectionCollapsed, setSectionCollapsed] = useState<{support: boolean; tools: boolean; settings: boolean}>(() => {
+    try {
+      const raw = localStorage.getItem('sidebar-sections');
+      return raw ? JSON.parse(raw) : { support: false, tools: false, settings: false };
+    } catch { return { support: false, tools: false, settings: false }; }
+  });
 
   // Update authentication state when it changes
   useEffect(() => {
@@ -71,6 +86,22 @@ export const Header: FC = () => {
       clearInterval(interval);
     };
   }, []);
+  // toggleSidebar replaced by inline setter
+
+  const toggleSection = (key: 'support' | 'tools' | 'settings') => {
+    const next = { ...sectionCollapsed, [key]: !sectionCollapsed[key] };
+    setSectionCollapsed(next);
+    try { localStorage.setItem('sidebar-sections', JSON.stringify(next)); } catch {}
+  };
+
+  // Keep main content aligned with sidebar width using ONLY pinned state
+  // Hover expansion should not shift content to avoid blocking clicks during reflow
+  useEffect(() => {
+    try {
+      const width = sidebarCollapsed ? '4rem' : '14rem';
+      document.documentElement.style.setProperty('--sidebar-width', width);
+    } catch {}
+  }, [sidebarCollapsed]);
 
   // Core navigation items for ticketing system
   const coreNavItems = [
@@ -100,12 +131,22 @@ export const Header: FC = () => {
     { path: '/settings?tab=notifications', label: 'Notifications', icon: Bell },
   ];
 
+  const effectiveCollapsed = sidebarCollapsed && !sidebarHover;
   return (
     <>
       <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
-          {/* Left side - Logo */}
-          <div className="flex items-center gap-6">
+        <div className="w-full px-3 sm:px-4 lg:px-4 flex h-16 items-center justify-between">
+          {/* Left: Hamburger + Logo */}
+          <div className="flex items-center gap-3">
+            {isAuthenticated && (
+              <Button variant="ghost" size="icon" onClick={() => setSidebarCollapsed(prev => {
+                const next = !prev;
+                try { localStorage.setItem('sidebar-collapsed', next ? '1' : '0'); } catch {}
+                return next;
+              })} className="h-9 w-9 hidden lg:inline-flex">
+                <Menu className="h-5 w-5" />
+              </Button>
+            )}
             <Link to="/" className="flex items-center gap-2">
               <img 
                 src="/ticket.ico" 
@@ -114,14 +155,17 @@ export const Header: FC = () => {
               />
               <span className="font-semibold text-lg">TicketHub</span>
             </Link>
-            {isAuthenticated && currentUser && (
-              <div className="hidden sm:block">
-                <span className="text-lg font-medium text-muted-foreground">
-                  Welcome, {currentUser.middleName ? `${currentUser.firstName} ${currentUser.middleName} ${currentUser.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`}
-                </span>
-              </div>
-            )}
           </div>
+
+          {/* Welcome label aligned with main content */}
+          {isAuthenticated && currentUser && (
+            <div className="hidden lg:block flex-1 pl-[calc(var(--sidebar-width,14rem)-10rem)]">
+              <span className="text-sm sm:text-base font-medium text-muted-foreground">
+                Welcome, {currentUser.middleName ? `${currentUser.firstName} ${currentUser.middleName} ${currentUser.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`}
+              </span>
+            </div>
+          )}
+
           {/* Right side - Controls */}
           <div className="flex items-center gap-3">
             <div className="hidden lg:block">
@@ -134,12 +178,12 @@ export const Header: FC = () => {
         </div>
       </header>
 
-      {/* Navigation Bar - Only show when authenticated */}
+      {/* Top Navigation Bar (mobile/tablet) */}
       {isAuthenticated && (
-        <div className="sticky top-16 z-40 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+        <div className="sticky top-16 z-40 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70 lg:hidden">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-center py-2">
-              {/* Main Navigation - Cleaner with dropdowns */}
+              {/* Main Navigation - horizontal (hidden on lg) */}
               <nav className="flex items-center gap-3">
                 {/* Core Items - Always visible */}
                 {coreNavItems.map((item) => {
@@ -268,14 +312,114 @@ export const Header: FC = () => {
         </div>
       )}
 
+      {/* Sidebar Navigation (desktop) */}
+      {isAuthenticated && (
+        <aside 
+          className={`hidden lg:flex fixed top-16 left-0 h-[calc(100vh-4rem)] ${effectiveCollapsed ? 'w-16' : 'w-56'} border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-20 transition-[width] duration-200`}
+          onMouseEnter={() => setSidebarHover(true)}
+          onMouseLeave={() => setSidebarHover(false)}
+        >
+          <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-2 relative">
+            {/* Core */}
+            <div className="space-y-1">
+              {coreNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors ${
+                      isActive
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {!effectiveCollapsed && <span>{item.label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Support */}
+            <div className="pt-2">
+              {!effectiveCollapsed && (
+                <button type="button" onClick={() => toggleSection('support')} className="w-full flex items-center justify-between px-2 py-1.5 text-[12px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
+                  <span>Support</span>
+                  <ChevronDown className={`h-3 w-3 transition-transform ${sectionCollapsed.support ? '-rotate-90' : ''}`} />
+                </button>
+              )}
+              <div className={`space-y-1 ${sectionCollapsed.support && effectiveCollapsed ? 'hidden' : ''}`}> 
+                {supportNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <Link key={item.path} to={item.path} className={`flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}>
+                      <Icon className="h-4 w-4" />
+                      {!effectiveCollapsed && <span>{item.label}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Tools */}
+            <div className="pt-2">
+              {!effectiveCollapsed && (
+                <button type="button" onClick={() => toggleSection('tools')} className="w-full flex items-center justify-between px-2 py-1.5 text-[12px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
+                  <span>Tools</span>
+                  <ChevronDown className={`h-3 w-3 transition-transform ${sectionCollapsed.tools ? '-rotate-90' : ''}`} />
+                </button>
+              )}
+              <div className={`space-y-1 ${sectionCollapsed.tools && effectiveCollapsed ? 'hidden' : ''}`}> 
+                {managementNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <Link key={item.path} to={item.path} className={`flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}>
+                      <Icon className="h-4 w-4" />
+                      {!effectiveCollapsed && <span>{item.label}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Settings */}
+            <div className="pt-2">
+              {!effectiveCollapsed && (
+                <button type="button" onClick={() => toggleSection('settings')} className="w-full flex items-center justify-between px-2 py-1.5 text-[12px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
+                  <span>Settings</span>
+                  <ChevronDown className={`h-3 w-3 transition-transform ${sectionCollapsed.settings ? '-rotate-90' : ''}`} />
+                </button>
+              )}
+              <div className={`space-y-1 ${sectionCollapsed.settings && effectiveCollapsed ? 'hidden' : ''}`}> 
+                {settingsNavItems.map((item) => {
+                  const Icon = item.icon;
+                  // active check using pathname startsWith for query params
+                  const isActive = location.pathname === '/settings' && item.path.startsWith('/settings');
+                  return (
+                    <Link key={item.path} to={item.path} className={`flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}>
+                      <Icon className="h-4 w-4" />
+                      {!effectiveCollapsed && <span>{item.label}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          </nav>
+        </aside>
+      )}
+
       {/* Mobile greeting */}
-      {currentUser && (
+      {/* {currentUser && (
         <div className="sm:hidden mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-3 pt-3 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70">
           <p className="text-sm text-muted-foreground">
             Welcome, {currentUser.middleName ? `${currentUser.firstName} ${currentUser.middleName} ${currentUser.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`}
           </p>
         </div>
-      )}
+      )} */}
     </>
   );
 };

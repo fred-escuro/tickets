@@ -67,6 +67,18 @@ export const TicketDetailPage: React.FC = () => {
     return typeof ticket.priority === 'string' ? ticket.priority : ticket.priority?.name || '';
   }, [ticket]);
 
+  const handleBack = () => {
+    try {
+      if (window.history.length > 1) {
+        navigate(-1);
+      } else {
+        navigate('/tickets');
+      }
+    } catch {
+      navigate('/tickets');
+    }
+  };
+
   const handleStatusChange = async (newStatusId: string, reason?: string, commentText?: string) => {
     if (!id) return;
     const oldStatusName = statusName || 'Unknown';
@@ -183,10 +195,10 @@ export const TicketDetailPage: React.FC = () => {
   const collapseAll = () => setExpandedKeys(new Set());
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+    <div className="relative z-0 mx-auto w-full max-w-[1500px] px-4 sm:px-6 lg:px-8 py-6 lg:pl-[calc(var(--sidebar-width,14rem)+1.5rem)]">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => navigate('/tickets')} className="gap-2">
+          <Button variant="outline" size="sm" onClick={handleBack} className="gap-2">
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
@@ -324,7 +336,12 @@ export const TicketDetailPage: React.FC = () => {
                           </div>
                           <div className="text-xs text-muted-foreground">{item.timestamp.toLocaleString()}</div>
                         </div>
-                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        <div className="flex items-center gap-2">
+                          {(item.type === 'issue' ? (item.data.attachments?.length || 0) : (item.data.attachments?.length || 0)) > 0 && (
+                            <Paperclip className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </div>
                       </div>
                       {isExpanded && (
                         <div className="p-4">

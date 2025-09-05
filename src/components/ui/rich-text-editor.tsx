@@ -13,6 +13,7 @@ import Code from '@tiptap/extension-code';
 import Placeholder from '@tiptap/extension-placeholder';
 import FontFamily from '@tiptap/extension-font-family';
 import FontSize from '@tiptap/extension-font-size';
+import { Indent } from './editor-extensions/indent';
 import { Button } from './button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 import { 
@@ -37,6 +38,8 @@ import {
   Highlighter,
   Type,
   Move,
+  ArrowLeft,
+  ArrowRight,
   Maximize2,
   Minimize2
 } from 'lucide-react';
@@ -422,6 +425,28 @@ const MenuBar = ({ editor }: { editor: any }) => {
       >
         <Quote className="h-4 w-4" />
       </Button>
+
+      {/* Increase / Decrease Indent */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        title="Increase indent"
+        onClick={() => editor.chain().focus().increaseIndent().run()}
+        disabled={!editor.can().increaseIndent()}
+      >
+        <ArrowRight className="h-4 w-4" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        title="Decrease indent"
+        onClick={() => editor.chain().focus().decreaseIndent().run()}
+        disabled={!editor.can().decreaseIndent()}
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </Button>
       
       <div className="w-px h-6 bg-border mx-1" />
       
@@ -480,13 +505,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const editor = useEditor({
     extensions: [
              StarterKit,
-       Image.configure({
-         HTMLAttributes: {
-           class: 'resizable-image',
-         },
-         allowBase64: true,
-         inline: true,
-       }),
+      Indent,
+      Image.configure({
+        HTMLAttributes: {
+          class: 'resizable-image',
+        },
+        allowBase64: true,
+        inline: true,
+      }),
       Link.configure({
         openOnClick: false,
       }),
@@ -523,6 +549,19 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       },
     },
   });
+
+  // Keep editor content in sync when the bound value prop changes externally
+  useEffect(() => {
+    if (!editor) return;
+    try {
+      const current = editor.getHTML();
+      if (value !== current) {
+        editor.commands.setContent(value || '', false);
+      }
+    } catch {
+      // no-op safeguard
+    }
+  }, [value, editor]);
 
   // Handle paste events for images
   useEffect(() => {

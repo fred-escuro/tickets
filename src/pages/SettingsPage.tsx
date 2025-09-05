@@ -34,6 +34,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { settingsService, type SystemSettings } from '@/lib/settingsService';
 import { ticketSystemService, type TicketCategory, type TicketPriority, type TicketStatus } from '@/lib/services/ticketSystemService';
 import { TicketStatusWorkflow } from '@/components/TicketStatusWorkflow';
@@ -51,11 +52,13 @@ export default function SettingsPage() {
   const [categories, setCategories] = useState<TicketCategory[]>([]);
   const [priorities, setPriorities] = useState<TicketPriority[]>([]);
   const [statuses, setStatuses] = useState<TicketStatus[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Category management state
   const [showCategoryDialog, setShowCategoryDialog] = useState(false);
   const [editingCategory, setEditingCategory] = useState<TicketCategory | null>(null);
+  const [showIconPicker, setShowIconPicker] = useState(false);
   const [categoryForm, setCategoryForm] = useState({
     name: '',
     description: '',
@@ -92,6 +95,21 @@ export default function SettingsPage() {
     escalationRules: {
       rules: [] as any[]
     }
+  });
+
+  // Template management state
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<any | null>(null);
+  const [useJsonEditor, setUseJsonEditor] = useState(false);
+  const [customFieldsList, setCustomFieldsList] = useState<{ name: string; value: string }[]>([]);
+  const [templateForm, setTemplateForm] = useState({
+    name: '',
+    categoryId: '',
+    title: '',
+    // Note: backend currently maps `description` to both meta and templateDescription
+    // We'll collect a single description for now
+    description: '',
+    customFieldsText: '{\n  \n}'
   });
 
   // Function to get next available priority level
@@ -161,10 +179,11 @@ export default function SettingsPage() {
     try {
       setLoading(true);
       console.log('Loading ticket system data...');
-      const [categoriesData, prioritiesData, statusesData] = await Promise.all([
+      const [categoriesData, prioritiesData, statusesData, templatesData] = await Promise.all([
         ticketSystemService.getCategories(),
         ticketSystemService.getPriorities(),
-        ticketSystemService.getStatuses()
+        ticketSystemService.getStatuses(),
+        ticketSystemService.getTemplates()
       ]);
       console.log('Categories loaded:', categoriesData);
       console.log('Priorities loaded:', prioritiesData);
@@ -172,6 +191,7 @@ export default function SettingsPage() {
       setCategories(categoriesData);
       setPriorities(prioritiesData);
       setStatuses(statusesData);
+      setTemplates(templatesData);
     } catch (error) {
       console.error('Error loading ticket system data:', error);
       toast.error('Failed to load ticket system data');
@@ -606,8 +626,101 @@ export default function SettingsPage() {
     }
   };
 
+  // Templates handlers
+  const openTemplateDialog = (template?: any) => {
+    if (template) {
+      setEditingTemplate(template);
+      setTemplateForm({
+        name: template.name || '',
+        categoryId: template.categoryId || '',
+        title: template.title || '',
+        description: template.templateDescription || template.description || '',
+        customFieldsText: template.customFields ? JSON.stringify(template.customFields, null, 2) : '{\n  \n}'
+      });
+      const entries = template.customFields ? Object.entries(template.customFields) : [];
+      setCustomFieldsList(entries.map(([name, value]) => ({ name, value: String(value ?? '') })));
+    } else {
+      setEditingTemplate(null);
+      setTemplateForm({ name: '', categoryId: '', title: '', description: '', customFieldsText: '{\n  \n}' });
+      setCustomFieldsList([]);
+    }
+    setUseJsonEditor(false);
+    setShowTemplateDialog(true);
+  };
+
+  const handleCreateOrUpdateTemplate = async () => {
+    try {
+      let parsedCustomFields: Record<string, any> | undefined = undefined;
+      const trimmed = templateForm.customFieldsText.trim();
+      if (trimmed) {
+        try {
+          parsedCustomFields = JSON.parse(trimmed);
+        } catch (e) {
+          toast.error('Custom fields must be valid JSON');
+          return;
+        }
+      }
+
+      if (editingTemplate) {
+        const updated = await ticketSystemService.updateTemplate(editingTemplate.id, {
+          name: templateForm.name,
+          categoryId: templateForm.categoryId,
+          title: templateForm.title,
+          description: templateForm.description,
+          customFields: parsedCustomFields
+        } as any);
+        setTemplates(prev => prev.map(t => t.id === editingTemplate.id ? updated : t));
+        toast.success('Template updated successfully');
+      } else {
+        const created = await ticketSystemService.createTemplate({
+          name: templateForm.name,
+          categoryId: templateForm.categoryId,
+          title: templateForm.title,
+          description: templateForm.description,
+          customFields: parsedCustomFields
+        } as any);
+        setTemplates(prev => [...prev, created]);
+        toast.success('Template created successfully');
+      }
+
+      setShowTemplateDialog(false);
+    } catch (error) {
+      console.error('Error saving template:', error);
+      toast.error('Failed to save template');
+    }
+  };
+
+  // Custom fields structured editor helpers
+  const syncListToJson = (list: { name: string; value: string }[]) => {
+    const obj: Record<string, any> = {};
+    list.forEach(({ name, value }) => {
+      if (name && name.trim().length > 0) {
+        obj[name] = value;
+      }
+    });
+    setTemplateForm(prev => ({ ...prev, customFieldsText: JSON.stringify(obj, null, 2) }));
+  };
+
+  const addCustomFieldRow = () => {
+    const next = [...customFieldsList, { name: '', value: '' }];
+    setCustomFieldsList(next);
+    syncListToJson(next);
+  };
+
+  const updateCustomFieldRow = (index: number, key: 'name' | 'value', val: string) => {
+    const next = customFieldsList.map((row, i) => (i === index ? { ...row, [key]: val } : row));
+    setCustomFieldsList(next);
+    syncListToJson(next);
+  };
+
+  const removeCustomFieldRow = (index: number) => {
+    const next = customFieldsList.filter((_, i) => i !== index);
+    setCustomFieldsList(next);
+    syncListToJson(next);
+  };
+
   return (
-    <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className="relative z-0 mx-auto w-full max-w-[1500px] px-4 sm:px-6 lg:px-8 py-6 lg:pl-[calc(var(--sidebar-width,14rem)+1.5rem)] space-y-6">
       {/* Header with Search */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -697,7 +810,7 @@ export default function SettingsPage() {
           >
             {/* Company Information */}
             <AccordionItem value="company" className="border rounded-lg">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
                     <Building2 className="h-5 w-5" />
@@ -772,7 +885,7 @@ export default function SettingsPage() {
 
             {/* System Preferences */}
             <AccordionItem value="system" className="border rounded-lg">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-green-100 text-green-600">
                     <Globe className="h-5 w-5" />
@@ -853,8 +966,8 @@ export default function SettingsPage() {
           >
             {/* Basic Configuration */}
             <AccordionItem value="categories" className="border rounded-lg">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline">
-                <div className="flex items-center gap-3">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
+                <div className="flex items-center gap-3 w-full">
                   <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
                     <Ticket className="h-5 w-5" />
                   </div>
@@ -926,8 +1039,8 @@ export default function SettingsPage() {
 
             {/* Priority Levels */}
             <AccordionItem value="priorities" className="border rounded-lg">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline">
-                <div className="flex items-center gap-3">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
+                <div className="flex items-center gap-3 w-full">
                   <div className="p-2 rounded-lg bg-orange-100 text-orange-600">
                     <AlertCircle className="h-5 w-5" />
                   </div>
@@ -1005,8 +1118,8 @@ export default function SettingsPage() {
 
             {/* Ticket Statuses */}
             <AccordionItem value="statuses" className="border rounded-lg">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline">
-                <div className="flex items-center gap-3">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
+                <div className="flex items-center gap-3 w-full">
                   <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
                     <CheckCircle className="h-5 w-5" />
                   </div>
@@ -1086,9 +1199,99 @@ export default function SettingsPage() {
               </AccordionContent>
             </AccordionItem>
 
+            
+
+            
+
+            {/* Ticket Templates */}
+            <AccordionItem value="templates" className="border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
+                <div className="flex items-center gap-3 w-full">
+                  <div className="p-2 rounded-lg bg-teal-100 text-teal-600">
+                    <Ticket className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">Ticket Templates</h3>
+                    <p className="text-sm text-muted-foreground">Pre-configured templates per category</p>
+                  </div>
+                  <Badge variant="outline" className="ml-auto">
+                    {templates.length} templates
+                  </Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="space-y-4">
+                  {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <RefreshCw className="h-6 w-6 animate-spin" />
+                      <span className="ml-2">Loading templates...</span>
+                    </div>
+                  ) : (
+                    <>
+                      {templates.length === 0 && (
+                        <div className="text-sm text-muted-foreground border rounded p-3">
+                          No templates yet. Create your first template to speed up ticket creation.
+                        </div>
+                      )}
+                      {templates.map((template: any) => (
+                        <div key={template.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex items-start gap-3">
+                            <div>
+                              <div className="font-medium">{template.name}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {template.category?.name ? `Category: ${template.category.name}` : ''}
+                              </div>
+                              <div className="text-sm text-muted-foreground truncate max-w-[600px]">
+                                Title: {template.title}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => openTemplateDialog(template)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={async () => {
+                                if (!confirm('Are you sure you want to delete this template? This action cannot be undone.')) return;
+                                try {
+                                  await ticketSystemService.deleteTemplate(template.id);
+                                  setTemplates(prev => prev.filter(t => t.id !== template.id));
+                                  toast.success('Template deleted successfully');
+                                } catch (error) {
+                                  console.error('Error deleting template:', error);
+                                  toast.error('Failed to delete template');
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      <Button 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={() => openTemplateDialog()}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add New Template
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
             {/* Workflow Visualizations */}
             <AccordionItem value="workflows" className="border rounded-lg">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-indigo-100 text-indigo-600">
                     <Workflow className="h-5 w-5" />
@@ -1138,7 +1341,7 @@ export default function SettingsPage() {
           >
             {/* User Roles & Permissions */}
             <AccordionItem value="roles" className="border rounded-lg">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-green-100 text-green-600">
                     <Users className="h-5 w-5" />
@@ -1172,7 +1375,7 @@ export default function SettingsPage() {
 
             {/* Departments */}
             <AccordionItem value="departments" className="border rounded-lg">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-teal-100 text-teal-600">
                     <Building2 className="h-5 w-5" />
@@ -1216,7 +1419,7 @@ export default function SettingsPage() {
           >
             {/* Email Notifications */}
             <AccordionItem value="email" className="border rounded-lg">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
                     <Mail className="h-5 w-5" />
@@ -1286,7 +1489,7 @@ export default function SettingsPage() {
 
             {/* In-App Notifications */}
             <AccordionItem value="inapp" className="border rounded-lg">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
                     <Bell className="h-5 w-5" />
@@ -1404,12 +1607,15 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="categoryIcon">Icon</Label>
-                <Input
-                  id="categoryIcon"
-                  value={categoryForm.icon}
-                  onChange={(e) => setCategoryForm(prev => ({ ...prev, icon: e.target.value }))}
-                  placeholder="e.g., laptop, server, wifi"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="categoryIcon"
+                    value={categoryForm.icon}
+                    onChange={(e) => setCategoryForm(prev => ({ ...prev, icon: e.target.value }))}
+                    placeholder="e.g., laptop, server, wifi"
+                  />
+                  <Button type="button" variant="outline" onClick={() => setShowIconPicker(true)}>Pick</Button>
+                </div>
               </div>
             </div>
             <div className="space-y-2">
@@ -1444,6 +1650,185 @@ export default function SettingsPage() {
               disabled={!categoryForm.name.trim()}
             >
               {editingCategory ? 'Update' : 'Create'} Category
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Icon Picker Dialog */}
+      <Dialog open={showIconPicker} onOpenChange={setShowIconPicker}>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle>Select Icon</DialogTitle>
+            <DialogDescription>Search and select a Lucide icon by name.</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-3">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Search icons..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-6 gap-3">
+              {Object.keys(LucideIcons)
+                .filter((k) => /^[A-Z]/.test(k))
+                .filter((k) => k.toLowerCase().includes(searchQuery.toLowerCase()))
+                .slice(0, 300)
+                .map((iconKey) => {
+                  const IconComp: any = (LucideIcons as any)[iconKey];
+                  const slug = iconKey
+                    .replace(/([a-z])([A-Z])/g, '$1-$2')
+                    .toLowerCase();
+                  return (
+                    <button
+                      key={iconKey}
+                      type="button"
+                      className="flex flex-col items-center gap-1 p-2 border rounded hover:bg-muted"
+                      onClick={() => {
+                        setCategoryForm((prev) => ({ ...prev, icon: slug }));
+                        setShowIconPicker(false);
+                      }}
+                      title={slug}
+                    >
+                      <IconComp className="h-5 w-5" />
+                      <span className="text-[10px] truncate w-full">{slug}</span>
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+          <DialogFooter className="flex-shrink-0 border-t pt-4">
+            <Button variant="outline" onClick={() => setShowIconPicker(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Template Management Dialog */}
+      <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle>{editingTemplate ? 'Edit Template' : 'Create New Template'}</DialogTitle>
+            <DialogDescription>
+              Define a reusable ticket template tied to a category.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-4 px-1">
+            <div className="space-y-2">
+              <Label htmlFor="templateName">Name *</Label>
+              <Input
+                id="templateName"
+                value={templateForm.name}
+                onChange={(e) => setTemplateForm(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="e.g., Hardware Issue Template"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="templateCategory">Category *</Label>
+              <Select 
+                value={templateForm.categoryId}
+                onValueChange={(value) => setTemplateForm(prev => ({ ...prev, categoryId: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="templateTitle">Ticket Title *</Label>
+              <Input
+                id="templateTitle"
+                value={templateForm.title}
+                onChange={(e) => setTemplateForm(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="e.g., Hardware Issue: [Device Type]"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="templateDescription">Description</Label>
+              <Textarea
+                id="templateDescription"
+                value={templateForm.description}
+                onChange={(e) => setTemplateForm(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Guidance shown in the ticket description"
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="templateCustomFields">Custom Fields (JSON)</Label>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">Provide structured fields or switch to JSON editor.</p>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="json-toggle" className="text-xs">JSON</Label>
+                  <Switch id="json-toggle" checked={useJsonEditor} onCheckedChange={(checked) => setUseJsonEditor(!!checked)} />
+                </div>
+              </div>
+
+              {useJsonEditor ? (
+                <Textarea
+                  id="templateCustomFields"
+                  value={templateForm.customFieldsText}
+                  onChange={(e) => setTemplateForm(prev => ({ ...prev, customFieldsText: e.target.value }))}
+                  placeholder={`{
+  "device_type": "Desktop",
+  "operating_system": "Windows"
+}`}
+                  rows={8}
+                />
+              ) : (
+                <div className="space-y-2">
+                  {customFieldsList.map((row, index) => (
+                    <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                      <Input
+                        className="col-span-4"
+                        placeholder="Field name (e.g., device_type)"
+                        value={row.name}
+                        onChange={(e) => updateCustomFieldRow(index, 'name', e.target.value)}
+                      />
+                      <Input
+                        className="col-span-7"
+                        placeholder="Value (e.g., Desktop)"
+                        value={row.value}
+                        onChange={(e) => updateCustomFieldRow(index, 'value', e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="col-span-1 text-red-600 hover:text-red-700"
+                        onClick={() => removeCustomFieldRow(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" size="sm" onClick={addCustomFieldRow}>
+                    <Plus className="h-4 w-4 mr-2" /> Add Field
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="flex-shrink-0 border-t pt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowTemplateDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateOrUpdateTemplate}
+              disabled={!templateForm.name.trim() || !templateForm.categoryId || !templateForm.title.trim()}
+            >
+              {editingTemplate ? 'Update Template' : 'Create Template'}
             </Button>
           </DialogFooter>
         </DialogContent>

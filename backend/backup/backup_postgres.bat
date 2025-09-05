@@ -39,5 +39,5 @@ if %ERRORLEVEL% equ 0 (
     echo Error: Backup failed.
 )
 
-pause
+:: pause
 endlocal

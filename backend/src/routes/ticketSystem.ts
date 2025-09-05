@@ -520,6 +520,67 @@ router.post('/templates', authenticate, authorize('admin'), async (req, res) => 
   }
 });
 
+// Update ticket template
+router.put('/templates/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      description,
+      categoryId,
+      title,
+      description: templateDescription,
+      customFields
+    } = req.body;
+
+    const data: any = {};
+    if (name !== undefined) data.name = name;
+    if (description !== undefined) data.description = description;
+    if (categoryId !== undefined) data.categoryId = categoryId;
+    if (title !== undefined) data.title = title;
+    if (templateDescription !== undefined) data.templateDescription = templateDescription;
+    if (customFields !== undefined) data.customFields = customFields;
+
+    const updated = await prisma.ticketTemplate.update({
+      where: { id },
+      data,
+      include: { category: true }
+    });
+
+    return res.json({
+      success: true,
+      data: updated,
+      message: 'Template updated successfully'
+    });
+  } catch (error) {
+    console.error('Update template error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to update template'
+    });
+  }
+});
+
+// Delete ticket template
+router.delete('/templates/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.ticketTemplate.delete({ where: { id } });
+
+    return res.json({
+      success: true,
+      message: 'Template deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete template error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to delete template'
+    });
+  }
+});
+
 // Get workflows
 router.get('/workflows', authenticate, async (req, res) => {
   try {

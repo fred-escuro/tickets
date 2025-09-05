@@ -91,7 +91,7 @@ export const FloatingHelpButton: FC = () => {
 
               {/* Quick Actions */}
               <div className="grid gap-3">
-                <Link to="/help-desk?action=create" onClick={() => setIsOpen(false)}>
+                <Link to="/tickets?action=create" onClick={() => setIsOpen(false)}>
                   <Button variant="outline" className="w-full justify-start gap-3 h-12">
                     <Plus className="h-4 w-4 text-blue-600" />
                     <div className="text-left">
@@ -101,7 +101,7 @@ export const FloatingHelpButton: FC = () => {
                   </Button>
                 </Link>
 
-                <Link to="/help-desk?tab=tickets" onClick={() => setIsOpen(false)}>
+                <Link to="/tickets?tab=tickets" onClick={() => setIsOpen(false)}>
                   <Button variant="outline" className="w-full justify-start gap-3 h-12">
                     <MessageSquare className="h-4 w-4 text-green-600" />
                     <div className="text-left">
@@ -111,7 +111,7 @@ export const FloatingHelpButton: FC = () => {
                   </Button>
                 </Link>
 
-                <Link to="/help-desk?tab=knowledge" onClick={() => setIsOpen(false)}>
+                <Link to="/tickets?tab=knowledge" onClick={() => setIsOpen(false)}>
                   <Button variant="outline" className="w-full justify-start gap-3 h-12">
                     <FileText className="h-4 w-4 text-purple-600" />
                     <div className="text-left">
