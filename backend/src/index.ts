@@ -14,6 +14,10 @@ import knowledgeBaseRoutes from './routes/knowledgeBase';
 import searchRoutes from './routes/search';
 import commentRoutes from './routes/comments';
 import ticketSystemRoutes from './routes/ticketSystem';
+import departmentRoutes from './routes/departments';
+import roleRoutes from './routes/roles';
+import permissionRoutes from './routes/permissions';
+import policyRoutes from './routes/policies';
 
 // Load environment variables
 dotenv.config();
@@ -46,6 +50,10 @@ app.use('/api/knowledge', knowledgeBaseRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/ticket-system', ticketSystemRoutes);
+app.use('/api/departments', departmentRoutes);
+app.use('/api/roles', roleRoutes);
+app.use('/api/permissions', permissionRoutes);
+app.use('/api/policies', policyRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

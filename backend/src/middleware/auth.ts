@@ -30,7 +30,6 @@ export const authenticate = async (
         lastName: true,
         middleName: true,
         email: true,
-        role: true,
         department: true,
         avatar: true,
         phone: true,
@@ -38,7 +37,19 @@ export const authenticate = async (
         isAgent: true,
         skills: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
+        roles: {
+          select: {
+            isPrimary: true,
+            role: { 
+              select: { 
+                id: true, 
+                name: true,
+                permissions: { include: { permission: true } }
+              } 
+            }
+          }
+        }
       }
     });
 
@@ -49,7 +60,17 @@ export const authenticate = async (
       });
     }
 
-    (req as any).user = user;
+    // Flatten permissions from roles to a simple array of keys
+    const permissionSet = new Set<string>();
+    (user?.roles || []).forEach((ur: any) => {
+      const rp = ur?.role?.permissions || [];
+      rp.forEach((rpItem: any) => {
+        const key = rpItem?.permission?.key;
+        if (typeof key === 'string' && key.length > 0) permissionSet.add(key);
+      });
+    });
+
+    (req as any).user = { ...user, permissions: Array.from(permissionSet) } as any;
     next();
     return;
   } catch (error) {
@@ -74,6 +95,14 @@ export const authenticate = async (
   }
 };
 
+export const userHasAnyRole = (user: any, allowedRoles: string[]): boolean => {
+  if (!user) return false;
+  const roleNames: string[] = Array.isArray(user.roles)
+    ? user.roles.map((r: any) => r?.role?.name).filter((n: any) => typeof n === 'string')
+    : [];
+  return allowedRoles.some(r => roleNames.includes(r));
+};
+
 export const authorize = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!(req as any).user) {
@@ -83,13 +112,30 @@ export const authorize = (...roles: string[]) => {
       });
     }
 
-    if (!roles.includes((req as any).user.role)) {
+    // Check via RBAC roles relation
+    if (!userHasAnyRole((req as any).user, roles)) {
       return res.status(403).json({
         success: false,
         error: 'Insufficient permissions'
       });
     }
 
+    next();
+    return;
+  };
+};
+
+export const authorizePermission = (...permissionKeys: string[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const user: any = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    const userPermissions: string[] = Array.isArray(user.permissions) ? user.permissions : [];
+    const has = permissionKeys.some(p => userPermissions.includes(p));
+    if (!has) {
+      return res.status(403).json({ success: false, error: 'Insufficient permissions' });
+    }
     next();
     return;
   };

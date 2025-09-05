@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { prisma } from '../index';
-import { authenticate, requireAgent, authorize } from '../middleware/auth';
+import { authenticate, requireAgent, authorize, authorizePermission } from '../middleware/auth';
 import { CreateTicketRequest, UpdateTicketRequest, TicketFilters, ApiResponse } from '../types';
 
 const router = Router();
 
 // Get all tickets with filtering and pagination
-router.get('/', authenticate, async (req, res) => {
+router.get('/', authenticate, authorizePermission('tickets:read'), async (req, res) => {
   try {
     const {
       page = 1,
@@ -34,7 +34,15 @@ router.get('/', authenticate, async (req, res) => {
     // Scope results for non-agents to only their tickets (submitted or assigned)
     const userId = (req as any).user.id;
     const isAgent = (req as any).user.isAgent;
-    if (!isAgent) {
+    const roles = Array.isArray((req as any).user?.roles) ? (req as any).user.roles : [];
+    const roleNames = roles.map((r: any) => (r?.role?.name || '').toLowerCase());
+    const perms: string[] = Array.isArray((req as any).user?.permissions) ? (req as any).user.permissions : [];
+    const isElevated = isAgent 
+      || roleNames.includes('admin')
+      || roleNames.includes('manager')
+      || perms.includes('users:read')
+      || perms.includes('reports:read');
+    if (!isElevated) {
       where.OR = [
         { submittedBy: userId },
         { assignedTo: userId }
@@ -193,7 +201,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Get ticket by ID
-router.get('/:id', authenticate, async (req, res) => {
+router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -278,7 +286,7 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // Create new ticket
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, authorizePermission('tickets:write'), async (req, res) => {
   try {
     const { title, description, category, priority, dueDate, tags }: CreateTicketRequest = req.body as any;
     const { priorityId } = (req.body as any);
@@ -369,7 +377,7 @@ router.post('/', authenticate, async (req, res) => {
 });
 
 // Update ticket
-router.put('/:id', authenticate, async (req, res) => {
+router.put('/:id', authenticate, authorizePermission('tickets:write'), async (req, res) => {
   try {
     const { id } = req.params;
     const updateData: UpdateTicketRequest = req.body;
@@ -550,7 +558,7 @@ router.put('/:id', authenticate, async (req, res) => {
 });
 
 // Get ticket status history
-router.get('/:id/status-history', authenticate, async (req, res) => {
+router.get('/:id/status-history', authenticate, authorizePermission('tickets:read'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -589,7 +597,7 @@ router.get('/:id/status-history', authenticate, async (req, res) => {
 });
 
 // Delete ticket (only by submitter or admin)
-router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.delete('/:id', authenticate, authorizePermission('tickets:delete'), async (req, res) => {
   try {
     const { id } = req.params;
     const userId = (req as any).user.id;
@@ -605,8 +613,10 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
       });
     }
 
-    // Only allow deletion if user is submitter or admin
-    if (ticket.submittedBy !== userId && (req as any).user.role !== 'admin') {
+    // Only allow deletion if user is submitter or admin via RBAC
+    const requester = (req as any).user;
+    const isAdmin = Array.isArray(requester?.roles) && requester.roles.some((r: any) => r?.role?.name === 'admin');
+    if (ticket.submittedBy !== userId && !isAdmin) {
       return res.status(403).json({
         success: false,
         error: 'Insufficient permissions to delete this ticket'
@@ -631,16 +641,24 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
 });
 
 // Get ticket statistics
-router.get('/stats/overview', authenticate, async (req, res) => {
+router.get('/stats/overview', authenticate, authorizePermission('tickets:read'), async (req, res) => {
   try {
     const userId = (req as any).user.id;
     const isAgent = (req as any).user.isAgent;
+    const roles = Array.isArray((req as any).user?.roles) ? (req as any).user.roles : [];
+    const roleNames = roles.map((r: any) => (r?.role?.name || '').toLowerCase());
+    const perms: string[] = Array.isArray((req as any).user?.permissions) ? (req as any).user.permissions : [];
+    const isElevated = isAgent 
+      || roleNames.includes('admin')
+      || roleNames.includes('manager')
+      || perms.includes('users:read')
+      || perms.includes('reports:read');
     const { range = 'today' } = req.query as { range?: string };
 
     let whereClause: any = {};
 
     // If not an agent, only show user's own tickets
-    if (!isAgent) {
+    if (!isElevated) {
       whereClause.OR = [
         { submittedBy: userId },
         { assignedTo: userId }
@@ -686,7 +704,8 @@ router.get('/stats/overview', authenticate, async (req, res) => {
       resolvedInRange,
       overdueTickets,
       unassignedTickets,
-      slaAtRiskTickets
+      slaAtRiskTickets,
+      openInProgressDirect
     ] = await Promise.all([
       prisma.ticket.count({ where: whereClause }),
       prisma.ticket.count({ where: { ...whereClause, statusId: statusMap.open || statusMap['open'] } }),
@@ -697,7 +716,12 @@ router.get('/stats/overview', authenticate, async (req, res) => {
       prisma.ticket.count({ where: rangeLower === 'all' ? { ...whereClause, resolvedAt: { not: null } } : { ...whereClause, resolvedAt: { gte: rangeStart } } }),
       prisma.ticket.count({ where: { ...notResolvedClosedWhere, dueDate: { lt: now } } }),
       prisma.ticket.count({ where: { ...notClosedWhere, assignedTo: null } }),
-      prisma.ticket.count({ where: { ...notResolvedClosedWhere, slaResponseAt: { lt: now } } })
+      prisma.ticket.count({ where: { ...notResolvedClosedWhere, slaResponseAt: { lt: now } } }),
+      // Fallback: directly count tickets whose status is neither resolved nor closed
+      prisma.ticket.count({ where: { 
+        ...whereClause,
+        status: { is: { isClosed: false, isResolved: false } }
+      } })
     ]);
 
     const stats = {
@@ -706,7 +730,9 @@ router.get('/stats/overview', authenticate, async (req, res) => {
       inProgress: inProgressTickets,
       resolved: resolvedTickets,
       closed: closedTickets,
-      openInProgress: openTickets + inProgressTickets,
+      openInProgress: (Number.isFinite(openTickets) && Number.isFinite(inProgressTickets) && (statusMap.open || statusMap['open']) && (statusMap.inprogress || statusMap['inprogress']))
+        ? (openTickets + inProgressTickets)
+        : openInProgressDirect,
       new: newTickets,
       resolvedInRange,
       overdue: overdueTickets,
@@ -730,10 +756,18 @@ router.get('/stats/overview', authenticate, async (req, res) => {
 });
 
 // Get ticket activity data for charts
-router.get('/stats/activity', authenticate, async (req, res) => {
+router.get('/stats/activity', authenticate, authorizePermission('tickets:read'), async (req, res) => {
   try {
     const userId = (req as any).user.id;
     const isAgent = (req as any).user.isAgent;
+    const roles = Array.isArray((req as any).user?.roles) ? (req as any).user.roles : [];
+    const roleNames = roles.map((r: any) => (r?.role?.name || '').toLowerCase());
+    const perms: string[] = Array.isArray((req as any).user?.permissions) ? (req as any).user.permissions : [];
+    const isElevated = isAgent 
+      || roleNames.includes('admin')
+      || roleNames.includes('manager')
+      || perms.includes('users:read')
+      || perms.includes('reports:read');
     const { days = '7' } = req.query;
     
     const daysCount = parseInt(days as string);
@@ -747,7 +781,7 @@ router.get('/stats/activity', authenticate, async (req, res) => {
     };
 
     // If not an agent, only show user's own tickets
-    if (!isAgent) {
+    if (!isElevated) {
       whereClause.OR = [
         { submittedBy: userId },
         { assignedTo: userId }
@@ -847,7 +881,7 @@ router.get('/stats/activity', authenticate, async (req, res) => {
 });
 
 // Get detailed ticket metrics
-router.get('/stats/metrics', authenticate, async (req, res) => {
+router.get('/stats/metrics', authenticate, authorizePermission('tickets:read'), async (req, res) => {
   try {
     const userId = (req as any).user.id;
     const isAgent = (req as any).user.isAgent;

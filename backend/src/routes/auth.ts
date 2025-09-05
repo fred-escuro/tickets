@@ -10,7 +10,7 @@ const router = Router();
 // Register new user
 router.post('/register', async (req, res) => {
   try {
-    const { firstName, lastName, middleName, email, password, role, department, avatar, phone, location, isAgent, skills }: CreateUserRequest = req.body;
+    const { firstName, lastName, middleName, email, password, department, avatar, phone, location, isAgent, skills }: CreateUserRequest = req.body;
 
     // Validate required fields
     if (!firstName || !lastName || !email || !password) {
@@ -44,7 +44,7 @@ router.post('/register', async (req, res) => {
         middleName,
         email,
         password: hashedPassword,
-        role: role || 'user',
+        // legacy role column no longer used
         department,
         avatar,
         phone,
@@ -58,7 +58,6 @@ router.post('/register', async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        role: true,
         department: true,
         avatar: true,
         phone: true,
@@ -72,7 +71,7 @@ router.post('/register', async (req, res) => {
 
     // Generate JWT tokens
     const token = (jwt.sign as any)(
-      { userId: user.id, email: user.email, role: user.role },
+      { userId: (user as any).id, email: (user as any).email },
       process.env.JWT_SECRET!,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
@@ -129,7 +128,15 @@ router.post('/login', async (req, res) => {
 
     // Find user
     const user = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
+      include: {
+        roles: {
+          select: {
+            isPrimary: true,
+            role: { select: { id: true, name: true, permissions: { include: { permission: true } } } }
+          }
+        }
+      }
     });
 
     if (!user) {
@@ -151,7 +158,7 @@ router.post('/login', async (req, res) => {
 
     // Generate JWT tokens
     const token = (jwt.sign as any)(
-      { userId: user.id, email: user.email, role: user.role },
+      { userId: user.id, email: user.email },
       process.env.JWT_SECRET!,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
@@ -162,17 +169,29 @@ router.post('/login', async (req, res) => {
       { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' }
     );
 
-    const { password: _, ...userWithoutPassword } = user;
+    const { password: _, ...userWithoutPassword } = user as any;
+
+    // Flatten permissions from role permissions
+    const permissionSet = new Set<string>();
+    ((user as any).roles || []).forEach((ur: any) => {
+      const rp = ur?.role?.permissions || [];
+      rp.forEach((rpItem: any) => {
+        const key = rpItem?.permission?.key;
+        if (typeof key === 'string' && key.length > 0) permissionSet.add(key);
+      });
+    });
 
     // Convert Prisma user to our User type format
-    const userResponse = {
+    const userResponse: any = {
       ...userWithoutPassword,
       middleName: userWithoutPassword.middleName || undefined,
       department: userWithoutPassword.department || undefined,
       avatar: userWithoutPassword.avatar || undefined,
       phone: userWithoutPassword.phone || undefined,
       location: userWithoutPassword.location || undefined,
-      skills: Array.isArray(userWithoutPassword.skills) ? userWithoutPassword.skills.filter((skill: any) => typeof skill === 'string') : []
+      skills: Array.isArray(userWithoutPassword.skills) ? userWithoutPassword.skills.filter((skill: any) => typeof skill === 'string') : [],
+      roles: (user as any).roles || [],
+      permissions: Array.from(permissionSet)
     };
 
     const response: AuthResponse = {
@@ -219,7 +238,6 @@ router.post('/refresh', async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        role: true,
         department: true,
         avatar: true,
         phone: true,
@@ -227,7 +245,13 @@ router.post('/refresh', async (req, res) => {
         isAgent: true,
         skills: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
+        roles: {
+          select: {
+            isPrimary: true,
+            role: { select: { id: true, name: true, permissions: { include: { permission: true } } } }
+          }
+        }
       }
     });
 
@@ -240,20 +264,31 @@ router.post('/refresh', async (req, res) => {
 
     // Generate new access token
     const newToken = (jwt.sign as any)(
-      { userId: user.id, email: user.email, role: user.role },
+      { userId: user.id, email: user.email },
       process.env.JWT_SECRET!,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
     // Convert Prisma user to our User type format
-    const userResponse = {
+    const permissionSet = new Set<string>();
+    ((user as any).roles || []).forEach((ur: any) => {
+      const rp = ur?.role?.permissions || [];
+      rp.forEach((rpItem: any) => {
+        const key = rpItem?.permission?.key;
+        if (typeof key === 'string' && key.length > 0) permissionSet.add(key);
+      });
+    });
+
+    const userResponse: any = {
       ...user,
       middleName: user.middleName || undefined,
       department: user.department || undefined,
       avatar: user.avatar || undefined,
       phone: user.phone || undefined,
       location: user.location || undefined,
-      skills: Array.isArray(user.skills) ? user.skills.filter((skill: any) => typeof skill === 'string') : []
+      skills: Array.isArray(user.skills) ? user.skills.filter((skill: any) => typeof skill === 'string') : [],
+      roles: (user as any).roles || [],
+      permissions: Array.from(permissionSet)
     };
 
     return res.json({

@@ -26,7 +26,11 @@ const AppRoutes: FC = () => {
       <Route
         path="/"
         element={
-          <ProtectedRoute pageTitle="Welcome to Dashboard" pageDescription="Please log in to access your dashboard and view analytics.">
+          <ProtectedRoute
+            pageTitle="Welcome to Dashboard"
+            pageDescription="Please log in to access your dashboard and view analytics."
+            requireAnyPermissionKeys={["tickets:read"]}
+          >
             <Dashboard />
           </ProtectedRoute>
         }
@@ -82,7 +86,11 @@ const AppRoutes: FC = () => {
       <Route
         path="/reports"
         element={
-          <ProtectedRoute pageTitle="Analytics & Reports" pageDescription="Please log in to view analytics and generate reports.">
+          <ProtectedRoute
+            pageTitle="Analytics & Reports"
+            pageDescription="Please log in to view analytics and generate reports."
+            requireAnyRoleNames={["admin","manager"]}
+          >
             <AnalyticsPage />
           </ProtectedRoute>
         }
@@ -98,7 +106,11 @@ const AppRoutes: FC = () => {
       <Route
         path="/settings"
         element={
-          <ProtectedRoute pageTitle="Settings" pageDescription="Please log in to access your account settings and preferences.">
+          <ProtectedRoute
+            pageTitle="Settings"
+            pageDescription="Please log in to access your account settings and preferences."
+            requireAnyRoleNames={["admin","manager"]}
+          >
             <SettingsPage />
           </ProtectedRoute>
         }

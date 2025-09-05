@@ -29,10 +29,17 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
     // Create user
     const newUser = await prisma.user.create({
       data: {
-        ...createData,
+        firstName: createData.firstName,
+        lastName: createData.lastName,
+        middleName: createData.middleName || undefined,
+        email: createData.email,
         password: hashedPassword,
-        role: createData.role || 'user',
-        isAgent: createData.isAgent || false
+        department: createData.department || undefined,
+        avatar: createData.avatar || undefined,
+        phone: createData.phone || undefined,
+        location: createData.location || undefined,
+        isAgent: createData.isAgent || false,
+        skills: createData.skills || undefined
       },
       select: {
         id: true,
@@ -40,7 +47,6 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        role: true,
         department: true,
         avatar: true,
         phone: true,
@@ -85,7 +91,13 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
         { email: { contains: search, mode: 'insensitive' } }
       ];
     }
-    if (role) where.role = role;
+    if (role) {
+      where.roles = {
+        some: {
+          role: { name: role.toString() }
+        }
+      } as any;
+    }
     if (department) where.department = department;
 
     // Get total count
@@ -100,7 +112,6 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        role: true,
         department: true,
         avatar: true,
         phone: true,
@@ -108,7 +119,15 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
         isAgent: true,
         skills: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
+        roles: {
+          select: {
+            isPrimary: true,
+            role: {
+              select: { id: true, name: true, description: true, isSystem: true }
+            }
+          }
+        }
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -145,7 +164,10 @@ router.get('/:id', authenticate, async (req, res) => {
     const currentUserId = (req as any).user.id;
 
     // Users can only view their own profile unless they're admin
-    if (id !== currentUserId && (req as any).user.role !== 'admin') {
+    // Allow if the requester is the same user or has admin role via RBAC
+    const requester = (req as any).user;
+    const isAdmin = Array.isArray(requester?.roles) && requester.roles.some((r: any) => r?.role?.name === 'admin');
+    if (id !== currentUserId && !isAdmin) {
       return res.status(403).json({
         success: false,
         error: 'Insufficient permissions'
@@ -160,7 +182,6 @@ router.get('/:id', authenticate, async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        role: true,
         department: true,
         avatar: true,
         phone: true,
@@ -168,7 +189,15 @@ router.get('/:id', authenticate, async (req, res) => {
         isAgent: true,
         skills: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
+        roles: {
+          select: {
+            isPrimary: true,
+            role: {
+              select: { id: true, name: true, description: true, isSystem: true }
+            }
+          }
+        }
       }
     });
 
@@ -200,7 +229,10 @@ router.put('/:id', authenticate, async (req, res) => {
     const currentUserId = (req as any).user.id;
 
     // Users can only update their own profile unless they're admin
-    if (id !== currentUserId && (req as any).user.role !== 'admin') {
+    // Allow if the requester is the same user or has admin role via RBAC
+    const requester = (req as any).user;
+    const isAdmin = Array.isArray(requester?.roles) && requester.roles.some((r: any) => r?.role?.name === 'admin');
+    if (id !== currentUserId && !isAdmin) {
       return res.status(403).json({
         success: false,
         error: 'Insufficient permissions'
@@ -222,14 +254,25 @@ router.put('/:id', authenticate, async (req, res) => {
     // Update user
     const updatedUser = await prisma.user.update({
       where: { id },
-      data: updateData,
+      data: {
+        firstName: updateData.firstName || undefined,
+        lastName: updateData.lastName || undefined,
+        middleName: updateData.middleName || undefined,
+        email: updateData.email || undefined,
+        // role updates are disabled; RBAC handles roles
+        department: updateData.department || undefined,
+        avatar: updateData.avatar || undefined,
+        phone: updateData.phone || undefined,
+        location: updateData.location || undefined,
+        isAgent: updateData.isAgent ?? undefined,
+        skills: updateData.skills || undefined
+      },
       select: {
         id: true,
         firstName: true,
         lastName: true,
         middleName: true,
         email: true,
-        role: true,
         department: true,
         avatar: true,
         phone: true,
@@ -330,3 +373,54 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
 });
 
 export default router;
+
+// Additional user role management endpoints
+router.get('/:id/roles', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        roles: {
+          select: {
+            isPrimary: true,
+            role: { select: { id: true, name: true, description: true, isSystem: true } }
+          }
+        }
+      }
+    });
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    return res.json({ success: true, data: user.roles });
+  } catch (e) {
+    console.error('Get user roles error:', e);
+    return res.status(500).json({ success: false, error: 'Failed to get user roles' });
+  }
+});
+
+router.post('/:id/roles/:roleId', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { id, roleId } = req.params;
+    const isPrimary = String(req.query.primary || 'false') === 'true';
+    await prisma.userRole.upsert({
+      where: { userId_roleId: { userId: id, roleId } },
+      create: { userId: id, roleId, isPrimary },
+      update: { isPrimary }
+    } as any);
+    return res.json({ success: true, message: 'Role assigned to user' });
+  } catch (e) {
+    console.error('Assign role to user error:', e);
+    return res.status(500).json({ success: false, error: 'Failed to assign role' });
+  }
+});
+
+router.delete('/:id/roles/:roleId', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { id, roleId } = req.params;
+    await prisma.userRole.deleteMany({ where: { userId: id, roleId } });
+    return res.json({ success: true, message: 'Role removed from user' });
+  } catch (e) {
+    console.error('Remove role from user error:', e);
+    return res.status(500).json({ success: false, error: 'Failed to remove role' });
+  }
+});

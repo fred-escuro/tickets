@@ -15,6 +15,7 @@ import { useState, useEffect, type FC } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '@/hooks/useApi';
 import { UserService, type SupportAgent, type User, type CreateUserData, type UpdateUserData, USER_ROLES, USER_DEPARTMENTS } from '@/lib/services/userService';
+import { roleService, type Role as RbacRole } from '@/lib/services/roleService';
 
 const getDepartmentBadgeColor = (department: string) => {
   switch (department) {
@@ -61,6 +62,12 @@ export const UsersPage: FC = () => {
   });
   const [error, setError] = useState('');
 
+  // RBAC roles
+  const [rbacRoles, setRbacRoles] = useState<RbacRole[]>([]);
+  const [rolesLoading, setRolesLoading] = useState(false);
+  const [selectedRoleIdCreate, setSelectedRoleIdCreate] = useState<string>('');
+  const [selectedRoleIdEdit, setSelectedRoleIdEdit] = useState<string>('');
+
   // Fetch all users using the API hook
   const { data: usersData, loading: usersLoading, error: usersError, execute: fetchUsers } = useApi(
     UserService.getAllUsers,
@@ -70,7 +77,42 @@ export const UsersPage: FC = () => {
   // Use useEffect to fetch data on component mount
   useEffect(() => {
     fetchUsers();
+    // Load RBAC roles
+    (async () => {
+      try {
+        setRolesLoading(true);
+        const roles = await roleService.list();
+        setRbacRoles(roles);
+        // Default selection to 'user' role if exists
+        const defaultRole = roles.find(r => r.name.toLowerCase() === 'user') || roles[0];
+        if (defaultRole) {
+          setSelectedRoleIdCreate(defaultRole.id);
+        }
+      } catch (e) {
+        // ignore; UI will fallback to static roles
+      } finally {
+        setRolesLoading(false);
+      }
+    })();
   }, []);
+
+  // Keep RBAC role selector in Edit dialog in sync with current DB role
+  useEffect(() => {
+    if (!selectedUser) return;
+    // Prefer primary RBAC role from user payload if available
+    const userAny: any = selectedUser as any;
+    const rolesArr: any[] = Array.isArray(userAny?.roles) ? userAny.roles : [];
+    let currentRoleId = '';
+    if (rolesArr.length > 0) {
+      const primary = rolesArr.find((ur: any) => ur?.isPrimary);
+      currentRoleId = primary?.role?.id || rolesArr[0]?.role?.id || '';
+    }
+    if (!currentRoleId && rbacRoles.length > 0) {
+      // Fallback to 'user' role if nothing found
+      currentRoleId = (rbacRoles.find(r => r.name.toLowerCase() === 'user')?.id) || '';
+    }
+    if (currentRoleId) setSelectedRoleIdEdit(currentRoleId);
+  }, [selectedUser, rbacRoles]);
 
   const users = usersData?.data || [];
 
@@ -102,7 +144,7 @@ export const UsersPage: FC = () => {
         middleName: formData.middleName || undefined,
         email: formData.email,
         password: formData.password,
-        role: formData.role,
+        role: 'user',
         department: formData.department || undefined,
         phone: formData.phone || undefined,
         avatar: formData.avatar || undefined,
@@ -112,6 +154,14 @@ export const UsersPage: FC = () => {
       const response = await UserService.createUser(createData);
       
       if (response.success) {
+        // Also assign RBAC role if available
+        try {
+          const newUser: any = response.data || (response as any).data;
+          const roleId = selectedRoleIdCreate || (rbacRoles.find(r => r.name.toLowerCase() === (formData.role || 'user').toLowerCase())?.id || '');
+          if (newUser?.id && roleId) {
+            await roleService.assignToUser(roleId, newUser.id, true);
+          }
+        } catch {}
         setShowCreateForm(false);
         setFormData({
           firstName: '',
@@ -156,6 +206,22 @@ export const UsersPage: FC = () => {
       const response = await UserService.updateUser(selectedUser.id, updateData);
       
       if (response.success) {
+        // Sync RBAC user_roles: make selected role primary and remove others
+        try {
+          const chosenRoleId = selectedRoleIdEdit || (rbacRoles.find(r => r.name.toLowerCase() === 'user')?.id || '');
+          if (chosenRoleId) {
+            const userResp: any = await UserService.getUser(selectedUser.id);
+            const currentRoles: string[] = ((userResp.data || userResp)?.roles || [])
+              .map((ur: any) => ur.role?.id)
+              .filter((id: any) => typeof id === 'string');
+            for (const rid of currentRoles) {
+              if (rid !== chosenRoleId) {
+                await roleService.removeFromUser(rid, selectedUser.id);
+              }
+            }
+            await roleService.assignToUser(chosenRoleId, selectedUser.id, true);
+          }
+        } catch {}
         setShowEditForm(false);
         setSelectedUser(null);
         setFormData({
@@ -288,7 +354,7 @@ export const UsersPage: FC = () => {
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
-                          placeholder="Search by name, role, or email..."
+                          placeholder="Search by name or email..."
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           className="pl-10"
@@ -315,12 +381,12 @@ export const UsersPage: FC = () => {
                     <div className="space-y-2">
                       <Select value={filterRole} onValueChange={setFilterRole}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Filter by role" />
+                          <SelectValue placeholder="Filter by user type" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">All Roles</SelectItem>
+                          <SelectItem value="all">All Users</SelectItem>
                           <SelectItem value="agent">Support Agents</SelectItem>
-                          <SelectItem value="customer">Customers</SelectItem>
+                          <SelectItem value="customer">Non-Agents</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -387,9 +453,14 @@ export const UsersPage: FC = () => {
                               <h3 className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors duration-300">
                                 {user.middleName ? `${user.firstName} ${user.middleName} ${user.lastName}` : `${user.firstName} ${user.lastName}`}
                               </h3>
-                              <Badge className={`${getAgentBadgeColor(user.isAgent)} text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
-                                {user.isAgent ? 'Agent' : 'User'}
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                {/* RBAC primary role only */}
+                                {Array.isArray((user as any).roles) && (user as any).roles.length > 0 && (
+                                  <Badge className="border-indigo-600 bg-indigo-50 text-indigo-700 text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm">
+                                    {((user as any).roles.find((r: any) => r.isPrimary) || (user as any).roles[0]).role?.name || 'Role'}
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                             
                             {user.department && (
@@ -513,16 +584,15 @@ export const UsersPage: FC = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="role">Role *</Label>
-                <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+                {/* RBAC Role (optional) */}
+                <Label>RBAC Role</Label>
+                <Select value={selectedRoleIdCreate} onValueChange={setSelectedRoleIdCreate}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder={rolesLoading ? 'Loading roles…' : 'Select RBAC role'} />
                   </SelectTrigger>
                   <SelectContent>
-                    {USER_ROLES.map((role) => (
-                      <SelectItem key={role} value={role}>
-                        {role}
-                      </SelectItem>
+                    {rbacRoles.map(r => (
+                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -665,20 +735,18 @@ export const UsersPage: FC = () => {
 
              <div className="grid grid-cols-2 gap-4">
                <div className="space-y-2">
-                 <Label htmlFor="editRole">Role *</Label>
-                 <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+                 <Label>RBAC Role</Label>
+                 <Select value={selectedRoleIdEdit} onValueChange={setSelectedRoleIdEdit}>
                    <SelectTrigger>
-                     <SelectValue />
+                     <SelectValue placeholder={rolesLoading ? 'Loading roles…' : 'Select RBAC role'} />
                    </SelectTrigger>
                    <SelectContent>
-                     {USER_ROLES.map((role) => (
-                       <SelectItem key={role} value={role}>
-                         {role}
-                       </SelectItem>
+                     {rbacRoles.map((r) => (
+                       <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                      ))}
                    </SelectContent>
                  </Select>
-               </div>
+                 </div>
                <div className="space-y-2">
                  <Label htmlFor="editDepartment">Department</Label>
                  <Select value={formData.department} onValueChange={(value) => setFormData({ ...formData, department: value })}>

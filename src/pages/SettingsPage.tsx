@@ -32,7 +32,10 @@ import {
   Workflow,
   Search,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Shield,
+  Key,
+  Lock
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { settingsService, type SystemSettings } from '@/lib/settingsService';
@@ -41,6 +44,10 @@ import { TicketStatusWorkflow } from '@/components/TicketStatusWorkflow';
 import { PriorityWorkflow } from '@/components/PriorityWorkflow';
 import { AuthService } from '@/lib/services/authService';
 import { toast } from 'sonner';
+import { roleService, type Role } from '@/lib/services/roleService';
+import { permissionService, type Permission } from '@/lib/services/permissionService';
+import { policyService, type AccessPolicy } from '@/lib/services/policyService';
+import { UserService, type User as AppUser } from '@/lib/services/userService';
 
 export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -54,6 +61,37 @@ export default function SettingsPage() {
   const [statuses, setStatuses] = useState<TicketStatus[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // RBAC/ABAC state
+  const [rbacLoading, setRbacLoading] = useState(false);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [policies, setPolicies] = useState<AccessPolicy[]>([]);
+  const [showRoleDialog, setShowRoleDialog] = useState(false);
+  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
+  const [showPolicyDialog, setShowPolicyDialog] = useState(false);
+  const [userRolesTableLoading, setUserRolesTableLoading] = useState(false);
+  const [userRoleRows, setUserRoleRows] = useState<Array<{ user: AppUser; roles: Array<{ id: string; name: string; isPrimary?: boolean }> }>>([]);
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [editingPermission, setEditingPermission] = useState<Permission | null>(null);
+  const [editingPolicy, setEditingPolicy] = useState<AccessPolicy | null>(null);
+  const [roleForm, setRoleForm] = useState({ name: '', description: '' });
+  const [permissionForm, setPermissionForm] = useState({ key: '', description: '' });
+  const [policyForm, setPolicyForm] = useState({
+    name: '',
+    description: '',
+    effect: 'ALLOW' as 'ALLOW' | 'DENY',
+    subjectType: 'ROLE' as 'ROLE' | 'USER' | 'DEPARTMENT',
+    subjectId: '',
+    resource: '',
+    action: '',
+    conditionsText: '{\n  \n}'
+  });
+  // Role assignment dialog state
+  const [showAssignRoleDialog, setShowAssignRoleDialog] = useState(false);
+  const [assignRole, setAssignRole] = useState<Role | null>(null);
+  const [assignUsers, setAssignUsers] = useState<AppUser[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [assignPrimary, setAssignPrimary] = useState(false);
   
   // Category management state
   const [showCategoryDialog, setShowCategoryDialog] = useState(false);
@@ -70,7 +108,17 @@ export default function SettingsPage() {
   // Status management state
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [editingStatus, setEditingStatus] = useState<TicketStatus | null>(null);
-  const [statusForm, setStatusForm] = useState({
+  type StatusForm = {
+    name: string;
+    description: string;
+    color: string;
+    isClosed: boolean;
+    isResolved: boolean;
+    allowedTransitions: string[];
+    permissions: { roles: string[]; users: string[] };
+  };
+
+  const [statusForm, setStatusForm] = useState<StatusForm>({
     name: '',
     description: '',
     color: 'blue',
@@ -152,6 +200,7 @@ export default function SettingsPage() {
   useEffect(() => {
     setSettings(settingsService.getSettings());
     loadTicketSystemData();
+    loadRbacAbac();
     
     // Log current user info for debugging
     const currentUser = AuthService.getCurrentUser();
@@ -197,6 +246,42 @@ export default function SettingsPage() {
       toast.error('Failed to load ticket system data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadRbacAbac = async () => {
+    try {
+      setRbacLoading(true);
+      const [r, p, ap] = await Promise.all([
+        roleService.list().catch(() => []),
+        permissionService.list().catch(() => []),
+        policyService.list().catch(() => []),
+      ]);
+      setRoles(r);
+      setPermissions(p);
+      setPolicies(ap);
+    } catch (e) {
+      console.error('Error loading RBAC/ABAC:', e);
+    } finally {
+      setRbacLoading(false);
+    }
+  };
+
+  const loadUserRolesTable = async () => {
+    try {
+      setUserRolesTableLoading(true);
+      const res: any = await UserService.getUsers({ limit: 100 });
+      const users: AppUser[] = (res.data || res) as any;
+      // If backend sends roles in list, map them; otherwise leave empty
+      const rows = users.map((u: any) => ({
+        user: u,
+        roles: ((u.roles || []) as any[]).map((ur: any) => ({ id: ur.role.id, name: ur.role.name, isPrimary: ur.isPrimary }))
+      }));
+      setUserRoleRows(rows);
+    } catch (e) {
+      console.error('Failed to load users for user-roles table', e);
+    } finally {
+      setUserRolesTableLoading(false);
     }
   };
 
@@ -249,16 +334,13 @@ export default function SettingsPage() {
   };
 
   const updateSetting = (section: string, subsection: string, key: string, value: any) => {
-    setSettings(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section as keyof typeof prev],
-        [subsection]: {
-          ...prev[section as keyof typeof prev][subsection as keyof typeof prev[typeof section]],
-          [key]: value
-        }
-      }
-    }));
+    setSettings(prev => {
+      const next: any = { ...prev } as any;
+      next[section] = { ...(next[section] || {}) };
+      next[section][subsection] = { ...(next[section][subsection] || {}) };
+      next[section][subsection][key] = value;
+      return next as typeof prev;
+    });
   };
 
   // Category management functions
@@ -355,8 +437,8 @@ export default function SettingsPage() {
         isResolved: status.isResolved || false,
         allowedTransitions: normalized,
         permissions: {
-          roles: status.permissions?.roles || [],
-          users: status.permissions?.users || []
+          roles: (status as any).permissions?.roles || [],
+          users: (status as any).permissions?.users || []
         }
       });
     } else {
@@ -883,6 +965,8 @@ export default function SettingsPage() {
               </AccordionContent>
             </AccordionItem>
 
+            
+
             {/* System Preferences */}
             <AccordionItem value="system" className="border rounded-lg">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
@@ -1079,7 +1163,7 @@ export default function SettingsPage() {
                                 Level {priority.level}
                               </Badge>
                               <Badge variant="outline" className="text-xs text-orange-600 border-orange-200">
-                                SLA: {priority.slaHours}h
+                                SLA: {priority.slaResponseHours}h
                               </Badge>
                             </div>
                           </div>
@@ -1339,39 +1423,309 @@ export default function SettingsPage() {
             onValueChange={setExpandedSections}
             className="space-y-4"
           >
-            {/* User Roles & Permissions */}
-            <AccordionItem value="roles" className="border rounded-lg">
+            {/* RBAC */}
+            <AccordionItem value="rbac" className="border rounded-lg">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 w-full">
                   <div className="p-2 rounded-lg bg-green-100 text-green-600">
-                    <Users className="h-5 w-5" />
+                    <Shield className="h-5 w-5" />
                   </div>
                   <div className="text-left">
-                    <h3 className="font-semibold">User Roles & Permissions</h3>
-                    <p className="text-sm text-muted-foreground">Define user roles and their permissions</p>
+                    <h3 className="font-semibold">RBAC: Roles & Permissions</h3>
+                    <p className="text-sm text-muted-foreground">Manage roles and permissions</p>
                   </div>
                   <Badge variant="outline" className="ml-auto">
-                    {settings.users.roles.length} roles
+                    {roles.length} roles • {permissions.length} permissions
                   </Badge>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-6 pb-6">
-                <div className="space-y-4">
-                  {settings.users.roles.map((role) => (
-                    <div key={role.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <h4 className="font-medium">{role.name}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Permissions: {role.permissions.join(', ')}
-                        </p>
-                      </div>
-                      <Button variant="outline" size="sm">Edit</Button>
+                <div className="space-y-6">
+                  {/* Roles */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-green-600" />
+                      <h4 className="font-medium">Roles</h4>
+                      <Button variant="outline" size="sm" className="ml-auto" onClick={() => setShowRoleDialog(true)}>
+                        <Plus className="h-4 w-4 mr-1" /> New Role
+                      </Button>
                     </div>
-                  ))}
-                  <Button variant="outline" className="w-full">Add New Role</Button>
+                    <div className="space-y-2">
+                      {rbacLoading && (
+                        <div className="text-sm text-muted-foreground">Loading roles…</div>
+                      )}
+                      {!rbacLoading && roles.length === 0 && (
+                        <div className="text-sm text-muted-foreground border rounded p-3">No roles yet.</div>
+                      )}
+                      {roles.map((role) => {
+                        const assigned = new Set((role as any).permissions?.map((rp: any) => rp.permission.id) || []);
+                        const availablePerms = permissions.filter(p => !assigned.has(p.id));
+                        return (
+                          <div key={role.id} className="p-3 border rounded space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="font-medium truncate">
+                                  {role.name} {role.isSystem && <Badge variant="outline" className="ml-2 text-xs">System</Badge>}
+                                </div>
+                                <div className="text-xs text-muted-foreground truncate">{role.description || '—'}</div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs">{((role as any).permissions||[]).length} perms</Badge>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditingRole(role);
+                                    setRoleForm({ name: role.name, description: role.description || '' });
+                                    setShowRoleDialog(true);
+                                  }}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700"
+                                  onClick={async () => {
+                                    if (!confirm(`Delete role "${role.name}"?`)) return;
+                                    try {
+                                      await roleService.remove(role.id);
+                                      setRoles(prev => prev.filter(r => r.id !== role.id));
+                                      toast.success('Role deleted');
+                                    } catch (e) {
+                                      toast.error('Failed to delete role');
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="text-xs font-medium">Permissions</div>
+                              <div className="flex flex-wrap gap-2">
+                                {((role as any).permissions || []).map((rp: any) => (
+                                  <Badge key={rp.permission.id} variant="outline" className="text-xs">
+                                    {rp.permission.key}
+                                    <button
+                                      type="button"
+                                      className="ml-1 text-red-600 hover:text-red-700"
+                                      onClick={async () => {
+                                        try {
+                                          await roleService.removePermission(role.id, rp.permission.id);
+                                          setRoles(prev => prev.map(r => r.id === role.id ? { ...r, permissions: ((r as any).permissions || []).filter((x: any) => x.permission.id !== rp.permission.id) } : r));
+                                          toast.success('Permission removed');
+                                        } catch (e) {
+                                          toast.error('Failed to remove permission');
+                                        }
+                                      }}
+                                    >
+                                      ×
+                                    </button>
+                                  </Badge>
+                                ))}
+                                {availablePerms.length === 0 && (
+                                  <span className="text-xs text-muted-foreground">No more permissions to add</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Select value="" onValueChange={async (permId) => {
+                                  try {
+                                    await roleService.addPermission(role.id, permId);
+                                    const perm = permissions.find(p => p.id === permId);
+                                    if (perm) {
+                                      setRoles(prev => prev.map(r => r.id === role.id ? { ...r, permissions: [ ...(((r as any).permissions) || []), { permission: perm } as any ] } : r));
+                                    }
+                                    toast.success('Permission added to role');
+                                  } catch (e) {
+                                    toast.error('Failed to add permission');
+                                  }
+                                }}>
+                                  <SelectTrigger className="h-8 w-56">
+                                    <SelectValue placeholder="Add permission to role" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {availablePerms.map(p => (
+                                      <SelectItem key={p.id} value={p.id}>{p.key}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      // Load users for assignment dialog
+                                      setAssignRole(role as any);
+                                      setShowAssignRoleDialog(true);
+                                      const res = await UserService.getUsers({ limit: 100 });
+                                      const anyRes: any = res as any;
+                                      const list: AppUser[] = (anyRes.data || anyRes) as AppUser[];
+                                      setAssignUsers(list);
+                                    } catch (e) {
+                                      toast.error('Failed to load users');
+                                    }
+                                  }}
+                                >
+                                  Assign to User
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Permissions */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Key className="h-4 w-4 text-blue-600" />
+                      <h4 className="font-medium">Permissions</h4>
+                      <Button variant="outline" size="sm" className="ml-auto" onClick={() => setShowPermissionDialog(true)}>
+                        <Plus className="h-4 w-4 mr-1" /> New Permission
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {rbacLoading && (
+                        <div className="col-span-2 text-sm text-muted-foreground">Loading permissions…</div>
+                      )}
+                      {!rbacLoading && permissions.length === 0 && (
+                        <div className="col-span-2 text-sm text-muted-foreground border rounded p-3">No permissions yet.</div>
+                      )}
+                      {permissions.map((perm) => (
+                        <div key={perm.id} className="p-3 border rounded flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-mono text-sm truncate" title={perm.key}>{perm.key}</div>
+                            <div className="text-xs text-muted-foreground truncate">{perm.description || '—'}</div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingPermission(perm);
+                                setPermissionForm({ key: perm.key, description: perm.description || '' });
+                                setShowPermissionDialog(true);
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={async () => {
+                                if (!confirm(`Delete permission "${perm.key}"?`)) return;
+                                try {
+                                  await permissionService.remove(perm.id);
+                                  setPermissions(prev => prev.filter(p => p.id !== perm.id));
+                                  toast.success('Permission deleted');
+                                } catch (e) {
+                                  toast.error('Failed to delete permission');
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </AccordionContent>
             </AccordionItem>
+
+            {/* ABAC Policies */}
+            <AccordionItem value="abac" className="border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
+                <div className="flex items-center gap-3 w-full">
+                  <div className="p-2 rounded-lg bg-amber-100 text-amber-600">
+                    <Lock className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">ABAC: Access Policies</h3>
+                    <p className="text-sm text-muted-foreground">Define attribute-based access rules</p>
+                  </div>
+                  <Badge variant="outline" className="ml-auto">
+                    {policies.length} policies
+                  </Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="space-y-3">
+                  <div className="flex items-center">
+                    <Button variant="outline" size="sm" className="ml-auto" onClick={() => setShowPolicyDialog(true)}>
+                      <Plus className="h-4 w-4 mr-1" /> New Policy
+                    </Button>
+                  </div>
+                  {rbacLoading && (
+                    <div className="text-sm text-muted-foreground">Loading policies…</div>
+                  )}
+                  {!rbacLoading && policies.length === 0 && (
+                    <div className="text-sm text-muted-foreground border rounded p-3">No policies yet.</div>
+                  )}
+                  <div className="space-y-2">
+                    {policies.map((p) => (
+                      <div key={p.id} className="p-3 border rounded">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{p.name}</div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {p.subjectType}{p.subjectId ? `:${p.subjectId}` : ''} → {p.resource}:{p.action}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <Badge variant="outline" className="text-xs">{p.effect}</Badge>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingPolicy(p);
+                                setPolicyForm({
+                                  name: p.name,
+                                  description: p.description || '',
+                                  effect: p.effect,
+                                  subjectType: p.subjectType,
+                                  subjectId: p.subjectId || '',
+                                  resource: p.resource,
+                                  action: p.action,
+                                  conditionsText: p.conditions ? JSON.stringify(p.conditions, null, 2) : '{\n  \n}'
+                                });
+                                setShowPolicyDialog(true);
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={async () => {
+                                if (!confirm(`Delete policy "${p.name}"?`)) return;
+                                try {
+                                  await policyService.remove(p.id);
+                                  setPolicies(prev => prev.filter(x => x.id !== p.id));
+                                  toast.success('Policy deleted');
+                                } catch (e) {
+                                  toast.error('Failed to delete policy');
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+            
 
             {/* Departments */}
             <AccordionItem value="departments" className="border rounded-lg">
@@ -1655,6 +2009,51 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Assign Role to User Dialog */}
+      <Dialog open={showAssignRoleDialog} onOpenChange={(open) => { setShowAssignRoleDialog(open); if (!open) { setAssignRole(null); setSelectedUserId(''); setAssignUsers([]); setAssignPrimary(false); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Role to User</DialogTitle>
+            <DialogDescription>
+              {assignRole ? `Select a user to assign the role "${assignRole.name}".` : 'Select a user to assign the role.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>User</Label>
+              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select user" />
+                </SelectTrigger>
+                <SelectContent>
+                  {assignUsers.map(u => (
+                    <SelectItem key={u.id} value={u.id}>{u.firstName} {u.lastName} — {u.email}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch id="primary-role" checked={assignPrimary} onCheckedChange={(c) => setAssignPrimary(!!c)} />
+              <Label htmlFor="primary-role">Set as primary role</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAssignRoleDialog(false)}>Cancel</Button>
+            <Button onClick={async () => {
+              if (!assignRole || !selectedUserId) return;
+              try {
+                await roleService.assignToUser(assignRole.id, selectedUserId, assignPrimary);
+                setShowAssignRoleDialog(false);
+                setAssignRole(null); setSelectedUserId(''); setAssignUsers([]); setAssignPrimary(false);
+                toast.success('Role assigned to user');
+              } catch (e) {
+                toast.error('Failed to assign role');
+              }
+            }} disabled={!assignRole || !selectedUserId}>Assign Role</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Icon Picker Dialog */}
       <Dialog open={showIconPicker} onOpenChange={setShowIconPicker}>
         <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
@@ -1830,6 +2229,230 @@ export default function SettingsPage() {
             >
               {editingTemplate ? 'Update Template' : 'Create Template'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Role Dialog */}
+      <Dialog open={showRoleDialog} onOpenChange={(open) => { setShowRoleDialog(open); if (!open) { setEditingRole(null); setRoleForm({ name: '', description: '' }); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingRole ? 'Edit Role' : 'Create Role'}</DialogTitle>
+            <DialogDescription>{editingRole ? 'Update role properties.' : 'Define a new role.'}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="roleName">Name</Label>
+              <Input id="roleName" value={roleForm.name} onChange={(e) => setRoleForm(prev => ({ ...prev, name: e.target.value }))} disabled={!!editingRole?.isSystem} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="roleDesc">Description</Label>
+              <Textarea id="roleDesc" value={roleForm.description} onChange={(e) => setRoleForm(prev => ({ ...prev, description: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRoleDialog(false)}>Cancel</Button>
+            {editingRole ? (
+              <Button onClick={async () => {
+                try {
+                  const updated = await roleService.update(editingRole.id, { name: roleForm.name, description: roleForm.description || undefined });
+                  setRoles(prev => prev.map(r => r.id === updated.id ? { ...r, ...updated } : r));
+                  setShowRoleDialog(false);
+                  setEditingRole(null);
+                  setRoleForm({ name: '', description: '' });
+                  toast.success('Role updated');
+                } catch (e) {
+                  toast.error('Failed to update role');
+                }
+              }} disabled={!roleForm.name.trim()}>Update Role</Button>
+            ) : (
+              <Button onClick={async () => {
+                try {
+                  const created = await roleService.create({ name: roleForm.name, description: roleForm.description || undefined });
+                  setRoles(prev => [...prev, created]);
+                  setShowRoleDialog(false);
+                  setRoleForm({ name: '', description: '' });
+                  toast.success('Role created');
+                } catch (e) {
+                  toast.error('Failed to create role');
+                }
+              }} disabled={!roleForm.name.trim()}>Create Role</Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permission Dialog */}
+      <Dialog open={showPermissionDialog} onOpenChange={(open) => { setShowPermissionDialog(open); if (!open) { setEditingPermission(null); setPermissionForm({ key: '', description: '' }); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingPermission ? 'Edit Permission' : 'Create Permission'}</DialogTitle>
+            <DialogDescription>{editingPermission ? 'Update permission description.' : 'Add a permission key like tickets:read.'}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="permKey">Key</Label>
+              <Input id="permKey" value={permissionForm.key} onChange={(e) => setPermissionForm(prev => ({ ...prev, key: e.target.value }))} placeholder="resource:action" disabled={!!editingPermission} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="permDesc">Description</Label>
+              <Textarea id="permDesc" value={permissionForm.description} onChange={(e) => setPermissionForm(prev => ({ ...prev, description: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPermissionDialog(false)}>Cancel</Button>
+            {editingPermission ? (
+              <Button onClick={async () => {
+                try {
+                  const updated = await permissionService.update(editingPermission.id, { description: permissionForm.description || undefined });
+                  setPermissions(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+                  setShowPermissionDialog(false);
+                  setEditingPermission(null);
+                  setPermissionForm({ key: '', description: '' });
+                  toast.success('Permission updated');
+                } catch (e) {
+                  toast.error('Failed to update permission');
+                }
+              }}>Update Permission</Button>
+            ) : (
+              <Button onClick={async () => {
+                try {
+                  const created = await permissionService.create({ key: permissionForm.key, description: permissionForm.description || undefined });
+                  setPermissions(prev => [...prev, created]);
+                  setShowPermissionDialog(false);
+                  setPermissionForm({ key: '', description: '' });
+                  toast.success('Permission created');
+                } catch (e) {
+                  toast.error('Failed to create permission');
+                }
+              }} disabled={!permissionForm.key.trim()}>Create Permission</Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Policy Dialog */}
+      <Dialog open={showPolicyDialog} onOpenChange={(open) => { setShowPolicyDialog(open); if (!open) { setEditingPolicy(null); setPolicyForm({ name: '', description: '', effect: 'ALLOW', subjectType: 'ROLE', subjectId: '', resource: '', action: '', conditionsText: '{\n  \n}' }); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingPolicy ? 'Edit Access Policy' : 'Create Access Policy'}</DialogTitle>
+            <DialogDescription>{editingPolicy ? 'Update ABAC rule.' : 'Define ABAC rule for a subject and resource/action.'}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Name</Label>
+                <Input value={policyForm.name} onChange={(e) => setPolicyForm(prev => ({ ...prev, name: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Effect</Label>
+                <Select value={policyForm.effect} onValueChange={(v) => setPolicyForm(prev => ({ ...prev, effect: v as any }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALLOW">ALLOW</SelectItem>
+                    <SelectItem value="DENY">DENY</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Description</Label>
+              <Textarea value={policyForm.description} onChange={(e) => setPolicyForm(prev => ({ ...prev, description: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label>Subject Type</Label>
+                <Select value={policyForm.subjectType} onValueChange={(v) => setPolicyForm(prev => ({ ...prev, subjectType: v as any }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ROLE">ROLE</SelectItem>
+                    <SelectItem value="USER">USER</SelectItem>
+                    <SelectItem value="DEPARTMENT">DEPARTMENT</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Subject ID (optional)</Label>
+                <Input value={policyForm.subjectId} onChange={(e) => setPolicyForm(prev => ({ ...prev, subjectId: e.target.value }))} placeholder="roleId/userId/departmentId" />
+              </div>
+              <div className="space-y-1">
+                <Label>Resource</Label>
+                <Input value={policyForm.resource} onChange={(e) => setPolicyForm(prev => ({ ...prev, resource: e.target.value }))} placeholder="tickets" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label>Action</Label>
+                <Input value={policyForm.action} onChange={(e) => setPolicyForm(prev => ({ ...prev, action: e.target.value }))} placeholder="read" />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label>Conditions (JSON)</Label>
+                <Textarea rows={4} value={policyForm.conditionsText} onChange={(e) => setPolicyForm(prev => ({ ...prev, conditionsText: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPolicyDialog(false)}>Cancel</Button>
+            {editingPolicy ? (
+              <Button onClick={async () => {
+                try {
+                  let conditions: any | null | undefined = undefined;
+                  const trimmed = policyForm.conditionsText.trim();
+                  if (trimmed) {
+                    try { conditions = JSON.parse(trimmed); } catch { toast.error('Conditions must be valid JSON'); return; }
+                  } else {
+                    conditions = null;
+                  }
+                  const updated = await policyService.update(editingPolicy.id, {
+                    name: policyForm.name,
+                    description: policyForm.description || undefined,
+                    effect: policyForm.effect,
+                    subjectType: policyForm.subjectType,
+                    subjectId: policyForm.subjectId || undefined,
+                    resource: policyForm.resource,
+                    action: policyForm.action,
+                    conditions,
+                  } as any);
+                  setPolicies(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+                  setShowPolicyDialog(false);
+                  setEditingPolicy(null);
+                  setPolicyForm({ name: '', description: '', effect: 'ALLOW', subjectType: 'ROLE', subjectId: '', resource: '', action: '', conditionsText: '{\n  \n}' });
+                  toast.success('Policy updated');
+                } catch (e) {
+                  toast.error('Failed to update policy');
+                }
+              }} disabled={!policyForm.name.trim() || !policyForm.resource.trim() || !policyForm.action.trim()}>Update Policy</Button>
+            ) : (
+              <Button onClick={async () => {
+                try {
+                  let conditions: any | undefined = undefined;
+                  const trimmed = policyForm.conditionsText.trim();
+                  if (trimmed) {
+                    try { conditions = JSON.parse(trimmed); } catch { toast.error('Conditions must be valid JSON'); return; }
+                  }
+                  const created = await policyService.create({
+                    name: policyForm.name,
+                    description: policyForm.description || undefined,
+                    effect: policyForm.effect,
+                    subjectType: policyForm.subjectType,
+                    subjectId: policyForm.subjectId || undefined,
+                    resource: policyForm.resource,
+                    action: policyForm.action,
+                    conditions,
+                  } as any);
+                  setPolicies(prev => [created, ...prev]);
+                  setShowPolicyDialog(false);
+                  setPolicyForm({ name: '', description: '', effect: 'ALLOW', subjectType: 'ROLE', subjectId: '', resource: '', action: '', conditionsText: '{\n  \n}' });
+                  toast.success('Policy created');
+                } catch (e) {
+                  toast.error('Failed to create policy');
+                }
+              }} disabled={!policyForm.name.trim() || !policyForm.resource.trim() || !policyForm.action.trim()}>Create Policy</Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

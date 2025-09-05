@@ -186,8 +186,10 @@ router.put('/:id', authenticate, requireAgent, async (req, res) => {
       });
     }
 
-    // Only allow updates if user is the author or admin
-    if (existingArticle.authorId !== userId && (req as any).user.role !== 'admin') {
+    // Only allow updates if user is the author or admin via RBAC
+    const requester = (req as any).user;
+    const isAdmin = Array.isArray(requester?.roles) && requester.roles.some((r: any) => r?.role?.name === 'admin');
+    if (existingArticle.authorId !== userId && !isAdmin) {
       return res.status(403).json({
         success: false,
         error: 'Insufficient permissions to update this article'
@@ -248,8 +250,10 @@ router.delete('/:id', authenticate, requireAgent, async (req, res) => {
       });
     }
 
-    // Only allow deletion if user is the author or admin
-    if (article.authorId !== userId && (req as any).user.role !== 'admin') {
+    // Only allow deletion if user is the author or admin via RBAC
+    const requester = (req as any).user;
+    const isAdmin = Array.isArray(requester?.roles) && requester.roles.some((r: any) => r?.role?.name === 'admin');
+    if (article.authorId !== userId && !isAdmin) {
       return res.status(403).json({
         success: false,
         error: 'Insufficient permissions to delete this article'

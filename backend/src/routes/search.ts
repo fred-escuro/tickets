@@ -131,8 +131,10 @@ router.get('/', authenticate, async (req, res) => {
       totalResults += kbCount;
     }
 
-    // Search users (admin only)
-    if ((type === 'all' || type === 'users') && (req as any).user.role === 'admin') {
+    // Search users (admin only via RBAC)
+    const requester = (req as any).user;
+    const isAdmin = Array.isArray(requester?.roles) && requester.roles.some((r: any) => r?.role?.name === 'admin');
+    if ((type === 'all' || type === 'users') && isAdmin) {
       const userWhere: any = {
         OR: [
           { firstName: { contains: searchTerm, mode: 'insensitive' } },
@@ -153,7 +155,7 @@ router.get('/', authenticate, async (req, res) => {
             lastName: true,
             middleName: true,
             email: true,
-            role: true,
+            // role column deprecated; include roles relation if needed
             department: true,
             avatar: true,
             isAgent: true,
@@ -272,8 +274,10 @@ router.get('/suggestions', authenticate, async (req, res) => {
       })));
     }
 
-    // User suggestions (admin only)
-    if ((type === 'all' || type === 'users') && (req as any).user.role === 'admin') {
+    // User suggestions (admin only via RBAC)
+    const requester = (req as any).user;
+    const isAdmin = Array.isArray(requester?.roles) && requester.roles.some((r: any) => r?.role?.name === 'admin');
+    if ((type === 'all' || type === 'users') && isAdmin) {
       const userSuggestions = await prisma.user.findMany({
         where: {
           OR: [
@@ -288,8 +292,7 @@ router.get('/suggestions', authenticate, async (req, res) => {
           firstName: true,
           lastName: true,
           middleName: true,
-          email: true,
-          role: true
+          email: true
         },
         take: 5
       });
@@ -360,7 +363,7 @@ router.get('/stats', authenticate, async (req, res) => {
           ]
         }
       }),
-      (req as any).user.role === 'admin' ? prisma.user.count({
+      (Array.isArray((req as any).user?.roles) && (req as any).user.roles.some((r: any) => r?.role?.name === 'admin')) ? prisma.user.count({
         where: {
           OR: [
             { firstName: { contains: searchTerm, mode: 'insensitive' } },

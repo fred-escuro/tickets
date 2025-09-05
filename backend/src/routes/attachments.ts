@@ -210,8 +210,10 @@ router.delete('/:id', authenticate, async (req, res) => {
       });
     }
 
-    // Only allow deletion if user is the uploader or admin
-    if (attachment.uploadedBy !== userId && (req as any).user.role !== 'admin') {
+    // Only allow deletion if user is the uploader or admin via RBAC
+    const requester = (req as any).user;
+    const isAdmin = Array.isArray(requester?.roles) && requester.roles.some((r: any) => r?.role?.name === 'admin');
+    if (attachment.uploadedBy !== userId && !isAdmin) {
       return res.status(403).json({
         success: false,
         error: 'Insufficient permissions to delete this attachment'

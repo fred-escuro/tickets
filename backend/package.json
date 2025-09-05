@@ -14,7 +14,8 @@
     "db:studio": "prisma studio",
     "db:seed": "ts-node src/scripts/seed.ts",
     "db:reset": "ts-node src/scripts/resetAndSeed.ts",
-    "db:seed-ticket-system": "ts-node src/scripts/seedTicketSystem.ts"
+    "db:seed-ticket-system": "ts-node src/scripts/seedTicketSystem.ts",
+    "db:seed-rbac-abac": "ts-node src/scripts/seedRbacAbac.ts"
   },
   "keywords": ["ticketing", "helpdesk", "support", "api"],
   "author": "",

@@ -11,7 +11,6 @@ export interface User extends BaseEntity {
   lastName: string;
   middleName?: string;
   email: string;
-  role: string;
   department?: string;
   avatar?: string;
   phone?: string;
@@ -26,7 +25,6 @@ export interface CreateUserRequest {
   middleName?: string;
   email: string;
   password: string;
-  role?: string;
   department?: string;
   avatar?: string;
   phone?: string;
@@ -40,7 +38,6 @@ export interface UpdateUserRequest {
   lastName?: string;
   middleName?: string;
   email?: string;
-  role?: string;
   department?: string;
   avatar?: string;
   phone?: string;
@@ -55,7 +52,7 @@ export interface LoginRequest {
 }
 
 export interface AuthResponse {
-  user: Omit<User, 'password'>;
+  user: Omit<User, 'password'> & { roles?: Array<{ isPrimary?: boolean; role: { id: string; name: string } }>; };
   token: string;
   refreshToken: string;
 }
@@ -262,7 +259,7 @@ export interface FileUploadConfig {
 export interface JwtPayload {
   userId: string;
   email: string;
-  role: string;
+  role?: string;
   iat?: number;
   exp?: number;
 }
@@ -274,4 +271,99 @@ export interface AuthenticatedRequest extends Request {
 
 export interface AuthorizedRequest extends AuthenticatedRequest {
   user: User;
+}
+
+// RBAC/ABAC & Department Types
+
+export interface Department extends BaseEntity {
+  name: string;
+  description?: string;
+  managerId?: string;
+  parentId?: string;
+}
+
+export interface CreateDepartmentRequest {
+  name: string;
+  description?: string;
+  managerId?: string;
+  parentId?: string;
+}
+
+export interface UpdateDepartmentRequest {
+  name?: string;
+  description?: string;
+  managerId?: string | null;
+  parentId?: string | null;
+}
+
+export interface Role extends BaseEntity {
+  name: string;
+  description?: string;
+  isSystem: boolean;
+}
+
+export interface CreateRoleRequest {
+  name: string;
+  description?: string;
+  isSystem?: boolean;
+  permissionIds?: string[];
+}
+
+export interface UpdateRoleRequest {
+  name?: string;
+  description?: string;
+  isSystem?: boolean;
+}
+
+export interface Permission extends BaseEntity {
+  key: string; // e.g. "tickets:read"
+  description?: string;
+}
+
+export interface CreatePermissionRequest {
+  key: string;
+  description?: string;
+}
+
+export interface UpdatePermissionRequest {
+  description?: string;
+}
+
+export type AccessEffect = 'ALLOW' | 'DENY';
+export type PolicySubjectType = 'ROLE' | 'USER' | 'DEPARTMENT';
+
+export interface AccessPolicy extends BaseEntity {
+  name: string;
+  description?: string;
+  effect: AccessEffect;
+  subjectType: PolicySubjectType;
+  subjectId?: string;
+  resource: string;
+  action: string;
+  conditions?: Record<string, any>;
+  isActive: boolean;
+}
+
+export interface CreateAccessPolicyRequest {
+  name: string;
+  description?: string;
+  effect?: AccessEffect;
+  subjectType: PolicySubjectType;
+  subjectId?: string;
+  resource: string;
+  action: string;
+  conditions?: Record<string, any>;
+  isActive?: boolean;
+}
+
+export interface UpdateAccessPolicyRequest {
+  name?: string;
+  description?: string;
+  effect?: AccessEffect;
+  subjectType?: PolicySubjectType;
+  subjectId?: string | null;
+  resource?: string;
+  action?: string;
+  conditions?: Record<string, any> | null;
+  isActive?: boolean;
 }
