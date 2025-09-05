@@ -238,7 +238,8 @@ model TicketStatus {
 
   // Relations
   tickets     Ticket[]
-  statusHistory TicketStatusHistory[]
+  statusHistory TicketStatusHistory[] @relation("CurrentStatus")
+  previousStatusHistory TicketStatusHistory[] @relation("PreviousStatus")
 
   @@map("ticket_statuses")
 }
@@ -247,6 +248,7 @@ model TicketStatusHistory {
   id          String   @id @default(cuid())
   ticketId    String
   statusId    String
+  previousStatusId String?
   changedBy   String
   changedAt   DateTime @default(now())
   reason      String?  // Optional reason for status change
@@ -254,7 +256,8 @@ model TicketStatusHistory {
 
   // Relations
   ticket      Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  status      TicketStatus @relation(fields: [statusId], references: [id])
+  status      TicketStatus @relation("CurrentStatus", fields: [statusId], references: [id])
+  previousStatus TicketStatus? @relation("PreviousStatus", fields: [previousStatusId], references: [id])
   user        User @relation(fields: [changedBy], references: [id])
 
   @@map("ticket_status_history")

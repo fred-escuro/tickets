@@ -76,7 +76,8 @@ export const TicketStatusBadge: React.FC<TicketStatusBadgeProps> = ({
 
   return (
     <Badge 
-      className={`${ticketSystemService.getStatusColorClass(statusData.color || 'gray')} ${sizeClasses} ${className}`}
+      variant="outline"
+      className={`${ticketSystemService.getStatusColorClass((statusData as any).color || 'gray')} ${sizeClasses} ${className} hover:brightness-95`}
     >
       {icon && <span className="mr-1">{icon}</span>}
       {statusData.name || 'Unknown'}

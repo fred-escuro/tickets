@@ -11,6 +11,7 @@ import {
   TableRow 
 } from './ui/table';
 import { TicketService, type Ticket } from '@/lib/services/ticketService';
+import { ticketSystemService } from '@/lib/services/ticketSystemService';
 import { useApi } from '@/hooks/useApi';
 import { TicketStatusBadge } from './TicketStatusBadge';
 import { TicketStatusChange } from './TicketStatusChange';
@@ -18,7 +19,11 @@ import { PriorityBadge } from './PriorityBadge';
 import { toast } from 'sonner';
 
 
-export const TicketList = () => {
+type TicketListProps = {
+  showStatusChange?: boolean;
+};
+
+export const TicketList = ({ showStatusChange = true }: TicketListProps) => {
   // Fetch tickets from backend API
   const { 
     data: ticketsData, 
@@ -33,8 +38,8 @@ export const TicketList = () => {
   // Handle status change
   const handleStatusChange = async (ticketId: string, newStatusId: string, reason?: string, comment?: string) => {
     try {
-      // Persist status change to backend
-      await TicketService.updateTicket(ticketId, { statusId: newStatusId });
+      // Persist status change to backend with reason/comment
+      await TicketService.updateTicketStatus(ticketId, newStatusId, { reason, comment });
       toast.success('Status updated successfully');
       await fetchTickets();
     } catch (error) {
@@ -137,39 +142,33 @@ export const TicketList = () => {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <TicketStatusBadge status={ticket.status as any} size="sm" />
-                        <TicketStatusChange
-                          ticketId={ticket.id}
-                          currentStatus={typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name}
-                          currentStatusId={typeof (ticket as any).status === 'object' ? (ticket as any).status?.id : undefined}
-                          onStatusChange={(newStatusId, reason, comment) => 
-                            handleStatusChange(ticket.id, newStatusId, reason, comment)
-                          }
-                          className="ml-2"
-                        />
+                        {showStatusChange && (
+                          <TicketStatusChange
+                            ticketId={ticket.id}
+                            currentStatus={typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name}
+                            currentStatusId={typeof (ticket as any).status === 'object' ? (ticket as any).status?.id : undefined}
+                            onStatusChange={(newStatusId, reason, comment) => 
+                              handleStatusChange(ticket.id, newStatusId, reason, comment)
+                            }
+                            className="ml-2"
+                          />
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <PriorityBadge priority={ticket.priority as any} size="sm" />
+                      <PriorityBadge priority={ticket.priority as any} size="sm" className="hover:brightness-95" />
                     </TableCell>
                     <TableCell>
-                      {ticket.categoryInfo ? (
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className={`w-3 h-3 rounded-full ${
-                              ticket.categoryInfo.color === 'blue' ? 'bg-blue-500' :
-                              ticket.categoryInfo.color === 'green' ? 'bg-green-500' :
-                              ticket.categoryInfo.color === 'red' ? 'bg-red-500' :
-                              ticket.categoryInfo.color === 'yellow' ? 'bg-yellow-500' :
-                              ticket.categoryInfo.color === 'orange' ? 'bg-orange-500' :
-                              ticket.categoryInfo.color === 'purple' ? 'bg-purple-500' :
-                              'bg-gray-500'
-                            }`}
-                          />
-                          <span className="capitalize">{ticket.categoryInfo.name}</span>
-                        </div>
-                      ) : (
-                        <span className="capitalize">{ticket.category}</span>
-                      )}
+                      {(() => {
+                        const catObj = (ticket as any).categoryInfo || (typeof (ticket as any).category === 'object' ? (ticket as any).category : undefined);
+                        const catName = typeof (ticket as any).category === 'object' ? (ticket as any).category?.name : ((ticket as any).category || (ticket as any).categoryInfo?.name);
+                        const color = (catObj?.color || 'gray').toLowerCase();
+                        return (
+                          <Badge variant="outline" className={`${ticketSystemService.getCategoryColorClass(color)} text-xs rounded-full px-2.5 py-0.5 hover:brightness-95`}>
+                            <span className="capitalize font-medium">{typeof catName === 'string' ? catName : 'Unknown'}</span>
+                          </Badge>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {new Date(ticket.submittedAt).toLocaleDateString()}

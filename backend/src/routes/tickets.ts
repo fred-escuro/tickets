@@ -30,6 +30,16 @@ router.get('/', authenticate, async (req, res) => {
     // Build where clause
     const where: any = {};
 
+    // Scope results for non-agents to only their tickets (submitted or assigned)
+    const userId = (req as any).user.id;
+    const isAgent = (req as any).user.isAgent;
+    if (!isAgent) {
+      where.OR = [
+        { submittedBy: userId },
+        { assignedTo: userId }
+      ];
+    }
+
     if (status) where.status = status;
     if (priority) where.priority = priority;
     if (category) where.category = category;
@@ -87,6 +97,14 @@ router.get('/', authenticate, async (req, res) => {
             id: true,
             name: true,
             level: true
+          }
+        },
+        category: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            icon: true
           }
         },
         attachments: {
@@ -164,10 +182,13 @@ router.get('/:id', authenticate, async (req, res) => {
           }
         },
         status: {
-          select: { id: true, name: true, isResolved: true, isClosed: true }
+          select: { id: true, name: true, color: true, isResolved: true, isClosed: true }
         },
         priority: {
-          select: { id: true, name: true, level: true }
+          select: { id: true, name: true, color: true, level: true }
+        },
+        category: {
+          select: { id: true, name: true, color: true, icon: true }
         },
         comments: {
           include: {
@@ -400,32 +421,78 @@ router.put('/:id', authenticate, async (req, res) => {
     if (updateData.resolvedAt !== undefined) prismaUpdateData.resolvedAt = updateData.resolvedAt;
     if (updateData.assignedAt !== undefined) prismaUpdateData.assignedAt = updateData.assignedAt;
 
-    const updatedTicket = await prisma.ticket.update({
-      where: { id },
-      data: prismaUpdateData,
-      include: {
-        submitter: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            middleName: true,
-            email: true,
-            avatar: true
+    // If status changed, perform update and history creation in a single transaction
+    const performStatusHistory = updateData.statusId && updateData.statusId !== existingTicket.statusId;
+
+    const updatedTicket = await (performStatusHistory
+      ? prisma.$transaction(async (tx) => {
+          const updated = await tx.ticket.update({
+            where: { id },
+            data: prismaUpdateData,
+            include: {
+              submitter: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  middleName: true,
+                  email: true,
+                  avatar: true
+                }
+              },
+              assignee: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  middleName: true,
+                  email: true,
+                  avatar: true
+                }
+              }
+            }
+          });
+
+          await tx.ticketStatusHistory.create({
+            data: {
+              ticketId: id,
+              statusId: updateData.statusId as string,
+              previousStatusId: existingTicket.statusId,
+              changedBy: userId,
+              reason: (updateData as any).statusChangeReason || undefined,
+              comment: (updateData as any).statusChangeComment || undefined
+            }
+          });
+
+          return updated;
+        })
+      : prisma.ticket.update({
+          where: { id },
+          data: prismaUpdateData,
+          include: {
+            submitter: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                email: true,
+                avatar: true
+              }
+            },
+            assignee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                email: true,
+                avatar: true
+              }
+            }
           }
-        },
-        assignee: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            middleName: true,
-            email: true,
-            avatar: true
-          }
-        }
-      }
-    });
+        })
+    );
 
     return res.json({
       success: true,
@@ -438,6 +505,45 @@ router.put('/:id', authenticate, async (req, res) => {
       success: false,
       error: 'Failed to update ticket'
     });
+  }
+});
+
+// Get ticket status history
+router.get('/:id/status-history', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const ticket = await prisma.ticket.findUnique({ where: { id }, select: { id: true } });
+    if (!ticket) {
+      return res.status(404).json({ success: false, error: 'Ticket not found' });
+    }
+
+    const history = await prisma.ticketStatusHistory.findMany({
+      where: { ticketId: id },
+      include: {
+        status: { select: { id: true, name: true, color: true } },
+        previousStatus: { select: { id: true, name: true, color: true } },
+        user: { select: { id: true, firstName: true, lastName: true } }
+      },
+      orderBy: { changedAt: 'desc' }
+    });
+
+    const mapped = history.map(h => ({
+      id: h.id,
+      statusId: h.statusId,
+      statusName: h.status?.name || 'Unknown',
+      previousStatusId: h.previousStatusId || null,
+      previousStatusName: h.previousStatus?.name || null,
+      changedBy: h.user ? `${h.user.firstName} ${h.user.lastName}` : 'Unknown',
+      changedAt: h.changedAt,
+      reason: h.reason || undefined,
+      comment: h.comment || undefined
+    }));
+
+    return res.json({ success: true, data: mapped });
+  } catch (error) {
+    console.error('Get status history error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to get status history' });
   }
 });
 
@@ -488,6 +594,7 @@ router.get('/stats/overview', authenticate, async (req, res) => {
   try {
     const userId = (req as any).user.id;
     const isAgent = (req as any).user.isAgent;
+    const { range = 'today' } = req.query as { range?: string };
 
     let whereClause: any = {};
 
@@ -509,18 +616,47 @@ router.get('/stats/overview', authenticate, async (req, res) => {
       return acc;
     }, {} as Record<string, string>);
 
+    // Range handling
+    const now = new Date();
+    let rangeStart: Date;
+    const rangeLower = typeof range === 'string' ? range.toLowerCase() : 'today';
+    if (rangeLower === '7d') {
+      rangeStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (rangeLower === '30d') {
+      rangeStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    } else if (rangeLower === 'all') {
+      // Special case: no date filtering for range-based metrics
+      rangeStart = new Date(0);
+    } else {
+      rangeStart = new Date(now);
+      rangeStart.setHours(0, 0, 0, 0); // today
+    }
+
+    const notClosedWhere = { ...whereClause, NOT: { statusId: statusMap.closed || statusMap['closed'] } };
+    const notResolvedClosedWhere = { ...whereClause, NOT: { statusId: { in: [statusMap.resolved || statusMap['resolved'], statusMap.closed || statusMap['closed']] } } };
+
     const [
       totalTickets,
       openTickets,
       inProgressTickets,
       resolvedTickets,
-      closedTickets
+      closedTickets,
+      newTickets,
+      resolvedInRange,
+      overdueTickets,
+      unassignedTickets,
+      slaAtRiskTickets
     ] = await Promise.all([
       prisma.ticket.count({ where: whereClause }),
       prisma.ticket.count({ where: { ...whereClause, statusId: statusMap.open || statusMap['open'] } }),
       prisma.ticket.count({ where: { ...whereClause, statusId: statusMap.inprogress || statusMap['inprogress'] } }),
       prisma.ticket.count({ where: { ...whereClause, statusId: statusMap.resolved || statusMap['resolved'] } }),
-      prisma.ticket.count({ where: { ...whereClause, statusId: statusMap.closed || statusMap['closed'] } })
+      prisma.ticket.count({ where: { ...whereClause, statusId: statusMap.closed || statusMap['closed'] } }),
+      prisma.ticket.count({ where: rangeLower === 'all' ? { ...whereClause } : { ...whereClause, submittedAt: { gte: rangeStart } } }),
+      prisma.ticket.count({ where: rangeLower === 'all' ? { ...whereClause, resolvedAt: { not: null } } : { ...whereClause, resolvedAt: { gte: rangeStart } } }),
+      prisma.ticket.count({ where: { ...notResolvedClosedWhere, dueDate: { lt: now } } }),
+      prisma.ticket.count({ where: { ...notClosedWhere, assignedTo: null } }),
+      prisma.ticket.count({ where: { ...notResolvedClosedWhere, slaResponseAt: { lt: now } } })
     ]);
 
     const stats = {
@@ -528,7 +664,15 @@ router.get('/stats/overview', authenticate, async (req, res) => {
       open: openTickets,
       inProgress: inProgressTickets,
       resolved: resolvedTickets,
-      closed: closedTickets
+      closed: closedTickets,
+      openInProgress: openTickets + inProgressTickets,
+      new: newTickets,
+      resolvedInRange,
+      overdue: overdueTickets,
+      unassigned: unassignedTickets,
+      slaAtRisk: slaAtRiskTickets,
+      range: typeof range === 'string' ? range : 'today',
+      lastUpdated: now
     };
 
     return res.json({

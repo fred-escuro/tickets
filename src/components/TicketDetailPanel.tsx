@@ -32,8 +32,12 @@ export const TicketDetailPanel: React.FC<Props> = ({ ticketId }) => {
     return ticket ? (typeof ticket.status === 'string' ? ticket.status : ticket.status?.name || '') : '';
   }, [ticket]);
 
-  const handleStatusChange = async (newStatusId: string) => {
-    const res = await apiClient.put(API_ENDPOINTS.TICKETS.UPDATE(ticketId), { statusId: newStatusId });
+  const handleStatusChange = async (newStatusId: string, reason?: string, comment?: string) => {
+    const res = await apiClient.put(API_ENDPOINTS.TICKETS.UPDATE(ticketId), {
+      statusId: newStatusId,
+      ...(reason ? { statusChangeReason: reason } : {}),
+      ...(comment ? { statusChangeComment: comment } : {})
+    });
     if (!res.success) { toast.error(res.error || 'Failed to update status'); return; }
     toast.success('Status updated');
     await fetchTicket();
@@ -83,7 +87,7 @@ export const TicketDetailPanel: React.FC<Props> = ({ ticketId }) => {
                     ticketId={ticket.id}
                     currentStatus={statusName}
                     currentStatusId={typeof ticket.status === 'object' ? ticket.status?.id : undefined}
-                    onStatusChange={async (id) => { await handleStatusChange(id); }}
+                    onStatusChange={async (id, reason, comment) => { await handleStatusChange(id, reason, comment); }}
                   />
                 </div>
               </div>

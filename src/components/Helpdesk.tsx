@@ -2,18 +2,24 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { ArrowRight, Headphones, Clock, AlertCircle, CheckCircle, MessageSquare, Loader2 } from 'lucide-react';
+import { ArrowRight, Headphones, Clock, AlertCircle, CheckCircle, MessageSquare, Loader2, AlertTriangle, User, Timer } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { type FC } from 'react';
 import { Link } from 'react-router-dom';
 import { TicketService, type Ticket } from '@/lib/services/ticketService';
+import { ticketSystemService } from '@/lib/services/ticketSystemService';
 import { useApi } from '@/hooks/useApi';
 import { TicketStatusBadge } from './TicketStatusBadge';
 import { TicketStatusChange } from './TicketStatusChange';
 import { PriorityBadge } from './PriorityBadge';
 import { toast } from 'sonner';
 
-export const Helpdesk: FC = () => {
+type HelpdeskProps = {
+  showStatusChange?: boolean;
+};
+
+export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
 
   
 
@@ -26,15 +32,17 @@ export const Helpdesk: FC = () => {
 
   // Fetch ticket statistics
   const { data: statsData, loading: statsLoading, error: statsError, execute: fetchStats } = useApi(
-    TicketService.getTicketStats,
+    (range?: string) => TicketService.getTicketStats(range),
     { autoExecute: false }
   );
 
   // Use useEffect to fetch data on component mount (only once)
+  const [statsRange, setStatsRange] = useState<'today'|'7d'|'30d'|'all'>('today');
+
   useEffect(() => {
     fetchTickets();
-    fetchStats();
-  }, []); // Empty dependency array - only run once on mount
+    fetchStats(statsRange);
+  }, [statsRange]); // refetch when range changes
 
 
 
@@ -53,7 +61,7 @@ export const Helpdesk: FC = () => {
     const s = getStatusName(t).toUpperCase();
     return s === 'RESOLVED' || s === 'CLOSED';
   });
-  const recentTickets = tickets.slice(0, 3);
+  const recentTickets = tickets.slice(0, 4);
 
 
 
@@ -127,6 +135,17 @@ export const Helpdesk: FC = () => {
       hour: '2-digit',
       minute: '2-digit'
     }).format(date);
+  };
+
+  const getSubmitterName = (t: any) => {
+    if (t.submitter && (t.submitter.firstName || t.submitter.lastName)) {
+      return `${t.submitter.firstName || ''}${t.submitter.firstName && t.submitter.lastName ? ' ' : ''}${t.submitter.lastName || ''}`.trim();
+    }
+    if (t.assignee && (t.assignee.firstName || t.assignee.lastName)) {
+      // Fallback just in case submitter is missing but we still want a name-like value
+      return `${t.assignee.firstName || ''}${t.assignee.firstName && t.assignee.lastName ? ' ' : ''}${t.assignee.lastName || ''}`.trim();
+    }
+    return 'Unknown';
   };
 
   const getStatusDisplayName = (status: string) => {
@@ -227,11 +246,19 @@ export const Helpdesk: FC = () => {
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle className="text-lg font-semibold">Helpdesk</CardTitle>
         <div className="flex items-center gap-2">
+          <Select value={statsRange} onValueChange={(v) => setStatsRange(v as any)}>
+            <SelectTrigger className="h-8 w-[120px]">
+              <SelectValue placeholder="Range" />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="7d">Last 7d</SelectItem>
+              <SelectItem value="30d">Last 30d</SelectItem>
+              <SelectItem value="all">All Tickets</SelectItem>
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={refreshData} className="h-8">
             Refresh
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => fetchStats()} className="h-8">
-            Stats
           </Button>
           <Link to="/tickets">
             <Button variant="ghost" size="sm" className="gap-2 h-8">
@@ -244,32 +271,69 @@ export const Helpdesk: FC = () => {
       <CardContent className="space-y-4">
 
 
-        {/* Summary Stats */}
-        <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
-
-          <div className="space-y-1 p-4 rounded-lg bg-muted/30 border text-center">
-            <p className="text-2xl font-bold text-blue-700">
-              {statsLoading && !stats ? (
-                <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-              ) : stats && typeof stats.open === 'number' && typeof stats.inProgress === 'number' 
-                ? stats.open + stats.inProgress 
-                : openTickets.length}
-            </p>
-            <p className="text-sm font-medium text-gray-700">
-              {statsLoading && !stats ? 'Loading...' : stats ? 'Open Tickets' : 'Open Tickets (from tickets)'}
-            </p>
-          </div>
-          <div className="space-y-1 p-4 rounded-lg bg-muted/30 border text-center">
-            <p className="text-2xl font-bold text-green-700">
-              {statsLoading && !stats ? (
-                <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-              ) : stats && typeof stats.resolved === 'number' && typeof stats.closed === 'number'
-                ? stats.resolved + stats.closed 
-                : resolvedTickets.length}
-            </p>
-            <p className="text-sm font-medium text-gray-700">
-              {statsLoading && !stats ? 'Loading...' : stats ? 'Resolved' : 'Resolved (from tickets)'}
-            </p>
+        {/* Summary Stats - Enhanced */}
+        <div className="flex items-center justify-between">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 flex-1 pr-3">
+            {/* Open + In Progress */}
+            <button type="button" className="space-y-1 p-4 rounded-lg bg-muted/30 border text-left hover:bg-muted/50 transition">
+              <p className="text-2xl font-bold text-blue-700">
+                {statsLoading && !stats ? <Loader2 className="h-4 w-4 animate-spin" /> : (stats?.openInProgress ?? (openTickets.length))}
+              </p>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" />
+                <p className="text-sm font-medium text-gray-700">Open + In Progress</p>
+              </div>
+            </button>
+            {/* New in Range */}
+            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border">
+              <p className="text-2xl font-bold text-purple-700">
+                {statsLoading && !stats ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : (stats?.new ?? 0)}
+              </p>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <MessageSquare className="h-3.5 w-3.5" />
+                <p className="text-sm font-medium text-gray-700">New {statsRange === 'today' ? 'Today' : statsRange.toUpperCase()}</p>
+              </div>
+            </div>
+            {/* Resolved in Range */}
+            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border">
+              <p className="text-2xl font-bold text-green-700">
+                {statsLoading && !stats ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : (stats?.resolvedInRange ?? 0)}
+              </p>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <CheckCircle className="h-3.5 w-3.5" />
+                <p className="text-sm font-medium text-gray-700">Resolved {statsRange === 'today' ? 'Today' : statsRange.toUpperCase()}</p>
+              </div>
+            </div>
+            {/* Overdue */}
+            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border">
+              <p className="text-2xl font-bold text-red-700">
+                {statsLoading && !stats ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : (stats?.overdue ?? 0)}
+              </p>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                <p className="text-sm font-medium text-gray-700">Overdue</p>
+              </div>
+            </div>
+            {/* Unassigned */}
+            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border">
+              <p className="text-2xl font-bold text-orange-700">
+                {statsLoading && !stats ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : (stats?.unassigned ?? 0)}
+              </p>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <User className="h-3.5 w-3.5" />
+                <p className="text-sm font-medium text-gray-700">Unassigned</p>
+              </div>
+            </div>
+            {/* SLA At Risk */}
+            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border">
+              <p className="text-2xl font-bold text-pink-700">
+                {statsLoading && !stats ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : (stats?.slaAtRisk ?? 0)}
+              </p>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Timer className="h-3.5 w-3.5" />
+                <p className="text-sm font-medium text-gray-700">SLA At Risk</p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -279,40 +343,36 @@ export const Helpdesk: FC = () => {
             <Headphones className="h-4 w-4 text-muted-foreground" />
             <h4 className="text-sm font-medium">Recent Tickets</h4>
           </div>
-          
+
           {recentTickets.length > 0 ? (
-            <div className="space-y-2">
-              {recentTickets.map((ticket, index) => (
-                <div 
-                  key={ticket.id} 
-                  className="p-2 rounded-lg bg-muted/30 space-y-2"
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {recentTickets.map((ticket) => (
+                <div
+                  key={ticket.id}
+                  className="rounded-lg border bg-card text-card-foreground p-3 flex flex-col justify-between h-[116px]"
                 >
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium truncate text-foreground">{ticket.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        #{ticket.ticketNumber} • {formatDate(ticket.submittedAt)}
+                      <p className="text-xs font-medium line-clamp-2 leading-snug">{ticket.title}</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        #{ticket.ticketNumber} • {formatDate(ticket.submittedAt)} • Created by {getSubmitterName(ticket as any)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1 ml-2">
-                      <TicketStatusBadge status={(ticket as any).status as any} size="sm" />
-                      <TicketStatusChange
-                        ticketId={ticket.id}
-                        currentStatus={typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name}
-                        currentStatusId={typeof (ticket as any).status === 'object' ? (ticket as any).status?.id : undefined}
-                        onStatusChange={handleStatusChange}
-                        className="ml-1"
-                      />
-                    </div>
+                    <TicketStatusBadge status={(ticket as any).status as any} size="sm" />
                   </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className={`text-xs font-medium capitalize ${getPriorityColor(typeof (ticket as any).priority === 'string' ? (ticket as any).priority : (ticket as any).priority?.name || '')}`}>
-                      {getPriorityDisplayName(typeof (ticket as any).priority === 'string' ? (ticket as any).priority : (ticket as any).priority?.name || '')} Priority
-                    </span>
-                    <span className="text-xs text-muted-foreground capitalize">
-                      {ticket.category}
-                    </span>
+
+                  <div className="flex items-center justify-between mt-2">
+                    <PriorityBadge priority={(ticket as any).priority as any} size="sm" className="hover:brightness-95" />
+                    {(() => {
+                      const catObj = typeof (ticket as any).category === 'object' ? (ticket as any).category : (ticket as any).categoryInfo;
+                      const catName = typeof (ticket as any).category === 'object' ? (ticket as any).category?.name : ((ticket as any).category || (ticket as any).categoryInfo?.name);
+                      const color = (catObj?.color || 'gray').toLowerCase();
+                      return (
+                        <Badge variant="outline" className={`${ticketSystemService.getCategoryColorClass(color)} text-xs rounded-full px-2.5 py-0.5 hover:brightness-95`}>
+                          <span className="capitalize font-medium">{typeof catName === 'string' ? catName : 'Unknown'}</span>
+                        </Badge>
+                      );
+                    })()}
                   </div>
                 </div>
               ))}
@@ -327,7 +387,7 @@ export const Helpdesk: FC = () => {
 
         {/* Quick Actions */}
         <div className="pt-3 border-t">
-          <Link to="/helpdesk" className="block">
+          <Link to="/tickets?action=create" className="block">
             <Button variant="outline" size="sm" className="w-full justify-center gap-2 h-8">
               <Headphones className="h-3 w-3" />
               <span className="text-xs">Submit Ticket</span>

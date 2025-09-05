@@ -8,14 +8,18 @@ import {
   MessageSquare, 
   ChevronDown,
   ChevronUp,
-  History
+  History,
+  ArrowRight
 } from 'lucide-react';
 import { ticketSystemService, type TicketStatus } from '@/lib/services/ticketSystemService';
+import { TicketService } from '@/lib/services/ticketService';
 
 interface StatusHistoryEntry {
   id: string;
   statusId: string;
   statusName: string;
+  previousStatusId?: string | null;
+  previousStatusName?: string | null;
   changedBy: string;
   changedAt: string;
   reason?: string;
@@ -25,15 +29,21 @@ interface StatusHistoryEntry {
 interface TicketStatusHistoryProps {
   ticketId: string;
   className?: string;
+  defaultExpanded?: boolean;
+  maxItems?: number;
+  refreshToken?: number | string;
 }
 
 export const TicketStatusHistory: React.FC<TicketStatusHistoryProps> = ({
   ticketId,
-  className = ''
+  className = '',
+  defaultExpanded = false,
+  maxItems,
+  refreshToken
 }) => {
   const [history, setHistory] = useState<StatusHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(!!defaultExpanded);
   const [statuses, setStatuses] = useState<TicketStatus[]>([]);
 
   // Load status history
@@ -41,29 +51,13 @@ export const TicketStatusHistory: React.FC<TicketStatusHistoryProps> = ({
     const loadHistory = async () => {
       setLoading(true);
       try {
-        // This would call the backend API to get status history
-        // For now, we'll use mock data
-        const mockHistory: StatusHistoryEntry[] = [
-          {
-            id: '1',
-            statusId: 'status-1',
-            statusName: 'Open',
-            changedBy: 'John Doe',
-            changedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-            reason: 'Ticket created',
-            comment: 'Initial ticket submission'
-          },
-          {
-            id: '2',
-            statusId: 'status-2',
-            statusName: 'In Progress',
-            changedBy: 'Jane Smith',
-            changedAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
-            reason: 'Work started',
-            comment: 'Beginning investigation of the issue'
-          }
-        ];
-        setHistory(mockHistory);
+        const res = await TicketService.getTicketStatusHistory(ticketId);
+        if (res.success) {
+          const entries = Array.isArray(res.data) ? res.data : [];
+          setHistory(maxItems ? entries.slice(0, maxItems) as any : (entries as any));
+        } else {
+          setHistory([]);
+        }
       } catch (error) {
         console.error('Failed to load status history:', error);
       } finally {
@@ -71,10 +65,11 @@ export const TicketStatusHistory: React.FC<TicketStatusHistoryProps> = ({
       }
     };
 
-    if (expanded) {
+    // Load on mount and whenever we re-expand
+    if (expanded || defaultExpanded) {
       loadHistory();
     }
-  }, [ticketId, expanded]);
+  }, [ticketId, expanded, defaultExpanded, maxItems, refreshToken]);
 
   // Load statuses for color mapping
   useEffect(() => {
@@ -87,12 +82,13 @@ export const TicketStatusHistory: React.FC<TicketStatusHistoryProps> = ({
       }
     };
 
-    if (expanded) {
+    if (expanded || defaultExpanded) {
       loadStatuses();
     }
-  }, [expanded]);
+  }, [expanded, defaultExpanded, refreshToken]);
 
-  const getStatusColor = (statusName: string) => {
+  const getStatusColor = (statusName?: string | null) => {
+    if (!statusName) return 'bg-gray-100 text-gray-800 border-gray-200';
     const status = statuses.find(s => s.name === statusName);
     if (status) {
       return ticketSystemService.getStatusColorClass(status.color);
@@ -164,11 +160,15 @@ export const TicketStatusHistory: React.FC<TicketStatusHistoryProps> = ({
                   
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <Badge className={`${getStatusColor(entry.previousStatusName)} text-xs`}>
+                        {entry.previousStatusName || 'Unknown'}
+                      </Badge>
+                      <ArrowRight className="h-3 w-3 text-muted-foreground" />
                       <Badge className={`${getStatusColor(entry.statusName)} text-xs`}>
                         {entry.statusName}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground ml-1">
                         by {entry.changedBy}
                       </span>
                       <span className="text-xs text-muted-foreground">

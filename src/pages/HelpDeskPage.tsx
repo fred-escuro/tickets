@@ -153,6 +153,26 @@ const getCategoryIcon = (category: string, categoryInfo?: { color: string; icon?
   }
 };
 
+// Badge classes for categories aligned with settings color scheme
+const getCategoryBadgeColor = (categoryObj?: { color?: string } | null) => {
+  const color = categoryObj?.color?.toLowerCase();
+  switch (color) {
+    case 'blue':
+      return 'bg-blue-100 text-blue-700 border-blue-200';
+    case 'green':
+      return 'bg-green-100 text-green-700 border-green-200';
+    case 'red':
+      return 'bg-red-100 text-red-700 border-red-200';
+    case 'yellow':
+      return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+    case 'orange':
+      return 'bg-orange-100 text-orange-700 border-orange-200';
+    case 'purple':
+      return 'bg-purple-100 text-purple-700 border-purple-200';
+    default:
+      return 'bg-gray-100 text-gray-700 border-gray-200';
+  }
+};
 
 
 const formatDate = (date: Date | string) => {
@@ -233,7 +253,10 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
                          {/* Header with category, title, and ticket number */}
              <div className="flex items-start gap-3">
                <div className="group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg">
-                 {getCategoryIcon(ticket.category, ticket.categoryInfo)}
+                {getCategoryIcon(
+                  typeof (ticket as any).category === 'object' ? (ticket as any).category?.name || 'general' : (ticket as any).category || 'general',
+                  typeof (ticket as any).category === 'object' ? (ticket as any).category : (ticket as any).categoryInfo
+                )}
                </div>
                <div className="min-w-0 flex-1">
                  <h3 className="font-semibold text-base truncate group-hover:text-primary transition-colors duration-300">{ticket.title}</h3>
@@ -245,13 +268,13 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
             
             {/* Status badges row */}
             <div className="flex flex-row gap-2 items-center">
-              <Badge className={`${getStatusColor(typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name)} border text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
+              <Badge variant="outline" className={`${getStatusColor(typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name)} border text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm hover:brightness-95`}>
                 <div className="flex items-center gap-1">
                   {getStatusIcon(typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name)}
                   <span className="capitalize font-medium">{typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name || 'Unknown'}</span>
                 </div>
               </Badge>
-              <Badge className={`${getPriorityColor(typeof (ticket as any).priority === 'string' ? (ticket as any).priority : (ticket as any).priority?.name)} text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm font-medium`}>
+              <Badge variant="outline" className={`${getPriorityColor(typeof (ticket as any).priority === 'string' ? (ticket as any).priority : (ticket as any).priority?.name)} text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm font-medium hover:brightness-95`}>
                 {(typeof (ticket as any).priority === 'string' ? (ticket as any).priority : (ticket as any).priority?.name || 'Unknown').toUpperCase()}
               </Badge>
               {ticket.comments && ticket.comments.length > 0 && (
@@ -262,15 +285,21 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
                   </div>
                 </Badge>
               )}
-              {ticket.attachments && ticket.attachments.length > 0 && (
-                <Badge variant="secondary" className="text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm">
-                  <div className="flex items-center gap-1">
-                    <Paperclip className="h-3 w-3" />
-                    <span className="font-medium">{ticket.attachments.length}</span>
-                  </div>
-                </Badge>
-              )}
-            </div>
+              {/* Category badge (replaces attachment count) */}
+               {(() => {
+                 const catObj = typeof (ticket as any).category === 'object' ? (ticket as any).category : (ticket as any).categoryInfo;
+                 const catName = typeof (ticket as any).category === 'object' ? (ticket as any).category?.name : ((ticket as any).category || (ticket as any).categoryInfo?.name);
+                 const catNameStr = typeof catName === 'string' ? catName : 'general';
+                 return (
+                  <Badge variant="outline" className={`${getCategoryBadgeColor(catObj)} text-xs rounded-full px-2.5 py-0.5 group-hover:scale-105 transition-transform duration-300 shadow-sm border hover:brightness-95`}> 
+                     <div className="flex items-center gap-1">
+                       {getCategoryIcon(catNameStr, catObj as any)}
+                       <span className="capitalize font-medium">{catNameStr || 'Unknown'}</span>
+                     </div>
+                   </Badge>
+                 );
+               })()}
+             </div>
             
             {/* Description and attachments */}
             <div className="space-y-3">

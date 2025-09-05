@@ -70,6 +70,10 @@ export const TicketStatusChange: React.FC<TicketStatusChangeProps> = ({
       toast.error('Please select a new status');
       return;
     }
+    if (!reason.trim()) {
+      toast.error('Reason for change is required');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -284,13 +288,14 @@ export const TicketStatusChange: React.FC<TicketStatusChangeProps> = ({
 
               {/* Reason for change */}
               <div>
-                <Label htmlFor="reason">Reason for Change</Label>
+                <Label htmlFor="reason">Reason for Change <span className="text-red-600">*</span></Label>
                 <Textarea
                   id="reason"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="Why are you changing the status?"
                   rows={2}
+                  className={!reason.trim() ? 'border-destructive focus-visible:ring-destructive' : ''}
                 />
               </div>
 

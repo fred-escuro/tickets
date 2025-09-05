@@ -35,6 +35,7 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/api/tickets/${id}`,
     ASSIGN: (id: string) => `/api/tickets/${id}/assign`,
     STATUS: (id: string) => `/api/tickets/${id}/status`,
+    STATUS_HISTORY: (id: string) => `/api/tickets/${id}/status-history`,
     STATS_OVERVIEW: '/api/tickets/stats/overview',
     STATS_ACTIVITY: '/api/tickets/stats/activity',
     STATS_METRICS: '/api/tickets/stats/metrics',

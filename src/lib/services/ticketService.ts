@@ -127,8 +127,9 @@ export class TicketService {
   }
 
   // Get ticket statistics
-  static async getTicketStats(): Promise<any> {
-    return apiClient.get('/api/tickets/stats/overview'); // This endpoint might not be in API_ENDPOINTS yet
+  static async getTicketStats(range?: string): Promise<any> {
+    const qs = range ? `?range=${encodeURIComponent(range)}` : '';
+    return apiClient.get(`/api/tickets/stats/overview${qs}`);
   }
 
   // Update an existing ticket (including priority changes)
@@ -140,6 +141,8 @@ export class TicketService {
       categoryId: string;
       priorityId: string;
       statusId: string;
+      statusChangeReason: string;
+      statusChangeComment: string;
       assignedTo: string;
       dueDate: string;
       resolution: string;
@@ -156,5 +159,28 @@ export class TicketService {
       throw new Error(response.error || 'Failed to update ticket');
     }
     return response as any;
+  }
+
+  // Update ticket status with optional reason/comment for history
+  static async updateTicketStatus(
+    id: string,
+    newStatusId: string,
+    options?: { reason?: string; comment?: string }
+  ) {
+    return this.updateTicket(id, {
+      statusId: newStatusId,
+      ...(options?.reason ? { statusChangeReason: options.reason } : {}),
+      ...(options?.comment ? { statusChangeComment: options.comment } : {})
+    });
+  }
+
+  // Fetch ticket status history
+  static async getTicketStatusHistory(
+    id: string
+  ): Promise<{
+    success: boolean;
+    data: Array<{ id: string; statusId: string; statusName: string; changedBy: string; changedAt: string; reason?: string; comment?: string }>;
+  }> {
+    return apiClient.get(API_ENDPOINTS.TICKETS.STATUS_HISTORY(id)) as any;
   }
 }

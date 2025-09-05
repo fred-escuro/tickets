@@ -103,6 +103,9 @@ export interface UpdateTicketRequest {
   categoryId?: string;
   priorityId?: string;
   statusId?: string;
+  // Optional metadata for status change history
+  statusChangeReason?: string;
+  statusChangeComment?: string;
   assignedTo?: string;
   dueDate?: Date;
   resolution?: string;

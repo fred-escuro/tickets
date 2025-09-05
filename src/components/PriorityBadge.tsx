@@ -43,10 +43,19 @@ export const PriorityBadge: React.FC<PriorityBadgeProps> = ({
   const getPriorityColorClasses = () => {
     if (!priorityData) return 'bg-gray-100 text-gray-700 border-gray-200';
     
-    const color = priorityData.color || 'gray';
+    const color = (priorityData as any).color || '';
     const level = priorityData.level || 1;
     
-    // Override color based on priority level if no specific color is set
+    // Prefer configured color when available, otherwise map by level
+    if (color) {
+      const c = color.toLowerCase();
+      if (c === 'red') return 'bg-red-100 text-red-700 border-red-200';
+      if (c === 'orange') return 'bg-orange-100 text-orange-700 border-orange-200';
+      if (c === 'yellow') return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      if (c === 'green') return 'bg-green-100 text-green-700 border-green-200';
+      if (c === 'blue') return 'bg-blue-100 text-blue-700 border-blue-200';
+    }
+    // Fallback: level based
     if (level >= 5) {
       return 'bg-red-100 text-red-700 border-red-200';
     } else if (level >= 4) {
@@ -86,16 +95,12 @@ export const PriorityBadge: React.FC<PriorityBadgeProps> = ({
   return (
     <Badge 
       variant="outline" 
-      className={`${getPriorityColorClasses()} ${getSizeClasses()} ${className}`}
+      className={`${getPriorityColorClasses()} ${getSizeClasses()} ${className} hover:brightness-95`}
     >
       <div className="flex items-center gap-1">
         {getPriorityIcon()}
         <span className="font-medium">{priorityData.name || 'Unknown'}</span>
-        {priorityData.slaHours && (
-          <span className="text-xs opacity-75">
-            ({priorityData.slaHours}h)
-          </span>
-        )}
+        {/* SLA hours display removed - not available on priority model */}
       </div>
     </Badge>
   );

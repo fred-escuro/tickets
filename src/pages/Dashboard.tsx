@@ -5,7 +5,7 @@ import { Projects } from '@/components/Projects';
 import { Analytics } from '@/components/Analytics';
 import { TeamCalendar } from '@/components/TeamCalendar';
 import { ApiTest } from '@/components/ApiTest';
-import { TicketList } from '@/components/TicketList';
+// TicketList removed from Dashboard
 import { type FC } from 'react';
 
 export const Dashboard: FC = () => {
@@ -16,32 +16,31 @@ export const Dashboard: FC = () => {
           {/* Main Content - Left Column */}
           <div className="lg:col-span-8 space-y-4 sm:gap-6">
             {/* Tickets Overview */}
-            <Helpdesk />
+            <Helpdesk showStatusChange={false} />
             
-            {/* Ticket List */}
-            <TicketList />
-            
-            {/* Knowledge Base */}
-            <Resources />
+            {/* Ticket List removed from Dashboard */}
             
             {/* Analytics Overview */}
             <Analytics />
+
+            {/* Knowledge Base */}
+            <Resources />
           </div>
 
           {/* Sidebar - Right Column */}
           <div className="lg:col-span-4">
             <div className="sticky top-32 space-y-4 sm:gap-6">
-              {/* API Connection Test */}
-              <ApiTest />
-              
-              {/* Support Team */}
-              <EmployeeDirectory />
+              {/* Ticket Calendar */}
+              <TeamCalendar />
               
               {/* Ticket Tasks */}
               <Projects />
               
-              {/* Ticket Calendar */}
-              <TeamCalendar />
+              {/* Support Team */}
+              <EmployeeDirectory />
+              
+              {/* API Connection Test */}
+              <ApiTest />
             </div>
           </div>
         </div>

@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { TicketStatusBadge } from '@/components/TicketStatusBadge';
+import { PriorityBadge } from '@/components/PriorityBadge';
 import { TicketStatusChange } from '@/components/TicketStatusChange';
 import { AttachmentDisplay } from '@/components/ui/attachment-display';
 import { RichTextDisplay } from '@/components/ui/rich-text-display';
@@ -15,7 +16,9 @@ import { CommentService } from '@/lib/services/commentService';
 import type { FileAttachment } from '@/components/ui/file-upload';
 import { apiClient, API_ENDPOINTS } from '@/lib/api';
 import { toast } from 'sonner';
-import { ArrowLeft, Calendar, Paperclip, User, MessageSquare, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Calendar, Paperclip, User, MessageSquare, ChevronDown, ChevronRight, FileText, Settings, Clock, ChevronUp } from 'lucide-react';
+import { TicketStatusHistory } from '@/components/TicketStatusHistory';
+import { ticketSystemService } from '@/lib/services/ticketSystemService';
 
 type LoadedTicket = any;
 
@@ -29,6 +32,10 @@ export const TicketDetailPage: React.FC = () => {
   const [comments, setComments] = useState<any[]>([]);
   const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
+  const [isOverviewOpen, setIsOverviewOpen] = useState(true);
+  const [isTimelineOpen, setIsTimelineOpen] = useState(true);
+  const [isStatusOpen, setIsStatusOpen] = useState(true);
 
   const fetchTicket = async () => {
     if (!id) return;
@@ -62,21 +69,35 @@ export const TicketDetailPage: React.FC = () => {
 
   const handleStatusChange = async (newStatusId: string, reason?: string, commentText?: string) => {
     if (!id) return;
-    const res = await apiClient.put(API_ENDPOINTS.TICKETS.UPDATE(id), { statusId: newStatusId });
+    const oldStatusName = statusName || 'Unknown';
+    const res = await apiClient.put(API_ENDPOINTS.TICKETS.UPDATE(id), {
+      statusId: newStatusId,
+      ...(reason ? { statusChangeReason: reason } : {}),
+      ...(commentText ? { statusChangeComment: commentText } : {})
+    });
     if (!res.success) {
       toast.error(res.error || 'Failed to update status');
       return;
     }
     toast.success('Status updated');
-    // Optionally record reason/comment as a ticket comment
+    // Record reason/comment as a ticket comment, with old/new status context
     try {
-      const contentParts: string[] = [];
-      if (reason && reason.trim().length > 0) contentParts.push(`Reason: ${reason.trim()}`);
-      if (commentText && commentText.trim().length > 0) contentParts.push(commentText.trim());
-      if (contentParts.length > 0) {
+      // Resolve new status name
+      let newStatusName = newStatusId;
+      try {
+        const statuses = await ticketSystemService.getStatuses();
+        const match = statuses.find(s => s.id === newStatusId);
+        if (match) newStatusName = match.name;
+      } catch {}
+
+      const lines: string[] = [];
+      if ((reason && reason.trim()) || (commentText && commentText.trim())) {
+        lines.push(`Status change: ${oldStatusName} → ${newStatusName}`);
+        if (reason && reason.trim().length > 0) lines.push(`Reason: ${reason.trim()}`);
+        if (commentText && commentText.trim().length > 0) lines.push(`Comment: ${commentText.trim()}`);
         await CommentService.createComment({
           ticketId: id,
-          content: contentParts.join('\n\n'),
+          content: lines.join('\n\n'),
           isInternal: false,
           attachments: []
         });
@@ -86,6 +107,7 @@ export const TicketDetailPage: React.FC = () => {
     }
     await fetchTicket();
     await loadComments();
+    setHistoryRefreshToken(prev => prev + 1);
   };
 
   const loadComments = async () => {
@@ -140,6 +162,13 @@ export const TicketDetailPage: React.FC = () => {
     return items;
   }, [ticket, comments]);
 
+  // Expand the latest (first) timeline item by default
+  useEffect(() => {
+    if (groupedTimeline.length > 0 && expandedKeys.size === 0) {
+      setExpandedKeys(new Set(['item-0']));
+    }
+  }, [groupedTimeline]);
+
   const toggleExpand = (key: string) => {
     const next = new Set(expandedKeys);
     if (next.has(key)) next.delete(key); else next.add(key);
@@ -168,18 +197,24 @@ export const TicketDetailPage: React.FC = () => {
             <Badge variant="outline" className="ml-1">#{ticket.ticketNumber}</Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          {ticket && (
-            <TicketStatusBadge status={ticket.status as any} size="sm" />
-          )}
-        </div>
+        <div className="flex items-center gap-2"></div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main */}
         <div className="lg:col-span-2 space-y-6">
           <Card>
-            <CardContent className="p-5 space-y-4">
+            <CardHeader className="pb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                <CardTitle className="text-base">Ticket Overview</CardTitle>
+              </div>
+              <button type="button" className="text-muted-foreground" onClick={() => setIsOverviewOpen(v => !v)} aria-label={isOverviewOpen ? 'Collapse' : 'Expand'}>
+                {isOverviewOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+            </CardHeader>
+            {isOverviewOpen && (
+            <CardContent className="p-5 pt-0 space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <div className="text-xs text-muted-foreground">Ticket Number</div>
@@ -187,19 +222,31 @@ export const TicketDetailPage: React.FC = () => {
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Status</div>
-                  {ticket && <Badge variant="outline" className="text-xs capitalize">{statusName || 'Unknown'}</Badge>}
+                  {ticket && <TicketStatusBadge status={ticket.status as any} size="sm" />}
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Priority</div>
-                  {ticket && <Badge variant="outline" className="text-xs capitalize">{priorityName || 'Unknown'}</Badge>}
+                  {ticket && <PriorityBadge priority={ticket.priority as any} size="sm" />}
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Category</div>
-                  {ticket?.categoryInfo ? (
-                    <Badge variant="outline" className="text-xs capitalize">{ticket.categoryInfo.name}</Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-xs capitalize">{ticket?.category || 'Unknown'}</Badge>
-                  )}
+                  {(() => {
+                    const catObj = typeof (ticket as any)?.category === 'object' ? (ticket as any).category : (ticket as any)?.categoryInfo;
+                    const catName = typeof (ticket as any)?.category === 'object' ? (ticket as any).category?.name : ((ticket as any)?.category || (ticket as any)?.categoryInfo?.name);
+                    const color = (catObj?.color || '').toLowerCase();
+                    const classes = color === 'blue' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                      color === 'green' ? 'bg-green-100 text-green-700 border-green-200' :
+                      color === 'red' ? 'bg-red-100 text-red-700 border-red-200' :
+                      color === 'yellow' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
+                      color === 'orange' ? 'bg-orange-100 text-orange-700 border-orange-200' :
+                      color === 'purple' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                      'bg-gray-100 text-gray-700 border-gray-200';
+                    return (
+                      <Badge variant="outline" className={`text-xs rounded-full px-2.5 py-0.5 border ${classes}`}>
+                        <span className="capitalize">{catName || 'Unknown'}</span>
+                      </Badge>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -220,7 +267,7 @@ export const TicketDetailPage: React.FC = () => {
 
               <Separator />
 
-              <div className="prose max-w-none">
+              <div className="prose max-w-none max-h-[320px] overflow-y-auto rounded-md border bg-muted/30 p-3">
                 {ticket ? (
                   <RichTextDisplay content={ticket.description} />
                 ) : (
@@ -237,23 +284,31 @@ export const TicketDetailPage: React.FC = () => {
                 </div>
               )}
             </CardContent>
+            )}
           </Card>
 
           {/* Timeline */}
           <Card>
-            <CardContent className="p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">Timeline ({groupedTimeline.length} items){isLoadingComments && <span className="text-xs text-muted-foreground ml-2">(Loading comments...)</span>}</div>
-                <div className="flex items-center gap-2">
-                  <Button onClick={() => setShowAddComment(true)} className="gap-2" disabled={isLoadingComments}>
-                    <MessageSquare className="h-4 w-4" />
-                    Add Comment
-                  </Button>
-                </div>
-              </div>
+            <CardHeader className="pb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={expandAll}>Expand All</Button>
-                <Button variant="outline" size="sm" onClick={collapseAll}>Collapse All</Button>
+                <Clock className="h-4 w-4" />
+                <CardTitle className="text-base">Timeline ({groupedTimeline.length} items)</CardTitle>
+              </div>
+              <button type="button" className="text-muted-foreground" onClick={() => setIsTimelineOpen(v => !v)} aria-label={isTimelineOpen ? 'Collapse' : 'Expand'}>
+                {isTimelineOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+            </CardHeader>
+            {isTimelineOpen && (
+            <CardContent className="p-5 pt-0 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={expandAll}>Expand All</Button>
+                  <Button variant="outline" size="sm" onClick={collapseAll}>Collapse All</Button>
+                </div>
+                <Button onClick={() => setShowAddComment(true)} className="gap-2" disabled={isLoadingComments}>
+                  <MessageSquare className="h-4 w-4" />
+                  Add Comment
+                </Button>
               </div>
 
               <div className="space-y-2">
@@ -291,34 +346,51 @@ export const TicketDetailPage: React.FC = () => {
                 })}
               </div>
             </CardContent>
+            )}
           </Card>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
           <Card>
-            <CardContent className="p-5 space-y-4">
-              <div className="space-y-2">
-                <div className="text-xs text-muted-foreground">Status</div>
-                {ticket && (
-                  <div className="flex items-center justify-between gap-2">
-                    <TicketStatusBadge status={ticket.status as any} size="sm" />
-                    <TicketStatusChange
-                      ticketId={ticket.id}
-                      currentStatus={statusName}
-                      currentStatusId={typeof ticket.status === 'object' ? ticket.status?.id : undefined}
-                      onStatusChange={async (newId, reason, addComment) => { await handleStatusChange(newId, reason, addComment); }}
-                      className="ml-1"
-                      triggerMode="button"
-                      triggerLabel="Change Status"
-                    />
-                  </div>
-                )}
+            <CardHeader className="pb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                <CardTitle className="text-base">Status & Actions</CardTitle>
               </div>
-
-              {/* Priority and Category removed per request */}
+              <button type="button" className="text-muted-foreground" onClick={() => setIsStatusOpen(v => !v)} aria-label={isStatusOpen ? 'Collapse' : 'Expand'}>
+                {isStatusOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+            </CardHeader>
+            {isStatusOpen && (
+            <CardContent className="p-5 pt-0 space-y-3">
+              {ticket && (
+                <div className="flex items-center justify-between gap-2">
+                  <TicketStatusBadge status={ticket.status as any} size="sm" />
+                  <TicketStatusChange
+                    ticketId={ticket.id}
+                    currentStatus={statusName}
+                    currentStatusId={typeof ticket.status === 'object' ? ticket.status?.id : undefined}
+                    onStatusChange={async (newId, reason, addComment) => { await handleStatusChange(newId, reason, addComment); }}
+                    className="ml-1"
+                    triggerMode="button"
+                    triggerLabel="Change Status"
+                  />
+                </div>
+              )}
             </CardContent>
+            )}
           </Card>
+
+          {/* Status History Card */}
+          {ticket && (
+            <TicketStatusHistory
+              ticketId={ticket.id}
+              defaultExpanded
+              maxItems={6}
+              refreshToken={historyRefreshToken}
+            />
+          )}
         </div>
       </div>
 
