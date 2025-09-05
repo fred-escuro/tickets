@@ -24,16 +24,13 @@ import {
   ArrowLeft, 
   HelpCircle, 
   MessageSquare, 
-  Phone, 
-  Mail,
+  
   Plus,
   Search,
   Clock,
   CheckCircle,
   XCircle,
   AlertCircle,
-  ThumbsUp,
-  Eye,
   FileText,
   Monitor,
   Wifi,
@@ -477,44 +474,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
   );
 };
 
-const KnowledgeBaseCard: FC<{ article: any; index?: number }> = ({ article, index = 0 }) => (
-  <Card 
-    className="hover:shadow-md transition-shadow cursor-pointer animate-in fade-in slide-in-from-bottom-4 duration-300"
-    style={{ animationDelay: `${(index + 1) * 100}ms` }}
-  >
-    <CardContent className="p-4">
-      <div className="space-y-3">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1 min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-blue-600" />
-              <h3 className="font-medium line-clamp-1">{article.title}</h3>
-            </div>
-            <Badge variant="outline" className="text-xs capitalize">
-              {article.category}
-            </Badge>
-          </div>
-        </div>
-        
-        <p className="text-sm text-muted-foreground line-clamp-2">{article.content}</p>
-        
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1">
-              <Eye className="h-3 w-3" />
-              {article.views}
-            </span>
-            <span className="flex items-center gap-1">
-              <ThumbsUp className="h-3 w-3" />
-              {article.helpful}
-            </span>
-          </div>
-          <span>Updated {formatDate(article.lastUpdated)}</span>
-        </div>
-      </div>
-    </CardContent>
-  </Card>
-);
+// KnowledgeBase features removed from HelpDesk page
 
 const NewTicketDialog: FC<{ 
   autoOpen?: boolean; 
@@ -796,6 +756,7 @@ const NewTicketDialog: FC<{
               placeholder="Brief description of the issue"
               value={formData.title}
               onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              autoFocus
               required
             />
           </div>
@@ -905,23 +866,87 @@ const NewTicketDialog: FC<{
 };
 
 export const HelpDeskPage: FC = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [ticketFilter, setTicketFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('tickets');
   const [autoOpenNewTicket, setAutoOpenNewTicket] = useState(false);
   // Fetch tickets from backend API
-  const { 
-    data: ticketsData, 
-    loading: ticketsLoading, 
-    error: ticketsError, 
-    execute: fetchTickets 
-  } = useApi(
-    () => TicketService.getTickets(),
-    { autoExecute: true } // Auto-execute since we're now protected by ProtectedRoute
-  );
+  // Infinite pagination state
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [ticketNumberQuery, setTicketNumberQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketsError, setTicketsError] = useState<string | null>(null);
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [priorityOptions, setPriorityOptions] = useState<TicketPriority[]>([]);
+  const [loadingPriorityOptions, setLoadingPriorityOptions] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [categoryOptions, setCategoryOptions] = useState<TicketCategory[]>([]);
+  const [loadingCategoryOptions, setLoadingCategoryOptions] = useState(false);
+  const [totalTickets, setTotalTickets] = useState<number>(0);
 
-  const tickets = ticketsData?.data || [];
+  const fetchTickets = async (nextPage = 1) => {
+    try {
+      setTicketsLoading(true);
+      setTicketsError(null);
+      const params: any = { page: nextPage, limit: 9, sortBy: 'createdAt', sortOrder: 'desc' };
+      // Apply server-side search
+      if (searchQuery && searchQuery.trim().length > 0) params.search = searchQuery.trim();
+      // Apply ticket number exact match if provided
+      if (ticketNumberQuery && ticketNumberQuery.trim().length > 0) params.ticketNumber = ticketNumberQuery.trim();
+      // Apply server-side status filter
+      if (ticketFilter && ticketFilter !== 'all') {
+        params.status = ticketFilter; // values already normalized to API names
+      }
+      // Apply server-side priority filter
+      if (priorityFilter && priorityFilter !== 'all') {
+        params.priority = priorityFilter; // priority name
+      }
+      // Apply server-side category filter (by category name)
+      if (categoryFilter && categoryFilter !== 'all') {
+        params.category = categoryFilter;
+      }
+      const res = await TicketService.getTickets(params);
+      if (!res.success) {
+        setTicketsError(res.error || 'Failed to load tickets');
+        setTicketsLoading(false);
+        return;
+      }
+      const newTickets: Ticket[] = res.data || [];
+      setTotalTickets(res.pagination?.total || newTickets.length || 0);
+      setTickets(prev => nextPage === 1 ? newTickets : [...prev, ...newTickets]);
+      const totalPages = res.pagination?.totalPages || (newTickets.length < 9 ? nextPage : nextPage + 1);
+      setHasMore(nextPage < totalPages && newTickets.length > 0);
+      setPage(nextPage);
+    } catch (e: any) {
+      setTicketsError(e?.message || 'Failed to load tickets');
+    } finally {
+      setTicketsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // initial load
+    fetchTickets(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Refetch when filters change
+  useEffect(() => {
+    fetchTickets(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticketFilter, priorityFilter, categoryFilter]);
+
+  // Debounced refetch when search changes
+  useEffect(() => {
+    const id = setTimeout(() => {
+      fetchTickets(1);
+    }, 300);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, ticketNumberQuery]);
   const [statuses, setStatuses] = useState<TicketStatus[]>([]);
   const [loadingStatuses, setLoadingStatuses] = useState(false);
 
@@ -940,6 +965,37 @@ export const HelpDeskPage: FC = () => {
     loadStatuses();
   }, []);
   
+  useEffect(() => {
+    const loadPrioritiesForFilter = async () => {
+      try {
+        setLoadingPriorityOptions(true);
+        const p = await ticketSystemService.getPriorities();
+        setPriorityOptions(p);
+      } catch (e) {
+        console.error('Failed to load priorities:', e);
+      } finally {
+        setLoadingPriorityOptions(false);
+      }
+    };
+    loadPrioritiesForFilter();
+  }, []);
+
+  // Load categories for filter options
+  useEffect(() => {
+    const loadCategoriesForFilter = async () => {
+      try {
+        setLoadingCategoryOptions(true);
+        const c = await ticketSystemService.getCategories();
+        setCategoryOptions(c);
+      } catch (e) {
+        console.error('Failed to load categories:', e);
+      } finally {
+        setLoadingCategoryOptions(false);
+      }
+    };
+    loadCategoriesForFilter();
+  }, []);
+  
   // Handle URL parameters on component mount
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -952,20 +1008,15 @@ export const HelpDeskPage: FC = () => {
     if (action === 'create') {
       setActiveTab('tickets');
       setAutoOpenNewTicket(true);
+      // Clear the action param so it doesn't reopen on refresh
+      const params = new URLSearchParams(searchParams);
+      params.delete('action');
+      setSearchParams(params, { replace: true });
     }
-  }, [searchParams]);
+  }, [searchParams, setSearchParams]);
   
-  const filteredTickets = tickets.filter((ticket: Ticket) => {
-    const matchesFilter = ticketFilter === 'all' || 
-      (ticketFilter === 'open' && ticket.status === 'OPEN') ||
-      (ticketFilter === 'in-progress' && ticket.status === 'IN_PROGRESS') ||
-      (ticketFilter === 'resolved' && ticket.status === 'RESOLVED') ||
-      (ticketFilter === 'closed' && ticket.status === 'CLOSED');
-    const matchesSearch = searchQuery === '' || 
-      ticket.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  // Tickets now come pre-filtered from backend via status/search; no client-side search
+  const filteredTickets = tickets;
 
   // For now, we'll use empty knowledge base until we implement that API
   const filteredKnowledgeBase: any[] = [];
@@ -997,7 +1048,14 @@ export const HelpDeskPage: FC = () => {
             </div>
             <NewTicketDialog 
               autoOpen={autoOpenNewTicket} 
-              onOpenChange={(open) => !open && setAutoOpenNewTicket(false)}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setAutoOpenNewTicket(false);
+                  const params = new URLSearchParams(searchParams);
+                  params.delete('action');
+                  setSearchParams(params, { replace: true });
+                }
+              }}
               isAuthenticated={true}
               onLoginRequired={() => {}}
             />
@@ -1008,58 +1066,96 @@ export const HelpDeskPage: FC = () => {
 
         {/* Search Bar */}
         <PageSection index={2} className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search tickets and knowledge base..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search tickets..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by ticket # (exact)"
+                value={ticketNumberQuery}
+                onChange={(e) => setTicketNumberQuery(e.target.value.replace(/[^0-9]/g, ''))}
+                className="pl-10"
+              />
+            </div>
           </div>
         </PageSection>
 
         {/* Tabs */}
         <PageSection index={3}>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3 max-w-md">
+            <TabsList className="grid w-full grid-cols-1 max-w-md">
             <TabsTrigger value="tickets" className="gap-2">
               <MessageSquare className="h-4 w-4 hidden sm:inline" />
               My Tickets
-            </TabsTrigger>
-            <TabsTrigger value="knowledge" className="gap-2">
-              <FileText className="h-4 w-4 hidden sm:inline" />
-              Knowledge Base
-            </TabsTrigger>
-            <TabsTrigger value="contact" className="gap-2">
-              <Phone className="h-4 w-4 hidden sm:inline" />
-              Contact
             </TabsTrigger>
           </TabsList>
 
           {/* Tickets Tab */}
           <TabsContent value="tickets" className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <h2 className="text-lg font-semibold">Support Tickets</h2>
-              <Select value={ticketFilter} onValueChange={setTicketFilter}>
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Tickets</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="in-progress">In Progress</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
-                </SelectContent>
-              </Select>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                Support Tickets
+                <Badge variant="outline" className="px-2 py-0.5 text-xs">
+                  {totalTickets}
+                </Badge>
+              </h2>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <Select value={ticketFilter} onValueChange={setTicketFilter}>
+                  <SelectTrigger className="w-full sm:w-48">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    {statuses.map(s => (
+                      <SelectItem key={s.id} value={s.name.toUpperCase()}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                  <SelectTrigger className="w-full sm:w-48">
+                    <SelectValue placeholder="Filter by priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Priorities</SelectItem>
+                    {priorityOptions.map(p => (
+                      <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="w-full sm:w-56">
+                    <SelectValue placeholder="Filter by category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categoryOptions.map(c => (
+                      <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             
             <PageSection index={4}>
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredTickets.map((ticket: Ticket, index: number) => (
-                  <TicketCard key={ticket.id} ticket={ticket} index={index} statuses={statuses} onTicketUpdated={fetchTickets} />
+                  <TicketCard key={ticket.id} ticket={ticket} index={index} statuses={statuses} onTicketUpdated={() => fetchTickets(1)} />
                 ))}
+              </div>
+              <div className="flex justify-center mt-6">
+                {hasMore && (
+                  <Button variant="outline" onClick={() => fetchTickets(page + 1)} disabled={ticketsLoading}>
+                    {ticketsLoading ? 'Loading…' : 'Load more'}
+                  </Button>
+                )}
               </div>
             </PageSection>
             
@@ -1080,123 +1176,7 @@ export const HelpDeskPage: FC = () => {
             )}
           </TabsContent>
 
-          {/* Knowledge Base Tab */}
-          <TabsContent value="knowledge" className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <h2 className="text-lg font-semibold">Knowledge Base</h2>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <FileText className="h-4 w-4" />
-                <span>0 articles</span>
-              </div>
-            </div>
-            
-            <PageSection index={5}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredKnowledgeBase.map((article, index) => (
-                  <KnowledgeBaseCard key={article.id} article={article} index={index} />
-                ))}
-              </div>
-            </PageSection>
-            
-            {filteredKnowledgeBase.length === 0 && (
-              <PageSection index={8}>
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-12">
-                    <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No articles found</h3>
-                    <p className="text-muted-foreground text-center">
-                      No knowledge base articles match your search.
-                    </p>
-                  </CardContent>
-                </Card>
-              </PageSection>
-            )}
-          </TabsContent>
-
-          {/* Contact Tab */}
-          <TabsContent value="contact" className="space-y-6">
-            <PageSection index={9}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300" style={{ animationDelay: '100ms' }}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Phone className="h-5 w-5 text-green-600" />
-                      Emergency Support
-                    </CardTitle>
-                  </CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    For critical issues that require immediate attention
-                  </p>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Phone:</span>
-                      <span className="text-sm text-blue-600">+1 (555) 123-4567</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Available:</span>
-                      <span className="text-sm">24/7</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-                <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300" style={{ animationDelay: '200ms' }}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Mail className="h-5 w-5 text-blue-600" />
-                      General Support
-                    </CardTitle>
-                  </CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    For non-urgent issues and general inquiries
-                  </p>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Email:</span>
-                      <span className="text-sm text-blue-600">support@company.com</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Response:</span>
-                      <span className="text-sm">Within 24 hours</span>
-                    </div>
-                  </div>
-                </CardContent>
-                </Card>
-              </div>
-            </PageSection>
-
-            <PageSection index={7}>
-              <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300" style={{ animationDelay: '100ms' }}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-purple-600" />
-                  Live Chat Support
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Chat with our support team for real-time assistance
-                </p>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="font-medium">Weekdays:</p>
-                    <p className="text-muted-foreground">9:00 AM - 6:00 PM</p>
-                  </div>
-                  <div>
-                    <p className="font-medium">Response Time:</p>
-                    <p className="text-muted-foreground">&lt; 5 minutes</p>
-                  </div>
-                </div>
-                <Button className="w-full gap-2">
-                  <MessageSquare className="h-4 w-4" />
-                  Start Live Chat
-                </Button>
-              </CardContent>
-            </Card>
-            </PageSection>
-          </TabsContent>
+          {/* Knowledge Base and Contact tabs removed */}
         </Tabs>
         </PageSection>
       </PageWrapper>

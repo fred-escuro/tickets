@@ -14,6 +14,7 @@ router.get('/', authenticate, async (req, res) => {
       status,
       priority,
       category,
+      ticketNumber,
       assignedTo,
       submittedBy,
       dateFrom,
@@ -40,11 +41,51 @@ router.get('/', authenticate, async (req, res) => {
       ];
     }
 
-    if (status) where.status = status;
-    if (priority) where.priority = priority;
-    if (category) where.category = category;
+    // Flexible filters for relations
+    if (status) {
+      // Filter by related status name (case-insensitive)
+      where.status = {
+        name: {
+          equals: status as string,
+          mode: 'insensitive'
+        }
+      };
+    }
+    if (priority) {
+      // Filter by related priority name (case-insensitive)
+      where.priority = {
+        name: {
+          equals: priority as string,
+          mode: 'insensitive'
+        }
+      };
+    }
+    if (category) {
+      // Accept either category id or name; prefer id
+      // If value looks like an id (cuid/uuid), filter by id; else by name
+      const value = category as string;
+      const looksLikeId = /^[a-z0-9]{10,}$/i.test(value);
+      if (looksLikeId) {
+        where.categoryId = value;
+      } else {
+        where.category = {
+          name: {
+            equals: value,
+            mode: 'insensitive'
+          }
+        };
+      }
+    }
     if (assignedTo) where.assignedTo = assignedTo;
     if (submittedBy) where.submittedBy = submittedBy;
+
+    // Exact ticket number match when provided
+    if (ticketNumber) {
+      const num = parseInt((ticketNumber as string).toString(), 10);
+      if (!isNaN(num)) {
+        where.ticketNumber = num;
+      }
+    }
 
     if (dateFrom || dateTo) {
       where.submittedAt = {};

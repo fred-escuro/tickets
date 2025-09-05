@@ -47,6 +47,7 @@ export interface TicketFilter {
   priority?: string;
   category?: string;
   search?: string;
+  ticketNumber?: number | string;
   page?: number;
   limit?: number;
   sortBy?: string;

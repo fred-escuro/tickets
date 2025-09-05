@@ -159,7 +159,7 @@ export const Header: FC = () => {
 
           {/* Welcome label aligned with main content */}
           {isAuthenticated && currentUser && (
-            <div className="hidden lg:block flex-1 pl-[calc(var(--sidebar-width,14rem)-10rem)]">
+            <div className="hidden lg:block flex-1 pl-18">
               <span className="text-sm sm:text-base font-medium text-muted-foreground">
                 Welcome, {currentUser.middleName ? `${currentUser.firstName} ${currentUser.middleName} ${currentUser.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`}
               </span>
