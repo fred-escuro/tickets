@@ -14,7 +14,7 @@ import { ArrowLeft, Search, Filter, Mail, Phone, MapPin, Users, Network, Shield,
 import { useState, useEffect, type FC } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '@/hooks/useApi';
-import { UserService, type SupportAgent, type User, type CreateUserData, type UpdateUserData, USER_ROLES, USER_DEPARTMENTS } from '@/lib/services/userService';
+import { UserService, type SupportAgent, type User, type CreateUserData, type UpdateUserData, type DepartmentOption, USER_ROLES, USER_DEPARTMENTS } from '@/lib/services/userService';
 import { roleService, type Role as RbacRole } from '@/lib/services/roleService';
 
 const getDepartmentBadgeColor = (department: string) => {
@@ -67,6 +67,8 @@ export const UsersPage: FC = () => {
   const [rolesLoading, setRolesLoading] = useState(false);
   const [selectedRoleIdCreate, setSelectedRoleIdCreate] = useState<string>('');
   const [selectedRoleIdEdit, setSelectedRoleIdEdit] = useState<string>('');
+  const [departmentsApi, setDepartmentsApi] = useState<DepartmentOption[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
 
   // Fetch all users using the API hook
   const { data: usersData, loading: usersLoading, error: usersError, execute: fetchUsers } = useApi(
@@ -94,6 +96,17 @@ export const UsersPage: FC = () => {
         setRolesLoading(false);
       }
     })();
+    // Load departments from backend
+    (async () => {
+      try {
+        setDepartmentsLoading(true);
+        const res = await UserService.getDepartments();
+        if (res.success && Array.isArray(res.data)) setDepartmentsApi(res.data);
+      } catch {}
+      finally {
+        setDepartmentsLoading(false);
+      }
+    })();
   }, []);
 
   // Keep RBAC role selector in Edit dialog in sync with current DB role
@@ -117,7 +130,9 @@ export const UsersPage: FC = () => {
   const users = usersData?.data || [];
 
   // Get unique departments for filter
-  const departments = Array.from(new Set(users.map(user => user.department).filter((dept): dept is string => !!dept))).sort();
+  const departments = (departmentsApi.length > 0
+    ? departmentsApi.map(d => d.name)
+    : Array.from(new Set(users.map(user => user.department).filter((dept): dept is string => !!dept))).sort());
 
   // Filter users based on search and department
   const filteredUsers = users.filter((user) => {
@@ -146,6 +161,8 @@ export const UsersPage: FC = () => {
         password: formData.password,
         role: 'user',
         department: formData.department || undefined,
+        // attempt to map by name to id if known
+        departmentId: (departmentsApi.find(d => d.name === formData.department)?.id) || undefined,
         phone: formData.phone || undefined,
         avatar: formData.avatar || undefined,
         location: formData.location || undefined
@@ -198,9 +215,12 @@ export const UsersPage: FC = () => {
         middleName: formData.middleName || undefined,
         role: formData.role,
         department: formData.department || undefined,
+        departmentId: (departmentsApi.find(d => d.name === formData.department)?.id) || undefined,
         phone: formData.phone || undefined,
         avatar: formData.avatar || undefined,
-        location: formData.location || undefined
+        location: formData.location || undefined,
+        // include password only if provided
+        ...(formData.password ? { password: formData.password } : {})
       };
 
       const response = await UserService.updateUser(selectedUser.id, updateData);
@@ -629,10 +649,10 @@ export const UsersPage: FC = () => {
                 <Label htmlFor="department">Department</Label>
                 <Select value={formData.department} onValueChange={(value) => setFormData({ ...formData, department: value })}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
+                    <SelectValue placeholder={departmentsLoading ? 'Loading departments…' : 'Select department'} />
                   </SelectTrigger>
                   <SelectContent>
-                    {USER_DEPARTMENTS.map((dept) => (
+                    {departments.map((dept) => (
                       <SelectItem key={dept} value={dept}>
                         {dept}
                       </SelectItem>
@@ -751,10 +771,10 @@ export const UsersPage: FC = () => {
                  <Label htmlFor="editDepartment">Department</Label>
                  <Select value={formData.department} onValueChange={(value) => setFormData({ ...formData, department: value })}>
                    <SelectTrigger>
-                     <SelectValue placeholder="Select department" />
+                     <SelectValue placeholder={departmentsLoading ? 'Loading departments…' : 'Select department'} />
                    </SelectTrigger>
                    <SelectContent>
-                     {USER_DEPARTMENTS.map((dept) => (
+                     {departments.map((dept) => (
                        <SelectItem key={dept} value={dept}>
                          {dept}
                        </SelectItem>
@@ -788,6 +808,33 @@ export const UsersPage: FC = () => {
                   </Button>
                 </div>
               </div>
+
+            {/* Password (only for users with users:write or admin) */}
+            {(() => {
+              // Client-side permission check using stored permissions/roles
+              const currentUser = JSON.parse(localStorage.getItem('user') || 'null') as any;
+              const perms: string[] = Array.isArray(currentUser?.permissions) ? currentUser.permissions : [];
+              const roleNames: string[] = Array.isArray(currentUser?.roles)
+                ? currentUser.roles.map((ur: any) => ur?.role?.name).filter((n: any) => typeof n === 'string')
+                : (currentUser?.role ? [currentUser.role] : []);
+              const canEditPassword = perms.includes('users:write') || roleNames.includes('admin') || roleNames.includes('manager');
+              if (!canEditPassword) return null;
+              return (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="editPassword">Password</Label>
+                    <Input
+                      id="editPassword"
+                      type="password"
+                      placeholder="Leave blank to keep unchanged"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2" />
+                </div>
+              );
+            })()}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

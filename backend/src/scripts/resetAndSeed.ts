@@ -38,8 +38,7 @@ async function resetAndSeed() {
           lastName: 'Admin',
           email: 'admin@tickethub.com',
           password: hashedPassword,
-          role: 'admin',
-          department: 'IT',
+          departmentId: null,
           isAgent: true,
           skills: {
             technical: ['System Administration', 'Database Management', 'Security'],
@@ -54,8 +53,7 @@ async function resetAndSeed() {
           lastName: 'Manager',
           email: 'manager@tickethub.com',
           password: hashedPassword,
-          role: 'manager',
-          department: 'Customer Success',
+          departmentId: null,
           isAgent: true,
           skills: {
             technical: ['Customer Support', 'Process Management', 'Analytics'],
@@ -70,8 +68,7 @@ async function resetAndSeed() {
           lastName: 'Agent',
           email: 'agent@tickethub.com',
           password: hashedPassword,
-          role: 'agent',
-          department: 'Technical Support',
+          departmentId: null,
           isAgent: true,
           skills: {
             technical: ['Hardware Support', 'Software Troubleshooting', 'Network Issues'],
@@ -86,8 +83,7 @@ async function resetAndSeed() {
           lastName: 'Developer',
           email: 'developer@tickethub.com',
           password: hashedPassword,
-          role: 'agent',
-          department: 'Engineering',
+          departmentId: null,
           isAgent: true,
           skills: {
             technical: ['JavaScript', 'React', 'Node.js', 'Database Design'],
@@ -102,8 +98,7 @@ async function resetAndSeed() {
           lastName: 'Customer',
           email: 'customer@tickethub.com',
           password: hashedPassword,
-          role: 'user',
-          department: 'Sales',
+          departmentId: null,
           isAgent: false,
           avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face'
         }
@@ -114,8 +109,7 @@ async function resetAndSeed() {
           lastName: 'User',
           email: 'user@tickethub.com',
           password: hashedPassword,
-          role: 'user',
-          department: 'Marketing',
+          departmentId: null,
           isAgent: false,
           avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face'
         }
@@ -980,45 +974,16 @@ async function resetAndSeed() {
 
     console.log(`✅ Created ${knowledgeBase.length} knowledge base articles`);
 
-    console.log('🎉 Database reset and seeding completed successfully!');
-    console.log('\n📊 Summary:');
-    console.log(`👥 Users: ${users.length}`);
-    console.log(`📁 Categories: ${categories.length} main + ${subcategories.length} subcategories`);
-    console.log(`⚡ Priorities: ${priorities.length}`);
-    console.log(`📊 Statuses: ${statuses.length}`);
-    console.log(`📝 Templates: ${templates.length}`);
-    console.log(`🔄 Workflows: ${workflows.length}`);
-    console.log(`🎫 Sample Tickets: ${sampleTickets.length}`);
-    console.log(`💬 Comments: ${comments.length}`);
-    console.log(`📚 Knowledge Base: ${knowledgeBase.length} articles`);
-    
-    console.log('\n🔑 Test User Credentials:');
-    console.log('Admin: admin@tickethub.com / password123');
-    console.log('Manager: manager@tickethub.com / password123');
-    console.log('Agent: agent@tickethub.com / password123');
-    console.log('Developer: developer@tickethub.com / password123');
-    console.log('Customer: customer@tickethub.com / password123');
-    console.log('User: user@tickethub.com / password123');
-
+    console.log('🎉 Database reset and seed completed successfully.');
   } catch (error) {
-    console.error('❌ Error during reset and seeding:', error);
-    throw error;
+    console.error('❌ Error during reset and seed:', error);
+    process.exitCode = 1;
   } finally {
     await prisma.$disconnect();
   }
 }
 
-// Run the reset and seed function if this file is executed directly
-if (require.main === module) {
-  resetAndSeed()
-    .then(() => {
-      console.log('🎉 Reset and seeding completed successfully!');
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error('💥 Reset and seeding failed:', error);
-      process.exit(1);
-    });
-}
-
-export { resetAndSeed };
+resetAndSeed().catch((err) => {
+  console.error('❌ Unhandled error in resetAndSeed:', err);
+  process.exit(1);
+});

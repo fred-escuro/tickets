@@ -130,7 +130,7 @@ router.post('/:id/users/:userId', authenticate, authorize('admin', 'manager'), a
 
     const updated = await prisma.user.update({
       where: { id: userId },
-      data: { departmentId: id, department: dept.name }
+      data: { departmentId: id }
     });
 
     return res.json({ success: true, data: { id: updated.id, departmentId: id }, message: 'User assigned to department' });

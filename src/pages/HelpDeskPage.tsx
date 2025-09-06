@@ -221,8 +221,10 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
         // Close the dialog and refresh comments
         setShowAddComment(false);
         
-        // Refresh comments to show the new one
-        await loadComments();
+        // Refresh ticket list to reflect the new comment
+        if (onTicketUpdated) {
+          await Promise.resolve(onTicketUpdated());
+        }
       } else {
         console.error('Comment creation failed:', response.message);
         toast.error(response.message || 'Failed to create comment');

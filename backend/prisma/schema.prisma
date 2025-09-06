@@ -17,14 +17,23 @@ model User {
   middleName  String?
   email       String   @unique
   password    String
-  department  String?
-  // New relational department reference (kept alongside legacy string for compatibility)
+  // Legacy string department removed; use relation below
   departmentId String?
   avatar      String?
   phone       String?
   location    String?
   isAgent     Boolean  @default(false)
   skills      Json?
+  // Auth & recovery fields
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
+  oauthProvider        String?
+  oauthProviderId      String?
+  emailVerifiedAt      DateTime?
+  lastLoginAt          DateTime?
+  // Email verification fields
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -227,6 +236,7 @@ model Permission {
 
   // Relations
   roles RolePermission[]
+  menuItems MenuItemPermission[]
 
   @@map("permissions")
 }
@@ -256,6 +266,39 @@ model UserRole {
 
   @@unique([userId, roleId])
   @@map("user_roles")
+}
+
+// Menu & Navigation Models
+model MenuItem {
+  id          String    @id @default(cuid())
+  parentId    String?
+  label       String
+  path        String?
+  icon        String?
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  featureFlag String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  parent    MenuItem?     @relation("MenuHierarchy", fields: [parentId], references: [id])
+  children  MenuItem[]    @relation("MenuHierarchy")
+  permissions MenuItemPermission[]
+
+  @@map("menu_items")
+}
+
+model MenuItemPermission {
+  menuItemId   String
+  permissionId String
+
+  // Relations
+  menuItem   MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([menuItemId, permissionId])
+  @@map("menu_item_permissions")
 }
 
 model AccessPolicy {

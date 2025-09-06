@@ -10,13 +10,18 @@ export interface User {
   email: string;
   role: string;
   avatar?: string;
-  department?: string;
+  departmentId?: string;
   phone?: string;
   location?: string;
   isAgent: boolean;
   skills?: any;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DepartmentOption {
+  id: string;
+  name: string;
 }
 
 // Support Agent types for backend API
@@ -27,7 +32,7 @@ export interface SupportAgent {
   middleName?: string;
   email: string;
   avatar?: string;
-  department: string;
+  departmentId?: string;
   skills?: string[];
 }
 
@@ -38,7 +43,7 @@ export interface CreateUserData {
   lastName: string;
   middleName?: string;
   role: string;
-  department?: string;
+  departmentId?: string;
   position?: string;
   phone?: string;
   avatar?: string;
@@ -50,12 +55,14 @@ export interface UpdateUserData {
   lastName?: string;
   middleName?: string;
   role?: string;
-  department?: string;
+  departmentId?: string | null;
   position?: string;
   phone?: string;
   avatar?: string;
   location?: string;
   isActive?: boolean;
+  // Optional new password when updating a user (admins or users:write only)
+  password?: string;
 }
 
 export interface UpdateProfileData {
@@ -73,7 +80,7 @@ export interface ChangePasswordData {
 export interface UserFilter {
   search?: string;
   role?: string;
-  department?: string;
+  departmentId?: string;
   isActive?: boolean;
   page?: number;
   limit?: number;
@@ -159,8 +166,8 @@ export class UserService {
   }
 
   // Get users by department
-  static async getUsersByDepartment(department: string): Promise<ApiResponse<User[]>> {
-    return apiClient.get(`/api/users/department/${department}`);
+  static async getUsersByDepartment(departmentId: string): Promise<ApiResponse<User[]>> {
+    return apiClient.get(`/api/users/department/${departmentId}`);
   }
 
   // Get users by role
@@ -171,6 +178,11 @@ export class UserService {
   // Get support agents
   static async getSupportAgents(): Promise<ApiResponse<SupportAgent[]>> {
     return apiClient.get(API_ENDPOINTS.USERS.AGENTS);
+  }
+
+  // Departments
+  static async getDepartments(): Promise<ApiResponse<DepartmentOption[]>> {
+    return apiClient.get(API_ENDPOINTS.DEPARTMENTS.LIST);
   }
 
   // Get all users

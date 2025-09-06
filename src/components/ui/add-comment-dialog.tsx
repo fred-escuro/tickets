@@ -51,7 +51,7 @@ export const AddCommentDialog: React.FC<AddCommentDialogProps> = ({
     setIsSubmitting(true);
     try {
       await onSubmit({ content: comment, attachments, isInternal });
-      toast.success('Comment added successfully!');
+      // Parent handles success toast; just close here
       handleClose();
     } catch (error) {
       toast.error('Failed to add comment. Please try again.');

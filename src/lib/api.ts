@@ -13,6 +13,11 @@ export const API_ENDPOINTS = {
     LOGOUT: '/api/auth/logout',
     REFRESH: '/api/auth/refresh',
     VERIFY: '/api/auth/verify',
+    FORGOT_PASSWORD: '/api/auth/forgot-password',
+    RESET_PASSWORD: '/api/auth/reset-password',
+    SOCIAL_LOGIN: '/api/auth/social-login',
+    VERIFY_EMAIL_REQUEST: '/api/auth/verify-email/request',
+    VERIFY_EMAIL_CONFIRM: '/api/auth/verify-email/confirm',
   },
   // Users
   USERS: {
@@ -25,6 +30,15 @@ export const API_ENDPOINTS = {
     UPDATE_BY_ID: (id: string) => `/api/users/${id}`,
     DELETE: (id: string) => `/api/users/${id}`,
     AGENTS: '/api/users/agents/list',
+  },
+  // Departments
+  DEPARTMENTS: {
+    LIST: '/api/departments',
+    GET: (id: string) => `/api/departments/${id}`,
+    CREATE: '/api/departments',
+    UPDATE: (id: string) => `/api/departments/${id}`,
+    DELETE: (id: string) => `/api/departments/${id}`,
+    ASSIGN_USER: (deptId: string, userId: string) => `/api/departments/${deptId}/users/${userId}`,
   },
   // Tickets
   TICKETS: {
@@ -66,6 +80,13 @@ export const API_ENDPOINTS = {
     GLOBAL: '/api/search',
     TICKETS: '/api/search/tickets',
     KNOWLEDGE: '/api/search/knowledge',
+  },
+  // Menu
+  MENU: {
+    LIST: '/api/menu',
+    ITEMS: '/api/menu/items',
+    ITEM: (id: string) => `/api/menu/items/${id}`,
+    LINK_PERMISSION: (id: string, permissionId: string) => `/api/menu/items/${id}/permissions/${permissionId}`,
   },
   // Health
   HEALTH: '/health',

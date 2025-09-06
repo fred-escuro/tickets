@@ -91,7 +91,14 @@ async function seedRbacAbac() {
             'sarah.tech@company.com',
             'mike.hardware@company.com',
             'alice.user@company.com',
-            'bob.employee@company.com'
+            'bob.employee@company.com',
+            // Alternate seed set
+            'admin@tickethub.com',
+            'manager@tickethub.com',
+            'agent@tickethub.com',
+            'developer@tickethub.com',
+            'customer@tickethub.com',
+            'user@tickethub.com'
           ]
         }
       }
@@ -99,12 +106,13 @@ async function seedRbacAbac() {
 
     const getUser = (email: string) => usersByEmail.find(u => u.email === email);
 
-    const adminUser = getUser('admin@company.com');
-    const john = getUser('john.support@company.com');
-    const sarah = getUser('sarah.tech@company.com');
-    const mike = getUser('mike.hardware@company.com');
-    const alice = getUser('alice.user@company.com');
-    const bob = getUser('bob.employee@company.com');
+    // Company.com set
+    const adminUser = getUser('admin@company.com') || getUser('admin@tickethub.com');
+    const john = getUser('john.support@company.com') || getUser('agent@tickethub.com');
+    const sarah = getUser('sarah.tech@company.com') || getUser('manager@tickethub.com');
+    const mike = getUser('mike.hardware@company.com') || getUser('developer@tickethub.com');
+    const alice = getUser('alice.user@company.com') || getUser('customer@tickethub.com');
+    const bob = getUser('bob.employee@company.com') || getUser('user@tickethub.com');
 
     // Assign roles
     const linkRole = async (userId: string, roleId: string, isPrimary = false) => {
@@ -117,7 +125,7 @@ async function seedRbacAbac() {
 
     if (adminUser) await linkRole(adminUser.id, adminRole.id, true);
     if (john) await linkRole(john.id, agentRole.id, true);
-    if (sarah) await linkRole(sarah.id, agentRole.id, true);
+    if (sarah) await linkRole(sarah.id, managerRole.id, true);
     if (mike) await linkRole(mike.id, agentRole.id, true);
     if (alice) await linkRole(alice.id, userRole.id, true);
     if (bob) await linkRole(bob.id, userRole.id, true);
@@ -126,7 +134,7 @@ async function seedRbacAbac() {
     const setDept = async (userId: string, deptId: string, deptName: string) => {
       await prisma.user.update({
         where: { id: userId },
-        data: { departmentId: deptId, department: deptName }
+        data: { departmentId: deptId }
       });
     };
 

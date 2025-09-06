@@ -23,12 +23,13 @@ import {
   Wrench,
   Menu
 } from 'lucide-react';
-import { type FC, useState, useEffect } from 'react';
+import { type FC, useState, useEffect, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
 import { Profile } from './Profile';
 import { GlobalSearch } from './GlobalSearch';
 import { NotificationDropdown } from './NotificationDropdown';
+import { menuService, type MenuItemDto } from '@/lib/services/menuService';
 
 export const Header: FC = () => {
   const location = useLocation();
@@ -48,6 +49,18 @@ export const Header: FC = () => {
       return raw ? JSON.parse(raw) : { support: false, tools: false, settings: false };
     } catch { return { support: false, tools: false, settings: false }; }
   });
+
+  // Dynamic menu from API
+  const [menu, setMenu] = useState<MenuItemDto[]>([]);
+  useEffect(() => {
+    let isMounted = true;
+    const load = async () => {
+      const res = await menuService.getMenu();
+      if (isMounted && res.success) setMenu(res.data || []);
+    };
+    if (isAuthenticated) load();
+    return () => { isMounted = false; };
+  }, [isAuthenticated]);
 
   // Update authentication state when it changes
   useEffect(() => {
@@ -103,33 +116,29 @@ export const Header: FC = () => {
     } catch {}
   }, [sidebarCollapsed]);
 
-  // Core navigation items for ticketing system
-  const coreNavItems = [
-    { path: '/', label: 'Dashboard', icon: Home },
-    { path: '/tickets', label: 'Tickets', icon: MessageSquare },
-  ];
+  // Icon mapping from string name to component
+  const iconMap = useMemo(() => ({
+    Home,
+    MessageSquare,
+    Users,
+    Calendar,
+    BarChart3,
+    FileText,
+    Headphones,
+    Shield,
+    Building2,
+    Ticket,
+    Bell,
+  } as Record<string, any>), []);
 
-  // Support team navigation
-  const supportNavItems = [
-    { path: '/users', label: 'Users', icon: Users },
-    { path: '/tasks', label: 'Tasks', icon: FileText },
-  ];
+  // Helpers to extract sections by label from hierarchical menu
+  const findSection = (label: string): MenuItemDto | undefined => menu.find(m => m.label === label);
+  const itemsOf = (label: string): MenuItemDto[] => (findSection(label)?.children ?? []).sort((a,b) => a.sortOrder - b.sortOrder);
 
-  // Management & reporting navigation
-  const managementNavItems = [
-    { path: '/calendar', label: 'Calendar', icon: Calendar },
-    { path: '/reports', label: 'Reports', icon: BarChart3 },
-    { path: '/knowledge-base', label: 'Knowledge Base', icon: Headphones },
-    { path: '/admin/users', label: 'User Management', icon: Shield },
-  ];
-
-  // Settings navigation
-  const settingsNavItems = [
-    { path: '/settings', label: 'General', icon: Building2 },
-    { path: '/settings?tab=tickets', label: 'Tickets', icon: Ticket },
-    { path: '/settings?tab=users', label: 'Users', icon: Users },
-    { path: '/settings?tab=notifications', label: 'Notifications', icon: Bell },
-  ];
+  const coreNavItems = itemsOf('Core');
+  const supportNavItems = itemsOf('Support');
+  const managementNavItems = itemsOf('Tools');
+  const settingsNavItems = itemsOf('Settings');
 
   const effectiveCollapsed = sidebarCollapsed && !sidebarHover;
   return (
@@ -187,12 +196,12 @@ export const Header: FC = () => {
               <nav className="flex items-center gap-3">
                 {/* Core Items - Always visible */}
                 {coreNavItems.map((item) => {
-                  const Icon = item.icon;
+                  const Icon = iconMap[item.icon || ''] || Home;
                   const isActive = location.pathname === item.path;
                   return (
                     <Link
-                      key={item.path}
-                      to={item.path}
+                      key={item.path || item.label}
+                      to={item.path || '#'}
                       className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                         isActive
                           ? 'bg-primary/10 text-primary shadow-sm'
@@ -223,11 +232,11 @@ export const Header: FC = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="center" className="w-48">
                     {supportNavItems.map((item) => {
-                      const Icon = item.icon;
+                      const Icon = iconMap[item.icon || ''] || Users;
                       return (
-                        <DropdownMenuItem key={item.path} asChild>
+                        <DropdownMenuItem key={item.path || item.label} asChild>
                           <Link
-                            to={item.path}
+                            to={item.path || '#'}
                             className="flex items-center gap-2 w-full"
                           >
                             <Icon className="h-4 w-4" />
@@ -257,11 +266,11 @@ export const Header: FC = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="center" className="w-48">
                     {managementNavItems.map((item) => {
-                      const Icon = item.icon;
+                      const Icon = iconMap[item.icon || ''] || Wrench;
                       return (
-                        <DropdownMenuItem key={item.path} asChild>
+                        <DropdownMenuItem key={item.path || item.label} asChild>
                           <Link
-                            to={item.path}
+                            to={item.path || '#'}
                             className="flex items-center gap-2 w-full"
                           >
                             <Icon className="h-4 w-4" />
@@ -291,11 +300,11 @@ export const Header: FC = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="center" className="w-48">
                     {settingsNavItems.map((item) => {
-                      const Icon = item.icon;
+                      const Icon = iconMap[item.icon || ''] || Settings;
                       return (
-                        <DropdownMenuItem key={item.path} asChild>
+                        <DropdownMenuItem key={item.path || item.label} asChild>
                           <Link
-                            to={item.path}
+                            to={item.path || '#'}
                             className="flex items-center gap-2 w-full"
                           >
                             <Icon className="h-4 w-4" />
@@ -323,12 +332,12 @@ export const Header: FC = () => {
             {/* Core */}
             <div className="space-y-1">
               {coreNavItems.map((item) => {
-                const Icon = item.icon;
+                const Icon = iconMap[item.icon || ''] || Home;
                 const isActive = location.pathname === item.path;
                 return (
                   <Link
-                    key={item.path}
-                    to={item.path}
+                    key={item.path || item.label}
+                    to={item.path || '#'}
                     className={`flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors ${
                       isActive
                         ? 'bg-primary/10 text-primary'
@@ -352,10 +361,10 @@ export const Header: FC = () => {
               )}
               <div className={`space-y-1 ${sectionCollapsed.support && effectiveCollapsed ? 'hidden' : ''}`}> 
                 {supportNavItems.map((item) => {
-                  const Icon = item.icon;
+                  const Icon = iconMap[item.icon || ''] || Users;
                   const isActive = location.pathname === item.path;
                   return (
-                    <Link key={item.path} to={item.path} className={`flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}>
+                    <Link key={item.path || item.label} to={item.path || '#'} className={`flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}>
                       <Icon className="h-4 w-4" />
                       {!effectiveCollapsed && <span>{item.label}</span>}
                     </Link>
@@ -374,10 +383,10 @@ export const Header: FC = () => {
               )}
               <div className={`space-y-1 ${sectionCollapsed.tools && effectiveCollapsed ? 'hidden' : ''}`}> 
                 {managementNavItems.map((item) => {
-                  const Icon = item.icon;
+                  const Icon = iconMap[item.icon || ''] || Wrench;
                   const isActive = location.pathname === item.path;
                   return (
-                    <Link key={item.path} to={item.path} className={`flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}>
+                    <Link key={item.path || item.label} to={item.path || '#'} className={`flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}>
                       <Icon className="h-4 w-4" />
                       {!effectiveCollapsed && <span>{item.label}</span>}
                     </Link>
@@ -396,11 +405,11 @@ export const Header: FC = () => {
               )}
               <div className={`space-y-1 ${sectionCollapsed.settings && effectiveCollapsed ? 'hidden' : ''}`}> 
                 {settingsNavItems.map((item) => {
-                  const Icon = item.icon;
+                  const Icon = iconMap[item.icon || ''] || Settings;
                   // active check using pathname startsWith for query params
-                  const isActive = location.pathname === '/settings' && item.path.startsWith('/settings');
+                  const isActive = location.pathname === '/settings' && ((item.path?.startsWith('/settings')) ?? false);
                   return (
-                    <Link key={item.path} to={item.path} className={`flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}>
+                    <Link key={item.path || item.label} to={item.path || '#'} className={`flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}>
                       <Icon className="h-4 w-4" />
                       {!effectiveCollapsed && <span>{item.label}</span>}
                     </Link>

@@ -34,7 +34,7 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
         middleName: createData.middleName || undefined,
         email: createData.email,
         password: hashedPassword,
-        department: createData.department || undefined,
+        departmentId: createData.departmentId || undefined,
         avatar: createData.avatar || undefined,
         phone: createData.phone || undefined,
         location: createData.location || undefined,
@@ -47,7 +47,7 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        department: true,
+        departmentId: true,
         avatar: true,
         phone: true,
         location: true,
@@ -75,7 +75,7 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
 // Get all users (admin only)
 router.get('/', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { page = 1, limit = 20, search, role, department } = req.query;
+    const { page = 1, limit = 20, search, role, departmentId } = req.query as any;
 
     const pageNum = parseInt(page.toString());
     const limitNum = parseInt(limit.toString());
@@ -98,7 +98,7 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
         }
       } as any;
     }
-    if (department) where.department = department;
+    if (departmentId) where.departmentId = departmentId;
 
     // Get total count
     const total = await prisma.user.count({ where });
@@ -112,7 +112,7 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        department: true,
+        departmentId: true,
         avatar: true,
         phone: true,
         location: true,
@@ -182,7 +182,7 @@ router.get('/:id', authenticate, async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        department: true,
+        departmentId: true,
         avatar: true,
         phone: true,
         location: true,
@@ -230,7 +230,7 @@ router.put('/:id', authenticate, async (req, res) => {
 
     // Users can only update their own profile unless they're admin
     // Allow if the requester is the same user or has admin role via RBAC
-    const requester = (req as any).user;
+    const requester = (req as any).user as any;
     const isAdmin = Array.isArray(requester?.roles) && requester.roles.some((r: any) => r?.role?.name === 'admin');
     if (id !== currentUserId && !isAdmin) {
       return res.status(403).json({
@@ -251,29 +251,41 @@ router.put('/:id', authenticate, async (req, res) => {
       });
     }
 
+    // Build update payload
+    const data: any = {
+      firstName: updateData.firstName || undefined,
+      lastName: updateData.lastName || undefined,
+      middleName: updateData.middleName || undefined,
+      email: updateData.email || undefined,
+      // role updates are disabled; RBAC handles roles
+      departmentId: updateData.departmentId === null ? null : updateData.departmentId || undefined,
+      avatar: updateData.avatar || undefined,
+      phone: updateData.phone || undefined,
+      location: updateData.location || undefined,
+      isAgent: updateData.isAgent ?? undefined,
+      skills: updateData.skills || undefined,
+    };
+
+    // If password is provided and requester is admin or has users:write permission, hash and set it
+    const requesterPermissions: string[] = Array.isArray(requester?.permissions) ? requester.permissions : [];
+    const canChangePassword = isAdmin || requesterPermissions.includes('users:write');
+    if (updateData.password && canChangePassword) {
+      const bcrypt = require('bcryptjs');
+      const hashed = await bcrypt.hash(updateData.password, 10);
+      data.password = hashed;
+    }
+
     // Update user
     const updatedUser = await prisma.user.update({
       where: { id },
-      data: {
-        firstName: updateData.firstName || undefined,
-        lastName: updateData.lastName || undefined,
-        middleName: updateData.middleName || undefined,
-        email: updateData.email || undefined,
-        // role updates are disabled; RBAC handles roles
-        department: updateData.department || undefined,
-        avatar: updateData.avatar || undefined,
-        phone: updateData.phone || undefined,
-        location: updateData.location || undefined,
-        isAgent: updateData.isAgent ?? undefined,
-        skills: updateData.skills || undefined
-      },
+      data,
       select: {
         id: true,
         firstName: true,
         lastName: true,
         middleName: true,
         email: true,
-        department: true,
+        departmentId: true,
         avatar: true,
         phone: true,
         location: true,
@@ -310,7 +322,7 @@ router.get('/agents/list', authenticate, async (req, res) => {
         middleName: true,
         email: true,
         avatar: true,
-        department: true,
+        departmentId: true,
         skills: true
       },
       orderBy: { firstName: 'asc' }

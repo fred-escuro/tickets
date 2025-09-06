@@ -216,7 +216,7 @@ router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req
             middleName: true,
             email: true,
             avatar: true,
-            department: true
+            departmentId: true
           }
         },
         assignee: {
@@ -227,7 +227,7 @@ router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req
             middleName: true,
             email: true,
             avatar: true,
-            department: true
+            departmentId: true
           }
         },
         status: {

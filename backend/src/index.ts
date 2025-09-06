@@ -18,6 +18,7 @@ import departmentRoutes from './routes/departments';
 import roleRoutes from './routes/roles';
 import permissionRoutes from './routes/permissions';
 import policyRoutes from './routes/policies';
+import menuRoutes from './routes/menu';
 
 // Load environment variables
 dotenv.config();
@@ -54,6 +55,7 @@ app.use('/api/departments', departmentRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/policies', policyRoutes);
+app.use('/api/menu', menuRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

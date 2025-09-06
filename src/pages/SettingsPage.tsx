@@ -37,6 +37,8 @@ import {
   Key,
   Lock
 } from 'lucide-react';
+import { DepartmentSettings } from '@/components/DepartmentSettings';
+import { MenuManagement } from '@/components/MenuManagement';
 import * as LucideIcons from 'lucide-react';
 import { settingsService, type SystemSettings } from '@/lib/settingsService';
 import { ticketSystemService, type TicketCategory, type TicketPriority, type TicketStatus } from '@/lib/services/ticketSystemService';
@@ -1423,6 +1425,24 @@ export default function SettingsPage() {
             onValueChange={setExpandedSections}
             className="space-y-4"
           >
+            {/* Menu Management */}
+            <AccordionItem value="menu" className="border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
+                <div className="flex items-center gap-3 w-full">
+                  <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
+                    <Settings className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">Menu Management</h3>
+                    <p className="text-sm text-muted-foreground">Manage menu items and permissions</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <MenuManagement />
+              </AccordionContent>
+            </AccordionItem>
+
             {/* RBAC */}
             <AccordionItem value="rbac" className="border rounded-lg">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
@@ -1727,7 +1747,7 @@ export default function SettingsPage() {
             </AccordionItem>
             
 
-            {/* Departments */}
+            {/* Departments (DB-backed) */}
             <AccordionItem value="departments" className="border rounded-lg">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3">
@@ -1738,26 +1758,10 @@ export default function SettingsPage() {
                     <h3 className="font-semibold">Departments</h3>
                     <p className="text-sm text-muted-foreground">Organize users into departments</p>
                   </div>
-                  <Badge variant="outline" className="ml-auto">
-                    {settings.users.departments.length} departments
-                  </Badge>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-6 pb-6">
-                <div className="space-y-4">
-                  {settings.users.departments.map((dept) => (
-                    <div key={dept.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <h4 className="font-medium">{dept.name}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Manager: {dept.manager}
-                        </p>
-                      </div>
-                      <Button variant="outline" size="sm">Edit</Button>
-                    </div>
-                  ))}
-                  <Button variant="outline" className="w-full">Add New Department</Button>
-                </div>
+                <DepartmentSettings />
               </AccordionContent>
             </AccordionItem>
           </Accordion>

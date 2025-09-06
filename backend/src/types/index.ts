@@ -11,7 +11,7 @@ export interface User extends BaseEntity {
   lastName: string;
   middleName?: string;
   email: string;
-  department?: string;
+  departmentId?: string;
   avatar?: string;
   phone?: string;
   location?: string;
@@ -25,7 +25,7 @@ export interface CreateUserRequest {
   middleName?: string;
   email: string;
   password: string;
-  department?: string;
+  departmentId?: string;
   avatar?: string;
   phone?: string;
   location?: string;
@@ -38,12 +38,14 @@ export interface UpdateUserRequest {
   lastName?: string;
   middleName?: string;
   email?: string;
-  department?: string;
+  departmentId?: string;
   avatar?: string;
   phone?: string;
   location?: string;
   isAgent?: boolean;
   skills?: string[];
+  // Allow privileged updates to password
+  password?: string;
 }
 
 export interface LoginRequest {
@@ -366,4 +368,35 @@ export interface UpdateAccessPolicyRequest {
   action?: string;
   conditions?: Record<string, any> | null;
   isActive?: boolean;
+}
+
+// Menu & Navigation Types
+export interface MenuItem extends BaseEntity {
+  parentId?: string;
+  label: string;
+  path?: string;
+  icon?: string;
+  sortOrder?: number;
+  isActive: boolean;
+  featureFlag?: string;
+}
+
+export interface CreateMenuItemRequest {
+  parentId?: string;
+  label: string;
+  path?: string;
+  icon?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+  featureFlag?: string;
+}
+
+export interface UpdateMenuItemRequest {
+  parentId?: string | null;
+  label?: string;
+  path?: string | null;
+  icon?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+  featureFlag?: string | null;
 }

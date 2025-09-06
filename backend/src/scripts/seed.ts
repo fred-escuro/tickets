@@ -16,8 +16,7 @@ async function main() {
       lastName: 'Administrator',
       email: 'admin@company.com',
       password: adminPassword,
-      role: 'admin',
-      department: 'IT',
+      
       isAgent: true,
       skills: ['System Administration', 'Security', 'Networking']
     }
@@ -33,8 +32,7 @@ async function main() {
       lastName: 'Support',
       email: 'john.support@company.com',
       password: agentPassword,
-      role: 'support_agent',
-      department: 'IT Support',
+      
       isAgent: true,
       skills: ['Network', 'Hardware', 'Software', 'Security']
     }
@@ -48,8 +46,7 @@ async function main() {
       lastName: 'Tech',
       email: 'sarah.tech@company.com',
       password: agentPassword,
-      role: 'support_agent',
-      department: 'IT Support',
+      
       isAgent: true,
       skills: ['Software', 'Database', 'Cloud', 'DevOps']
     }
@@ -63,8 +60,7 @@ async function main() {
       lastName: 'Hardware',
       email: 'mike.hardware@company.com',
       password: agentPassword,
-      role: 'support_agent',
-      department: 'IT Support',
+      
       isAgent: true,
       skills: ['Hardware', 'Peripherals', 'Maintenance']
     }
@@ -80,8 +76,7 @@ async function main() {
       lastName: 'User',
       email: 'alice.user@company.com',
       password: userPassword,
-      role: 'user',
-      department: 'Marketing',
+      
       isAgent: false
     }
   });
@@ -94,8 +89,7 @@ async function main() {
       lastName: 'Employee',
       email: 'bob.employee@company.com',
       password: userPassword,
-      role: 'user',
-      department: 'Sales',
+      
       isAgent: false
     }
   });

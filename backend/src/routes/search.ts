@@ -140,8 +140,7 @@ router.get('/', authenticate, async (req, res) => {
           { firstName: { contains: searchTerm, mode: 'insensitive' } },
           { lastName: { contains: searchTerm, mode: 'insensitive' } },
           { middleName: { contains: searchTerm, mode: 'insensitive' } },
-          { email: { contains: searchTerm, mode: 'insensitive' } },
-          { department: { contains: searchTerm, mode: 'insensitive' } }
+          { email: { contains: searchTerm, mode: 'insensitive' } }
         ]
       };
 
@@ -156,7 +155,7 @@ router.get('/', authenticate, async (req, res) => {
             middleName: true,
             email: true,
             // role column deprecated; include roles relation if needed
-            department: true,
+            departmentId: true,
             avatar: true,
             isAgent: true,
             createdAt: true

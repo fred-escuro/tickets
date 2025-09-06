@@ -4,3 +4,4 @@ export * from './ticketService';
 export * from './userService';
 export * from './attachmentService';
 export * from './commentService';
+export * from './menuService';

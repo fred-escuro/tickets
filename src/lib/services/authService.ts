@@ -64,6 +64,31 @@ export class AuthService {
     return apiClient.post(API_ENDPOINTS.AUTH.REGISTER, data);
   }
 
+  // Forgot password
+  static async forgotPassword(email: string): Promise<ApiResponse<{ resetToken?: string; expiresAt?: string }>> {
+    return apiClient.post(API_ENDPOINTS.AUTH.FORGOT_PASSWORD, { email });
+  }
+
+  // Reset password
+  static async resetPassword(token: string, password: string): Promise<ApiResponse<void>> {
+    return apiClient.post(API_ENDPOINTS.AUTH.RESET_PASSWORD, { token, password });
+  }
+
+  // Social login (Google)
+  static async socialLoginGoogle(idToken: string): Promise<ApiResponse<AuthResponse>> {
+    return apiClient.post(API_ENDPOINTS.AUTH.SOCIAL_LOGIN, { provider: 'google', idToken });
+  }
+
+  // Email verification request
+  static async requestEmailVerification(email: string): Promise<ApiResponse<{ token?: string; expiresAt?: string }>> {
+    return apiClient.post(API_ENDPOINTS.AUTH.VERIFY_EMAIL_REQUEST, { email });
+  }
+
+  // Email verification confirm
+  static async confirmEmailVerification(token: string): Promise<ApiResponse<void>> {
+    return apiClient.post(API_ENDPOINTS.AUTH.VERIFY_EMAIL_CONFIRM, { token });
+  }
+
   // Logout user
   static async logout(): Promise<ApiResponse<void>> {
     try {

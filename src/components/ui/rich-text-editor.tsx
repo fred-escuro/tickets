@@ -8,8 +8,7 @@ import Underline from '@tiptap/extension-underline';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import { Highlight } from '@tiptap/extension-highlight';
-import CodeBlock from '@tiptap/extension-code-block';
-import Code from '@tiptap/extension-code';
+// Remove explicit Code and CodeBlock to avoid duplicates with StarterKit
 import Placeholder from '@tiptap/extension-placeholder';
 import FontFamily from '@tiptap/extension-font-family';
 import FontSize from '@tiptap/extension-font-size';
@@ -37,11 +36,10 @@ import {
   Palette,
   Highlighter,
   Type,
-  Move,
   ArrowLeft,
   ArrowRight,
-  Maximize2,
-  Minimize2
+  // Maximize2,
+  // Minimize2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -527,8 +525,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       Highlight.configure({
         multicolor: true,
       }),
-      CodeBlock,
-      Code,
       Placeholder.configure({
         placeholder,
       }),
@@ -556,7 +552,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     try {
       const current = editor.getHTML();
       if (value !== current) {
-        editor.commands.setContent(value || '', false);
+        editor.commands.setContent(value || '', { emitUpdate: false });
       }
     } catch {
       // no-op safeguard
@@ -681,7 +677,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   // Add image resize functionality
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || !editor.view || !editor.view.dom) return;
 
     const handleImageResize = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
@@ -757,22 +753,25 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
      };
 
     // Add click listener for resize
-    editor.view.dom.addEventListener('mousedown', handleImageResize);
-    
+    const dom = editor.view.dom;
+    dom.addEventListener('mousedown', handleImageResize);
+
     // Add resize handles when content changes
     const observer = new MutationObserver(addResizeHandles);
-    observer.observe(editor.view.dom, { childList: true, subtree: true });
-    
-         // Initial add of resize handles
-     addResizeHandles();
-     
-     // Also add resize handles after a delay to ensure they're added
-     setTimeout(addResizeHandles, 1000);
-     setTimeout(addResizeHandles, 2000);
+    observer.observe(dom, { childList: true, subtree: true });
+
+    // Initial add of resize handles
+    addResizeHandles();
+
+    // Staggered attempts in case content mounts later
+    const t1 = setTimeout(addResizeHandles, 1000);
+    const t2 = setTimeout(addResizeHandles, 2000);
 
     return () => {
-      editor.view.dom.removeEventListener('mousedown', handleImageResize);
-      observer.disconnect();
+      try { dom.removeEventListener('mousedown', handleImageResize); } catch {}
+      try { observer.disconnect(); } catch {}
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
   }, [editor]);
 

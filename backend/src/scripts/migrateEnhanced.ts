@@ -1,4 +1,7 @@
 import { PrismaClient } from '@prisma/client';
+import { seedTicketSystem } from './seedTicketSystem';
+import { seedRbacAbac } from './seedRbacAbac';
+import { seedMenu } from './seedMenu';
 
 const prisma = new PrismaClient();
 
@@ -7,12 +10,16 @@ async function migrateEnhanced() {
 
   try {
     // This script will be run after the Prisma migration
-    // It handles any data migration or cleanup needed
-    
-    console.log('✅ Enhanced ticket system migration completed');
-    console.log('📋 Next steps:');
-    console.log('1. Run: npm run db:reset (to reset and seed with new data)');
-    console.log('2. Or run: npm run db:seed-ticket-system (to just seed ticket system data)');
+    // It seeds core data sets
+    console.log('👥 Seeding users (basic)...');
+    try { await import('./seed'); } catch {}
+    console.log('🔐 Seeding RBAC/ABAC...');
+    await seedRbacAbac();
+    console.log('🎫 Seeding ticket system (categories, priorities, statuses, templates, workflows)...');
+    await seedTicketSystem();
+    console.log('📋 Seeding menu items and permissions...');
+    await seedMenu();
+    console.log('✅ Enhanced ticket system migration and seeding completed');
     
   } catch (error) {
     console.error('❌ Migration error:', error);
