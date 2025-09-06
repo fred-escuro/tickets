@@ -750,6 +750,35 @@ export const UsersPage: FC = () => {
                    disabled
                    className="bg-gray-50"
                  />
+                 {/* Email verification action (admin/users:write only) */}
+                 {(() => {
+                   const currentUser = JSON.parse(localStorage.getItem('user') || 'null') as any;
+                   const perms: string[] = Array.isArray(currentUser?.permissions) ? currentUser.permissions : [];
+                   const roles: string[] = Array.isArray(currentUser?.roles) ? currentUser.roles.map((r: any) => r?.role?.name) : [];
+                   const canVerify = perms.includes('users:write') || roles.includes('admin');
+                   if (!canVerify) return null;
+                   return (
+                     <div className="flex items-center gap-2 pt-1">
+                       <Button type="button" variant="outline" size="sm"
+                         onClick={async () => {
+                           if (!selectedUser) return;
+                           try {
+                             const res = await UserService.requestVerificationForUser(selectedUser.id);
+                             if (res.success) {
+                               toast.success('Verification email sent (if the account is unverified)');
+                             } else {
+                               toast.error(res.error || 'Failed to request verification');
+                             }
+                           } catch (e) {
+                             toast.error('Failed to request verification');
+                           }
+                         }}
+                       >
+                         Send verification email
+                       </Button>
+                     </div>
+                   );
+                 })()}
                </div>
              </div>
 

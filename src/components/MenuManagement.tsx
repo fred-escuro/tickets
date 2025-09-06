@@ -67,7 +67,9 @@ export function MenuManagement() {
         toast.success(editItem ? 'Menu item updated' : 'Menu item created');
         setDlgOpen(false);
         setEditItem(null);
+        const y = window.scrollY;
         await load();
+        window.scrollTo({ top: y });
       } else {
         toast.error(res.error || 'Operation failed');
       }
@@ -79,7 +81,12 @@ export function MenuManagement() {
   const remove = async (id: string) => {
     try {
       const res = await menuService.deleteItem(id);
-      if (res.success) { toast.success('Menu item deleted'); await load(); }
+      if (res.success) {
+        toast.success('Menu item deleted');
+        const y = window.scrollY;
+        await load();
+        window.scrollTo({ top: y });
+      }
       else toast.error(res.error || 'Failed to delete');
     } catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
   };
@@ -90,7 +97,13 @@ export function MenuManagement() {
     if (!targetItem || !selectedPermId) return;
     try {
       const res = await menuService.linkPermission(targetItem.id, selectedPermId);
-      if (res.success) { toast.success('Permission linked'); setLinkDlgOpen(false); await load(); }
+      if (res.success) {
+        toast.success('Permission linked');
+        setLinkDlgOpen(false);
+        const y = window.scrollY;
+        await load();
+        window.scrollTo({ top: y });
+      }
       else toast.error(res.error || 'Failed to link permission');
     } catch (e: any) { toast.error(e?.message || 'Failed to link permission'); }
   };
@@ -98,7 +111,12 @@ export function MenuManagement() {
   const unlinkPerm = async (item: MenuItemFlat, permissionId: string) => {
     try {
       const res = await menuService.unlinkPermission(item.id, permissionId);
-      if (res.success) { toast.success('Permission unlinked'); await load(); }
+      if (res.success) {
+        toast.success('Permission unlinked');
+        const y = window.scrollY;
+        await load();
+        window.scrollTo({ top: y });
+      }
       else toast.error(res.error || 'Failed to unlink permission');
     } catch (e: any) { toast.error(e?.message || 'Failed to unlink permission'); }
   };

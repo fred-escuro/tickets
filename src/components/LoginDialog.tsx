@@ -197,11 +197,12 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
   };
 
   const handleDemoLogin = async (type: 'admin' | 'agent' | 'user') => {
+    // Match seeded users and passwords from backend seed scripts
     const demoCredentials = {
-      admin: { email: 'admin@tickethub.com', password: 'password123' },
-      agent: { email: 'agent@tickethub.com', password: 'password123' },
-      user: { email: 'user@tickethub.com', password: 'password123' }
-    };
+      admin: { email: 'admin@company.com', password: 'admin123' },
+      agent: { email: 'john.support@company.com', password: 'agent123' },
+      user: { email: 'alice.user@company.com', password: 'user123' }
+    } as const;
 
     setCredentials(demoCredentials[type]);
     setIsLoading(true);
@@ -323,7 +324,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
             </Button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Button type="button" variant="ghost" className="justify-start px-0 text-sm" onClick={handleForgotPassword} disabled={isSubmittingForgot}>
+            <Button type="button" variant="outline" onClick={handleForgotPassword} disabled={isSubmittingForgot}>
               {isSubmittingForgot ? 'Sending…' : 'Forgot password?'}
             </Button>
             <Button type="button" variant="outline" onClick={handleResendVerification}>

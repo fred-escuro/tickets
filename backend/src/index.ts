@@ -19,6 +19,9 @@ import roleRoutes from './routes/roles';
 import permissionRoutes from './routes/permissions';
 import policyRoutes from './routes/policies';
 import menuRoutes from './routes/menu';
+// Legacy settings routes removed after migration to v2
+// import settingsRoutes from './routes/settings';
+import settingsV2Routes from './routes/settingsV2';
 
 // Load environment variables
 dotenv.config();
@@ -42,6 +45,15 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Serve static uploads (e.g., logo)
+import path from 'path';
+import fs from 'fs';
+const uploadsDir = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir, { maxAge: '7d' }));
+
 // Use routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tickets', ticketRoutes);
@@ -56,6 +68,8 @@ app.use('/api/roles', roleRoutes);
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/policies', policyRoutes);
 app.use('/api/menu', menuRoutes);
+// app.use('/api/settings', settingsRoutes);
+app.use('/api/settings/v2', settingsV2Routes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

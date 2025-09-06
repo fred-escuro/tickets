@@ -41,6 +41,8 @@ import { DepartmentSettings } from '@/components/DepartmentSettings';
 import { MenuManagement } from '@/components/MenuManagement';
 import * as LucideIcons from 'lucide-react';
 import { settingsService, type SystemSettings } from '@/lib/settingsService';
+import { settingsApi, type SystemSettingsDto } from '@/lib/services/settingsApi';
+import { buildApiUrl } from '@/lib/api';
 import { ticketSystemService, type TicketCategory, type TicketPriority, type TicketStatus } from '@/lib/services/ticketSystemService';
 import { TicketStatusWorkflow } from '@/components/TicketStatusWorkflow';
 import { PriorityWorkflow } from '@/components/PriorityWorkflow';
@@ -54,6 +56,20 @@ import { UserService, type User as AppUser } from '@/lib/services/userService';
 export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SystemSettings>(settingsService.getSettings());
+  const [serverSettings, setServerSettings] = useState<SystemSettingsDto | null>(null);
+  // v2 generic namespaces
+  const [branding, setBranding] = useState<{ appName: string; logoUrl?: string | null }>({ appName: 'TicketHub', logoUrl: null });
+  const [companyNs, setCompanyNs] = useState<{ name: string; email: string; phone: string; address: string; timezone: string; language: string; currency: string; businessHours: { start: string; end: string; timezone?: string }; logoUrl?: string | null }>({ name: '', email: '', phone: '', address: '', timezone: 'UTC', language: 'en', currency: 'USD', businessHours: { start: '09:00', end: '17:00', timezone: 'UTC' }, logoUrl: null });
+  const [smtp, setSmtp] = useState<{ host: string; port: number; secure: boolean; fromAddress: string; user: string; password: string }>({ host: '', port: 587, secure: false, fromAddress: '', user: '', password: '' });
+  // App logo staging (save on Save Preferences)
+  const [brandingLogoFile, setBrandingLogoFile] = useState<File | null>(null);
+  const [brandingLogoPreviewUrl, setBrandingLogoPreviewUrl] = useState<string | null>(null);
+  // Company logo staging
+  const [companyLogoFile, setCompanyLogoFile] = useState<File | null>(null);
+  const [companyLogoPreviewUrl, setCompanyLogoPreviewUrl] = useState<string | null>(null);
+  const [notifyNs, setNotifyNs] = useState<{ emailEnabled: boolean; inAppEnabled: boolean; pushEnabled: boolean; frequency: string }>({ emailEnabled: true, inAppEnabled: true, pushEnabled: false, frequency: 'immediate' });
+  const [googleAuth, setGoogleAuth] = useState<{ enabled: boolean; redirectUri: string; clientId: string; clientSecret: string }>({ enabled: false, redirectUri: '', clientId: '', clientSecret: '' });
+  const [logoUploading, setLogoUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   
@@ -201,6 +217,27 @@ export default function SettingsPage() {
   // Load settings on component mount
   useEffect(() => {
     setSettings(settingsService.getSettings());
+    // Load generic namespaces
+    (async () => {
+      const res = await settingsApi.getNamespaces(['branding','company','email.smtp','notifications','auth.google']);
+      if (res.success && res.data) {
+        const b = res.data['branding'] || {};
+        setBranding({ appName: b.appName || b.name || 'TicketHub', logoUrl: b.logoUrl || null });
+        const c = res.data['company'] || {};
+        setCompanyNs({
+          name: c.name || '', email: c.email || '', phone: c.phone || '', address: c.address || '',
+          timezone: c.timezone || 'UTC', language: c.language || 'en', currency: c.currency || 'USD',
+          businessHours: c.businessHours || { start: '09:00', end: '17:00', timezone: c.timezone || 'UTC' },
+          logoUrl: c.logoUrl || null
+        });
+        const s = res.data['email.smtp'] || {};
+        setSmtp({ host: s.host || '', port: Number(s.port ?? 587), secure: !!s.secure, fromAddress: s.fromAddress || '', user: s.user || '', password: s.password || '' });
+        const n = res.data['notifications'] || {};
+        setNotifyNs({ emailEnabled: !!n.emailEnabled, inAppEnabled: !!n.inAppEnabled, pushEnabled: !!n.pushEnabled, frequency: n.frequency || 'immediate' });
+        const g = res.data['auth.google'] || {};
+        setGoogleAuth({ enabled: !!g.enabled, redirectUri: g.redirectUri || '', clientId: g.clientId || '', clientSecret: g.clientSecret || '' });
+      }
+    })();
     loadTicketSystemData();
     loadRbacAbac();
     
@@ -225,6 +262,60 @@ export default function SettingsPage() {
       setExpandedSections([]);
     }
   }, [currentTab, allAccordionsExpanded]);
+
+  // Search: auto-switch tab and expand matching sections; scroll to first match
+  useEffect(() => {
+    const q = (searchQuery || '').trim().toLowerCase();
+    if (!q) return;
+
+    const index: Record<string, Record<string, string[]>> = {
+      general: {
+        company: ['company', 'address', 'phone', 'timezone', 'company logo', 'logo'],
+        system: ['system', 'language', 'currency', 'business hours', 'app name', 'app logo', 'branding', 'brand']
+      },
+      tickets: {
+        categories: ['category', 'categories'],
+        priorities: ['priority', 'priorities', 'sla'],
+        statuses: ['status', 'statuses'],
+        workflows: ['workflow', 'workflows', 'automation']
+      },
+      users: {
+        roles: ['role', 'roles', 'rbac'],
+        departments: ['department', 'departments']
+      },
+      notifications: {
+        smtp: ['smtp', 'mail', 'email server', 'from address', 'port', 'tls', 'ssl'],
+        email: ['email', 'notification', 'notifications'],
+        inapp: ['in-app', 'inapp', 'in app']
+      }
+    } as any;
+
+    let bestTab: string | null = null;
+    let matches: string[] = [];
+    (Object.keys(index) as string[]).forEach((tab) => {
+      const sections = index[tab];
+      const matched = Object.entries(sections)
+        .filter(([_, keywords]) => keywords.some((w) => w.includes(q) || q.includes(w)))
+        .map(([sec]) => sec);
+      if (!bestTab && matched.length > 0) {
+        bestTab = tab;
+        matches = matched;
+      }
+    });
+
+    if (bestTab) {
+      if (bestTab === 'general') setSearchParams({}); else setSearchParams({ tab: bestTab });
+      setExpandedSections(matches);
+      // Scroll to first match after render
+      setTimeout(() => {
+        const first = matches[0];
+        const el = document.querySelector(`[data-section="${first}"]`);
+        if (el && 'scrollIntoView' in el) {
+          (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 50);
+    }
+  }, [searchQuery]);
 
   const loadTicketSystemData = async () => {
     try {
@@ -321,8 +412,14 @@ export default function SettingsPage() {
     setSaveStatus('saving');
     
     try {
-      // Save settings using the service
+      // Save settings locally
       settingsService.updateSettings(settings);
+      // Persist namespaces to backend
+      await settingsApi.updateNamespace('branding', { appName: branding.appName });
+      await settingsApi.updateNamespace('company', {
+        name: companyNs.name, email: companyNs.email, phone: companyNs.phone, address: companyNs.address,
+        timezone: companyNs.timezone, language: companyNs.language, currency: companyNs.currency, businessHours: companyNs.businessHours
+      });
       
       setSaveStatus('success');
     } catch (error) {
@@ -332,6 +429,125 @@ export default function SettingsPage() {
       setIsSaving(false);
       // Reset status after 3 seconds
       setTimeout(() => setSaveStatus('idle'), 3000);
+    }
+  };
+
+  const handleLogoUpload = (file: File) => {
+    try {
+      setLogoUploading(true);
+      // Stage file; upload will happen on Save Preferences
+      if (brandingLogoPreviewUrl) {
+        try { URL.revokeObjectURL(brandingLogoPreviewUrl); } catch {}
+      }
+      setBrandingLogoFile(file);
+      setBrandingLogoPreviewUrl(URL.createObjectURL(file));
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  // Save helpers for namespaces
+  const saveBranding = async () => {
+    try {
+      const res = await settingsApi.updateNamespace('branding', { appName: branding.appName });
+      if (!res.success) throw new Error(res.error || 'Failed to save branding');
+      toast.success('Branding saved');
+      try { window.dispatchEvent(new CustomEvent('branding-updated', { detail: { appName: branding.appName, appLogoUrl: branding.logoUrl } })); } catch {}
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save branding');
+    }
+  };
+
+  const saveCompany = async () => {
+    try {
+      const res = await settingsApi.updateNamespace('company', companyNs as any);
+      if (!res.success) throw new Error(res.error || 'Failed to save company info');
+      toast.success('Company info saved');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save company info');
+    }
+  };
+
+  const handleCompanyLogoUpload = (file: File) => {
+    try {
+      setLogoUploading(true);
+      if (companyLogoPreviewUrl) { try { URL.revokeObjectURL(companyLogoPreviewUrl); } catch {} }
+      setCompanyLogoFile(file);
+      setCompanyLogoPreviewUrl(URL.createObjectURL(file));
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  const saveSmtp = async () => {
+    try {
+      const res = await settingsApi.updateNamespace('email.smtp', smtp as any);
+      if (!res.success) throw new Error(res.error || 'Failed to save SMTP');
+      toast.success('SMTP settings saved');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save SMTP');
+    }
+  };
+
+  const saveNotifications = async () => {
+    try {
+      const res = await settingsApi.updateNamespace('notifications', notifyNs as any);
+      if (!res.success) throw new Error(res.error || 'Failed to save notifications');
+      toast.success('Notification settings saved');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save notifications');
+    }
+  };
+
+  const saveGoogle = async () => {
+    try {
+      const res = await settingsApi.updateNamespace('auth.google', googleAuth as any);
+      if (!res.success) throw new Error(res.error || 'Failed to save Google auth');
+      toast.success('Google auth settings saved');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save Google auth');
+    }
+  };
+
+  const saveSystemPreferences = async () => {
+    try {
+      let logoUrlToSave = branding.logoUrl || null;
+      // Upload staged logo first if present
+      if (brandingLogoFile) {
+        const resp = await settingsApi.uploadToNamespace('branding','logoUrl', brandingLogoFile);
+        if (!resp.success) throw new Error(resp.error || 'Failed to upload app logo');
+        logoUrlToSave = (resp.data as any)?.value as string;
+      }
+      await settingsApi.updateNamespace('branding', { appName: branding.appName, logoUrl: logoUrlToSave });
+      let companyLogoUrlToSave = companyNs.logoUrl || null;
+      if (companyLogoFile) {
+        const resp2 = await settingsApi.uploadToNamespace('company','logoUrl', companyLogoFile);
+        if (!resp2.success) throw new Error(resp2.error || 'Failed to upload company logo');
+        companyLogoUrlToSave = (resp2.data as any)?.value as string;
+      }
+      await settingsApi.updateNamespace('company', {
+        name: companyNs.name,
+        email: companyNs.email,
+        phone: companyNs.phone,
+        address: companyNs.address,
+        timezone: companyNs.timezone,
+        language: companyNs.language,
+        currency: companyNs.currency,
+        businessHours: companyNs.businessHours,
+        logoUrl: companyLogoUrlToSave,
+      });
+      // Update local branding state and notify header
+      setBranding(prev => ({ ...prev, logoUrl: logoUrlToSave }));
+      if (brandingLogoPreviewUrl) { try { URL.revokeObjectURL(brandingLogoPreviewUrl); } catch {} }
+      setBrandingLogoFile(null);
+      setBrandingLogoPreviewUrl(null);
+      if (companyLogoPreviewUrl) { try { URL.revokeObjectURL(companyLogoPreviewUrl); } catch {} }
+      setCompanyLogoFile(null);
+      setCompanyLogoPreviewUrl(null);
+      try { window.dispatchEvent(new CustomEvent('branding-updated', { detail: { appName: branding.appName, appLogoUrl: logoUrlToSave } })); } catch {}
+      toast.success('Preferences saved');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save preferences');
     }
   };
 
@@ -893,7 +1109,7 @@ export default function SettingsPage() {
             className="space-y-4"
           >
             {/* Company Information */}
-            <AccordionItem value="company" className="border rounded-lg">
+            <AccordionItem value="company" className="border rounded-lg" data-section="company">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
@@ -907,39 +1123,37 @@ export default function SettingsPage() {
               </AccordionTrigger>
               <AccordionContent className="px-6 pb-6">
                 <div className="space-y-4">
+                  {/* Company Logo */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="companyName">Company Name</Label>
-                      <Input
-                        id="companyName"
-                        value={settings.general.companyName}
-                        onChange={(e) => updateSetting('general', 'general', 'companyName', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="companyEmail">Company Email</Label>
-                      <Input
-                        id="companyEmail"
-                        type="email"
-                        value={settings.general.companyEmail}
-                        onChange={(e) => updateSetting('general', 'general', 'companyEmail', e.target.value)}
-                      />
+                      <Label>Company Logo</Label>
+                      <div className="flex items-center gap-3">
+                        <img src={companyLogoPreviewUrl || (companyNs.logoUrl ? (companyNs.logoUrl.startsWith('http') ? companyNs.logoUrl : buildApiUrl(companyNs.logoUrl.startsWith('/uploads/') ? companyNs.logoUrl : `/uploads/${companyNs.logoUrl.replace(/^uploads[\\/]/,'')}`)) : (branding.logoUrl ? (branding.logoUrl.startsWith('http') ? branding.logoUrl : buildApiUrl(branding.logoUrl.startsWith('/uploads/') ? branding.logoUrl : `/uploads/${branding.logoUrl.replace(/^uploads[\\/]/,'')}`)) : '/ticket.ico'))} alt="Company Logo" className="h-10 w-10 rounded border" onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/ticket.ico'; }} />
+                        <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleCompanyLogoUpload(f); }} disabled={logoUploading} />
+                      </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
+                      <Label htmlFor="companyName">Company Name</Label>
+                      <Input id="companyName" defaultValue={companyNs.name} onBlur={(e) => setCompanyNs(prev => ({ ...prev, name: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="companyEmail">Company Email</Label>
+                      <Input id="companyEmail" type="email" defaultValue={companyNs.email} onBlur={(e) => setCompanyNs(prev => ({ ...prev, email: e.target.value }))} />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
                       <Label htmlFor="companyPhone">Company Phone</Label>
-                      <Input
-                        id="companyPhone"
-                        value={settings.general.companyPhone}
-                        onChange={(e) => updateSetting('general', 'general', 'companyPhone', e.target.value)}
-                      />
+                      <Input id="companyPhone" defaultValue={companyNs.phone} onBlur={(e) => setCompanyNs(prev => ({ ...prev, phone: e.target.value }))} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="timezone">Timezone</Label>
                       <Select 
-                        value={settings.general.timezone}
-                        onValueChange={(value) => updateSetting('general', 'general', 'timezone', value)}
+                        value={companyNs.timezone}
+                        onValueChange={(value) => setCompanyNs(prev => ({ ...prev, timezone: value }))}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -957,11 +1171,10 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="companyAddress">Company Address</Label>
-                    <Textarea
-                      id="companyAddress"
-                      value={settings.general.companyAddress}
-                      onChange={(e) => updateSetting('general', 'general', 'companyAddress', e.target.value)}
-                    />
+                    <Textarea id="companyAddress" defaultValue={companyNs.address} onBlur={(e) => setCompanyNs(prev => ({ ...prev, address: e.target.value }))} />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button type="button" onClick={saveCompany}>Save Company</Button>
                   </div>
                 </div>
               </AccordionContent>
@@ -970,7 +1183,7 @@ export default function SettingsPage() {
             
 
             {/* System Preferences */}
-            <AccordionItem value="system" className="border rounded-lg">
+            <AccordionItem value="system" className="border rounded-lg" data-section="system">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-green-100 text-green-600">
@@ -988,8 +1201,8 @@ export default function SettingsPage() {
                     <div className="space-y-2">
                       <Label htmlFor="language">Default Language</Label>
                       <Select 
-                        value={settings.general.language}
-                        onValueChange={(value) => updateSetting('general', 'general', 'language', value)}
+                        value={companyNs.language}
+                        onValueChange={(value) => setCompanyNs(prev => ({ ...prev, language: value }))}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -1005,8 +1218,8 @@ export default function SettingsPage() {
                     <div className="space-y-2">
                       <Label htmlFor="currency">Currency</Label>
                       <Select 
-                        value={settings.general.currency}
-                        onValueChange={(value) => updateSetting('general', 'general', 'currency', value)}
+                        value={companyNs.currency}
+                        onValueChange={(value) => setCompanyNs(prev => ({ ...prev, currency: value }))}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -1024,18 +1237,79 @@ export default function SettingsPage() {
                       <div className="flex gap-2">
                         <Input
                           type="time"
-                          value={settings.general.businessHours.start}
-                          onChange={(e) => updateSetting('general', 'businessHours', 'start', e.target.value)}
+                          value={companyNs.businessHours.start}
+                          onChange={(e) => setCompanyNs(prev => ({ ...prev, businessHours: { ...prev.businessHours, start: e.target.value } }))}
                         />
                         <span className="self-center">to</span>
                         <Input
                           type="time"
-                          value={settings.general.businessHours.end}
-                          onChange={(e) => updateSetting('general', 'businessHours', 'end', e.target.value)}
+                          value={companyNs.businessHours.end}
+                          onChange={(e) => setCompanyNs(prev => ({ ...prev, businessHours: { ...prev.businessHours, end: e.target.value } }))}
                         />
                       </div>
                     </div>
                   </div>
+                  {/* App Branding */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="appName">App Name</Label>
+                      <Input id="appName" defaultValue={branding.appName} onBlur={(e) => setBranding(prev => ({ ...prev, appName: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>App Logo</Label>
+                      <div className="flex items-center gap-3">
+                        <img src={brandingLogoPreviewUrl || (branding.logoUrl ? (branding.logoUrl.startsWith('http') ? branding.logoUrl : buildApiUrl(branding.logoUrl.startsWith('/uploads/') ? branding.logoUrl : `/uploads/${branding.logoUrl.replace(/^uploads[\\/]/,'')}`)) : '/ticket.ico')} alt="App Logo" className="h-10 w-10 rounded border" onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/ticket.ico'; }} />
+                        <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); }} disabled={logoUploading} />
+                        {/* Branding will be saved with Save Preferences */}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button type="button" onClick={saveSystemPreferences}>Save Preferences</Button>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </TabsContent>
+
+        {/* Authentication Settings */}
+        {/* Reuse notifications tab for now; optionally a new tab can be added */}
+        <TabsContent value="general" className="space-y-6">
+          <Accordion type="multiple" value={expandedSections} onValueChange={setExpandedSections} className="space-y-4">
+            <AccordionItem value="google" className="border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-red-100 text-red-600">
+                    <Key className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">Google Authentication</h3>
+                    <p className="text-sm text-muted-foreground">Enable Google OAuth login for users</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center gap-2">
+                    <Switch id="google-enabled" checked={googleAuth.enabled} onCheckedChange={(c) => setGoogleAuth(prev => ({ ...prev, enabled: !!c }))} />
+                    <Label htmlFor="google-enabled">Enable Google Login</Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Redirect URI</Label>
+                    <Input value={googleAuth.redirectUri} onChange={(e) => setGoogleAuth(prev => ({ ...prev, redirectUri: e.target.value }))} placeholder="http://localhost:3000/auth/callback/google" />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label>Client ID</Label>
+                    <Input value={googleAuth.clientId} onChange={(e) => setGoogleAuth(prev => ({ ...prev, clientId: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label>Client Secret</Label>
+                    <Input type="password" value={googleAuth.clientSecret} onChange={(e) => setGoogleAuth(prev => ({ ...prev, clientSecret: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="flex justify-end mt-4">
+                  <Button type="button" onClick={saveGoogle}>Save Google Auth</Button>
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -1051,7 +1325,7 @@ export default function SettingsPage() {
             className="space-y-4"
           >
             {/* Basic Configuration */}
-            <AccordionItem value="categories" className="border rounded-lg">
+            <AccordionItem value="categories" className="border rounded-lg" data-section="categories">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3 w-full">
                   <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
@@ -1124,7 +1398,7 @@ export default function SettingsPage() {
             </AccordionItem>
 
             {/* Priority Levels */}
-            <AccordionItem value="priorities" className="border rounded-lg">
+            <AccordionItem value="priorities" className="border rounded-lg" data-section="priorities">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3 w-full">
                   <div className="p-2 rounded-lg bg-orange-100 text-orange-600">
@@ -1203,7 +1477,7 @@ export default function SettingsPage() {
             </AccordionItem>
 
             {/* Ticket Statuses */}
-            <AccordionItem value="statuses" className="border rounded-lg">
+            <AccordionItem value="statuses" className="border rounded-lg" data-section="statuses">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3 w-full">
                   <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
@@ -1655,6 +1929,7 @@ export default function SettingsPage() {
                       ))}
                     </div>
                   </div>
+                  {/* Branding fields removed from RBAC section - managed in System Preferences */}
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -1748,7 +2023,7 @@ export default function SettingsPage() {
             
 
             {/* Departments (DB-backed) */}
-            <AccordionItem value="departments" className="border rounded-lg">
+            <AccordionItem value="departments" className="border rounded-lg" data-section="departments">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-teal-100 text-teal-600">
@@ -1775,8 +2050,68 @@ export default function SettingsPage() {
             onValueChange={setExpandedSections}
             className="space-y-4"
           >
+            {/* SMTP */}
+            <AccordionItem value="smtp" className="border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
+                    <Mail className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">SMTP</h3>
+                    <p className="text-sm text-muted-foreground">Outgoing mail server configuration</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Host</Label>
+                    <Input value={smtp.host} onChange={(e) => setSmtp(prev => ({ ...prev, host: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Port</Label>
+                    <Input type="number" value={smtp.port} onChange={(e) => setSmtp(prev => ({ ...prev, port: Number(e.target.value) || 0 }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>From Address</Label>
+                    <Input value={smtp.fromAddress} onChange={(e) => setSmtp(prev => ({ ...prev, fromAddress: e.target.value }))} />
+                  </div>
+                  <div className="flex items-center gap-2 mt-8">
+                    <Switch id="smtp-secure" checked={smtp.secure} onCheckedChange={(c) => setSmtp(prev => ({ ...prev, secure: !!c }))} />
+                    <Label htmlFor="smtp-secure">Use TLS/SSL</Label>
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label>User</Label>
+                    <Input value={smtp.user} onChange={(e) => setSmtp(prev => ({ ...prev, user: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label>Password</Label>
+                    <Input type="password" value={smtp.password} onChange={(e) => setSmtp(prev => ({ ...prev, password: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="smtp-test-to" className="text-sm">Send test to</Label>
+                    <Input id="smtp-test-to" placeholder="recipient@example.com" className="w-72" onBlur={(e) => setSmtp(prev => ({ ...prev, testTo: (e.target as any).value }))} />
+                    <Button type="button" variant="secondary" onClick={async () => {
+                      const to = (smtp as any).testTo || '';
+                      if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { toast.error('Enter a valid recipient email'); return; }
+                      try {
+                        const res = await settingsApi.sendSmtpTest(to);
+                        if (!res.success) throw new Error(res.error || 'Failed to send');
+                        toast.success('Test email sent');
+                      } catch (e: any) {
+                        toast.error(e?.message || 'Failed to send test email');
+                      }
+                    }}>Send Test Email</Button>
+                  </div>
+                  <Button type="button" onClick={saveSmtp}>Save SMTP</Button>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
             {/* Email Notifications */}
-            <AccordionItem value="email" className="border rounded-lg">
+            <AccordionItem value="email" className="border rounded-lg" data-section="email">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
@@ -1846,7 +2181,7 @@ export default function SettingsPage() {
             </AccordionItem>
 
             {/* In-App Notifications */}
-            <AccordionItem value="inapp" className="border rounded-lg">
+            <AccordionItem value="inapp" className="border rounded-lg" data-section="inapp">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
@@ -1906,6 +2241,9 @@ export default function SettingsPage() {
                 </div>
               </AccordionContent>
             </AccordionItem>
+            <div className="flex justify-end px-6">
+              <Button type="button" variant="outline" onClick={saveNotifications}>Save Notification Preferences</Button>
+            </div>
           </Accordion>
         </TabsContent>
       </Tabs>

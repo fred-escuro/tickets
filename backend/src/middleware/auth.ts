@@ -99,9 +99,10 @@ export const authenticate = async (
 export const userHasAnyRole = (user: any, allowedRoles: string[]): boolean => {
   if (!user) return false;
   const roleNames: string[] = Array.isArray(user.roles)
-    ? user.roles.map((r: any) => r?.role?.name).filter((n: any) => typeof n === 'string')
+    ? user.roles.map((r: any) => (r?.role?.name || '').toLowerCase()).filter((n: any) => typeof n === 'string')
     : [];
-  return allowedRoles.some(r => roleNames.includes(r));
+  const normalized = allowedRoles.map(r => (r || '').toLowerCase());
+  return normalized.some(r => roleNames.includes(r));
 };
 
 export const authorize = (...roles: string[]) => {
@@ -114,7 +115,7 @@ export const authorize = (...roles: string[]) => {
     }
 
     // Check via RBAC roles relation
-    if (!userHasAnyRole((req as any).user, roles)) {
+    if (!userHasAnyRole((req as any).user, roles.map(r => r.toLowerCase()))) {
       return res.status(403).json({
         success: false,
         error: 'Insufficient permissions'

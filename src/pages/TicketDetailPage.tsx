@@ -317,7 +317,14 @@ export const TicketDetailPage: React.FC = () => {
                   <Button variant="outline" size="sm" onClick={expandAll}>Expand All</Button>
                   <Button variant="outline" size="sm" onClick={collapseAll}>Collapse All</Button>
                 </div>
-                <Button onClick={() => setShowAddComment(true)} className="gap-2" disabled={isLoadingComments}>
+                <Button onClick={() => setShowAddComment(true)} className="gap-2" disabled={isLoadingComments || !(() => {
+                  try {
+                    const u: any = JSON.parse(localStorage.getItem('user') || 'null');
+                    const roleNames: string[] = Array.isArray(u?.roles) ? u.roles.map((r: any) => r?.role?.name?.toLowerCase()).filter(Boolean) : (u?.role ? [String(u.role).toLowerCase()] : []);
+                    const perms: string[] = Array.isArray(u?.permissions) ? u.permissions : [];
+                    return roleNames.includes('admin') || perms.includes('comments:write');
+                  } catch { return false; }
+                })()}>
                   <MessageSquare className="h-4 w-4" />
                   Add Comment
                 </Button>
@@ -392,6 +399,14 @@ export const TicketDetailPage: React.FC = () => {
                     className="ml-1"
                     triggerMode="button"
                     triggerLabel="Change Status"
+                    disabled={!(() => {
+                      try {
+                        const u: any = JSON.parse(localStorage.getItem('user') || 'null');
+                        const roleNames: string[] = Array.isArray(u?.roles) ? u.roles.map((r: any) => r?.role?.name?.toLowerCase()).filter(Boolean) : (u?.role ? [String(u.role).toLowerCase()] : []);
+                        const perms: string[] = Array.isArray(u?.permissions) ? u.permissions : [];
+                        return roleNames.includes('admin') || perms.includes('ticket-status:change');
+                      } catch { return false; }
+                    })()}
                   />
                 </div>
               )}

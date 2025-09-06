@@ -30,6 +30,7 @@ export const API_ENDPOINTS = {
     UPDATE_BY_ID: (id: string) => `/api/users/${id}`,
     DELETE: (id: string) => `/api/users/${id}`,
     AGENTS: '/api/users/agents/list',
+    VERIFY_EMAIL_REQUEST: (id: string) => `/api/users/${id}/verify-email/request`,
   },
   // Departments
   DEPARTMENTS: {
@@ -87,6 +88,12 @@ export const API_ENDPOINTS = {
     ITEMS: '/api/menu/items',
     ITEM: (id: string) => `/api/menu/items/${id}`,
     LINK_PERMISSION: (id: string, permissionId: string) => `/api/menu/items/${id}/permissions/${permissionId}`,
+  },
+  // Settings
+  SETTINGS: {
+    GET: '/api/settings',
+    UPDATE: '/api/settings',
+    UPLOAD_LOGO: '/api/settings/logo',
   },
   // Health
   HEALTH: '/health',

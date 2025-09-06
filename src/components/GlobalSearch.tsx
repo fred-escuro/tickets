@@ -123,11 +123,11 @@ export const GlobalSearch: FC = () => {
     <>
       <Button
         variant="outline"
-        className="relative h-9 w-full justify-start rounded-[0.5rem] bg-background text-sm font-normal text-muted-foreground shadow-none sm:pr-12 md:w-40 lg:w-64"
+        className="relative h-9 w-full justify-start rounded-[0.5rem] bg-background text-sm font-normal text-muted-foreground shadow-none sm:pr-12 md:w-48 lg:w-72"
         onClick={() => setIsOpen(true)}
       >
         <span className="inline-flex">Search...</span>
-        <kbd className="pointer-events-none absolute right-[0.3rem] top-[0.3rem] inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+        <kbd className="pointer-events-none absolute right-[0.35rem] top-1/2 -translate-y-1/2 inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
           <span className="text-xs">⌘</span>K
         </kbd>
       </Button>

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../index';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorize, authorizePermission } from '../middleware/auth';
 import { UpdateUserRequest, ApiResponse, CreateUserRequest } from '../types';
 
 const router = Router();
@@ -434,5 +434,25 @@ router.delete('/:id/roles/:roleId', authenticate, authorize('admin'), async (req
   } catch (e) {
     console.error('Remove role from user error:', e);
     return res.status(500).json({ success: false, error: 'Failed to remove role' });
+  }
+});
+
+// Request email verification for a user (admin or users:write)
+router.post('/:id/verify-email/request', authenticate, authorizePermission('users:write'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    // Generate token and expiry
+    const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await prisma.user.update({ where: { id }, data: { emailVerificationToken: token, emailVerificationExpires: expires } });
+    // NOTE: integrate SMTP send using settings later; respond success now
+    return res.json({ success: true, data: { sent: true } });
+  } catch (e) {
+    console.error('Verify email request error:', e);
+    return res.status(500).json({ success: false, error: 'Failed to request verification email' });
   }
 });

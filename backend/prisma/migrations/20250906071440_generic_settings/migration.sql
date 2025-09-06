@@ -1,0 +1,1 @@
+-- No-op placeholder migration to avoid conflicts in shadow DB during dev

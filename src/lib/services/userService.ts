@@ -180,6 +180,11 @@ export class UserService {
     return apiClient.get(API_ENDPOINTS.USERS.AGENTS);
   }
 
+  // Admin: request verification email for a specific user
+  static async requestVerificationForUser(userId: string): Promise<ApiResponse<{ sent: boolean }>> {
+    return apiClient.post(API_ENDPOINTS.USERS.VERIFY_EMAIL_REQUEST(userId), {});
+  }
+
   // Departments
   static async getDepartments(): Promise<ApiResponse<DepartmentOption[]>> {
     return apiClient.get(API_ENDPOINTS.DEPARTMENTS.LIST);

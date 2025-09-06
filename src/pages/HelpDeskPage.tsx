@@ -366,6 +366,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
                   }}
                   className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary"
                   title="Add Comment"
+                  disabled={!(() => { try { const u: any = JSON.parse(localStorage.getItem('user') || 'null'); const roleNames: string[] = Array.isArray(u?.roles) ? u.roles.map((r: any) => r?.role?.name?.toLowerCase()).filter(Boolean) : (u?.role ? [String(u.role).toLowerCase()] : []); const perms: string[] = Array.isArray(u?.permissions) ? u.permissions : []; return roleNames.includes('admin') || perms.includes('comments:write'); } catch { return false; } })()}
                 >
                   <MessageSquare className="h-3 w-3" />
                 </Button>
@@ -1081,7 +1082,7 @@ export const HelpDeskPage: FC = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by ticket # (exact)"
+                placeholder="Search by ticket # (supports partial)"
                 value={ticketNumberQuery}
                 onChange={(e) => setTicketNumberQuery(e.target.value.replace(/[^0-9]/g, ''))}
                 className="pl-10"

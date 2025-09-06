@@ -30,12 +30,15 @@ async function seedRbacAbac() {
       'tickets:write',
       'tickets:delete',
       'tickets:assign',
+      'ticket-status:change',
       'comments:write',
       'attachments:upload',
       'users:read',
       'users:write',
       'knowledge:read',
       'knowledge:write',
+      // settings
+      'settings:write',
       'reports:read'
     ];
 
@@ -61,9 +64,9 @@ async function seedRbacAbac() {
 
     // Role -> Permission assignments
     const rolePerms: Record<string, string[]> = {
-      admin: ['tickets:read','tickets:write','tickets:delete','tickets:assign','comments:write','attachments:upload','users:read','users:write','knowledge:read','knowledge:write','reports:read'],
-      manager: ['tickets:read','tickets:write','tickets:assign','comments:write','attachments:upload','users:read','knowledge:read','knowledge:write','reports:read'],
-      agent: ['tickets:read','tickets:write','comments:write','attachments:upload','knowledge:read','reports:read'],
+      admin: ['tickets:read','tickets:write','tickets:delete','tickets:assign','ticket-status:change','comments:write','attachments:upload','users:read','users:write','knowledge:read','knowledge:write','settings:write','reports:read'],
+      manager: ['tickets:read','tickets:write','tickets:assign','ticket-status:change','comments:write','attachments:upload','users:read','knowledge:read','knowledge:write','reports:read'],
+      agent: ['tickets:read','tickets:write','ticket-status:change','comments:write','attachments:upload','knowledge:read','reports:read'],
       user: ['tickets:read','tickets:write','knowledge:read']
     };
 

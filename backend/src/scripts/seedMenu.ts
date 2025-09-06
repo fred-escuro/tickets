@@ -13,6 +13,7 @@ export async function seedMenu() {
       'users:write',
       'reports:read',
       'knowledge:read',
+      'settings:write',
     ];
 
     const permissions = await Promise.all(
@@ -81,10 +82,10 @@ export async function seedMenu() {
     await createMenu('User Management', 4, { parentId: tools.id, path: '/admin/users', icon: 'Shield', permissionKeys: ['users:write'] });
 
     // Settings items (grouped under Settings section)
-    await createMenu('General', 1, { parentId: settings.id, path: '/settings', icon: 'Building2', permissionKeys: ['users:write'] });
-    await createMenu('Tickets', 2, { parentId: settings.id, path: '/settings?tab=tickets', icon: 'Ticket', permissionKeys: ['tickets:read'] });
-    await createMenu('Users', 3, { parentId: settings.id, path: '/settings?tab=users', icon: 'Users', permissionKeys: ['users:read'] });
-    await createMenu('Notifications', 4, { parentId: settings.id, path: '/settings?tab=notifications', icon: 'Bell', permissionKeys: ['users:read'] });
+    await createMenu('General', 1, { parentId: settings.id, path: '/settings', icon: 'Building2', permissionKeys: ['settings:write'] });
+    await createMenu('Tickets', 2, { parentId: settings.id, path: '/settings?tab=tickets', icon: 'Ticket', permissionKeys: ['settings:write'] });
+    await createMenu('Users', 3, { parentId: settings.id, path: '/settings?tab=users', icon: 'Users', permissionKeys: ['settings:write'] });
+    await createMenu('Notifications', 4, { parentId: settings.id, path: '/settings?tab=notifications', icon: 'Bell', permissionKeys: ['settings:write'] });
 
     console.log('✅ Menu seeded');
   } catch (e) {

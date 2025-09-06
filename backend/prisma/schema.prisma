@@ -445,6 +445,40 @@ model TicketWorkflow {
   @@map("ticket_workflows")
 }
 
+// SystemSettings model removed after migration to generic settings
+
+// Generic App Settings (namespace/key/value)
+model AppSetting {
+  id         String   @id @default(cuid())
+  namespace  String
+  key        String
+  value      Json
+  type       SettingType @default(JSON)
+  isSecret   Boolean  @default(false)
+  description String?
+  updatedBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([namespace, key])
+  @@index([namespace])
+  @@map("app_settings")
+}
+
+model SettingHistory {
+  id         String   @id @default(cuid())
+  namespace  String
+  key        String
+  oldValue   Json?
+  newValue   Json?
+  changedBy  String?
+  reason     String?
+  changedAt  DateTime @default(now())
+
+  @@index([namespace, key])
+  @@map("setting_history")
+}
+
 // Enums
 enum Priority {
   LOW
@@ -485,4 +519,12 @@ enum PolicySubjectType {
   ROLE
   USER
   DEPARTMENT
+}
+
+enum SettingType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+  FILE
 }

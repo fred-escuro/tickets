@@ -87,11 +87,26 @@ router.get('/', authenticate, authorizePermission('tickets:read'), async (req, r
     if (assignedTo) where.assignedTo = assignedTo;
     if (submittedBy) where.submittedBy = submittedBy;
 
-    // Exact ticket number match when provided
+    // Ticket number filter - support exact or prefix (e.g., '1' matches 1, 10, 100...)
     if (ticketNumber) {
-      const num = parseInt((ticketNumber as string).toString(), 10);
+      const raw = (ticketNumber as string).toString();
+      const num = parseInt(raw, 10);
       if (!isNaN(num)) {
-        where.ticketNumber = num;
+        // Use raw SQL to find ids with ticketNumber text starting with the digits
+        try {
+          const like = `%${raw}%`;
+          const rows = await prisma.$queryRaw<any>`SELECT "id" FROM "tickets" WHERE CAST("ticketNumber" AS TEXT) LIKE ${like}`;
+          const ids = Array.isArray(rows) ? rows.map((r: any) => r.id).filter(Boolean) : [];
+          if (ids.length > 0) {
+            (where.AND ||= []).push({ id: { in: ids } });
+          } else {
+            // Force no results if no ids matched the prefix
+            (where.AND ||= []).push({ id: { in: ['__no_match__'] } });
+          }
+        } catch (e) {
+          // Fallback to exact match if raw query fails
+          where.ticketNumber = num;
+        }
       }
     }
 
@@ -407,8 +422,18 @@ router.put('/:id', authenticate, authorizePermission('tickets:write'), async (re
       });
     }
 
-    // Handle status changes (validate allowed transitions server-side)
+    // Handle status changes (permission + validate allowed transitions server-side)
     if (updateData.statusId && updateData.statusId !== existingTicket.statusId) {
+      // Enforce specific permission to change status unless admin role
+      const requester = (req as any).user || {};
+      const roleNames: string[] = Array.isArray(requester?.roles)
+        ? requester.roles.map((r: any) => (r?.role?.name || '').toLowerCase())
+        : [];
+      const perms: string[] = Array.isArray(requester?.permissions) ? requester.permissions : [];
+      const canChangeStatus = roleNames.includes('admin') || perms.includes('ticket-status:change');
+      if (!canChangeStatus) {
+        return res.status(403).json({ success: false, error: 'Insufficient permissions to change ticket status' });
+      }
       const [currentStatus, targetStatus] = await Promise.all([
         prisma.ticketStatus.findUnique({ where: { id: existingTicket.statusId } }),
         prisma.ticketStatus.findUnique({ where: { id: updateData.statusId } })
