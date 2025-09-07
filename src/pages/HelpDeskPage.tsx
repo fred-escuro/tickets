@@ -411,64 +411,85 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
               Add Task to Ticket #{ticket.ticketNumber}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="task-title">Task Title</Label>
-              <Input
-                id="task-title"
-                placeholder="Enter task title"
-                className="w-full"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="task-description">Description</Label>
-              <Textarea
-                id="task-description"
-                placeholder="Describe the task..."
-                className="min-h-[100px]"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="task-priority">Priority</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
+          {(() => {
+            const [title, setTitle] = useState('');
+            const [description, setDescription] = useState('');
+            const [priority, setPriority] = useState('');
+            const [assignee, setAssignee] = useState('');
+            const [errors, setErrors] = useState<{ title?: string; description?: string; priority?: string; assignee?: string }>({});
+
+            const validate = () => {
+              const e: typeof errors = {};
+              if (!title.trim()) e.title = 'Task title is required';
+              if (!description.trim()) e.description = 'Description is required';
+              if (!priority) e.priority = 'Priority is required';
+              if (!assignee) e.assignee = 'Assignee is required';
+              setErrors(e);
+              return Object.keys(e).length === 0;
+            };
+
+            const submit = () => {
+              if (!validate()) {
+                toast.error('Please fill in all required fields');
+                return;
+              }
+              // TODO: integrate with backend task creation
+              toast.success('Task added successfully!');
+              setShowAddTask(false);
+            };
+
+            return (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="task-title">Task Title</Label>
+                  <Input id="task-title" placeholder="Enter task title" className="w-full" value={title} onChange={(e) => { setTitle(e.target.value); if (errors.title) setErrors(prev => ({ ...prev, title: undefined })); }} />
+                  {errors.title && (<p className="text-sm text-red-600">{errors.title}</p>)}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="task-description">Description</Label>
+                  <Textarea id="task-description" placeholder="Describe the task..." className="min-h-[100px]" value={description} onChange={(e) => { setDescription(e.target.value); if (errors.description) setErrors(prev => ({ ...prev, description: undefined })); }} />
+                  {errors.description && (<p className="text-sm text-red-600">{errors.description}</p>)}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="task-priority">Priority</Label>
+                    <Select value={priority} onValueChange={(v) => { setPriority(v); if (errors.priority) setErrors(prev => ({ ...prev, priority: undefined })); }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="critical">Critical</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {errors.priority && (<p className="text-sm text-red-600">{errors.priority}</p>)}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="task-assignee">Assignee</Label>
+                    <Select value={assignee} onValueChange={(v) => { setAssignee(v); if (errors.assignee) setErrors(prev => ({ ...prev, assignee: undefined })); }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select assignee" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="john">John Support</SelectItem>
+                        <SelectItem value="sarah">Sarah Tech</SelectItem>
+                        <SelectItem value="mike">Mike Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {errors.assignee && (<p className="text-sm text-red-600">{errors.assignee}</p>)}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button variant="outline" onClick={() => setShowAddTask(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={submit}>Add Task</Button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="task-assignee">Assignee</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select assignee" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="john">John Support</SelectItem>
-                    <SelectItem value="sarah">Sarah Tech</SelectItem>
-                    <SelectItem value="mike">Mike Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="outline" onClick={() => setShowAddTask(false)}>
-                Cancel
-              </Button>
-              <Button onClick={() => {
-                toast.success('Task added successfully!');
-                setShowAddTask(false);
-              }}>
-                Add Task
-              </Button>
-            </div>
-          </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

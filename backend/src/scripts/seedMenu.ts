@@ -86,6 +86,7 @@ export async function seedMenu() {
     await createMenu('Tickets', 2, { parentId: settings.id, path: '/settings?tab=tickets', icon: 'Ticket', permissionKeys: ['settings:write'] });
     await createMenu('Users', 3, { parentId: settings.id, path: '/settings?tab=users', icon: 'Users', permissionKeys: ['settings:write'] });
     await createMenu('Notifications', 4, { parentId: settings.id, path: '/settings?tab=notifications', icon: 'Bell', permissionKeys: ['settings:write'] });
+    await createMenu('Tasks', 5, { parentId: settings.id, path: '/settings?tab=tasks', icon: 'CheckSquare', permissionKeys: ['settings:write'] });
 
     console.log('✅ Menu seeded');
   } catch (e) {

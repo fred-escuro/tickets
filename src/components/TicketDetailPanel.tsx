@@ -9,13 +9,21 @@ import { Card, CardContent } from './ui/card';
 import { AttachmentDisplay } from './ui/attachment-display';
 import { RichTextDisplay } from './ui/rich-text-display';
 import { toast } from 'sonner';
-import { Calendar, Paperclip, User } from 'lucide-react';
+import { Calendar, Paperclip, User, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
+import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
+import { Button } from './ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 interface Props { ticketId: string }
 
 export const TicketDetailPanel: React.FC<Props> = ({ ticketId }) => {
   const [loading, setLoading] = useState(false);
   const [ticket, setTicket] = useState<any>(null);
+  const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
+  const [taskComments, setTaskComments] = useState<Record<string, any[]>>({});
+  const [taskCommentDraft, setTaskCommentDraft] = useState<Record<string, string>>({});
+  const [taskCommentsLoading, setTaskCommentsLoading] = useState<Record<string, boolean>>({});
 
   const fetchTicket = async () => {
     if (!ticketId) return;
@@ -41,6 +49,53 @@ export const TicketDetailPanel: React.FC<Props> = ({ ticketId }) => {
     if (!res.success) { toast.error(res.error || 'Failed to update status'); return; }
     toast.success('Status updated');
     await fetchTicket();
+  };
+
+  const canWriteTasks = useMemo(() => {
+    try {
+      const u: any = JSON.parse(localStorage.getItem('user') || 'null');
+      const roleNames: string[] = Array.isArray(u?.roles) ? u.roles.map((r: any) => r?.role?.name?.toLowerCase()).filter(Boolean) : (u?.role ? [String(u.role).toLowerCase()] : []);
+      const perms: string[] = Array.isArray(u?.permissions) ? u.permissions : [];
+      return roleNames.includes('admin') || perms.includes('tickets:write');
+    } catch { return false; }
+  }, []);
+
+  const loadTaskComments = async (taskId: string) => {
+    try {
+      setTaskCommentsLoading(prev => ({ ...prev, [taskId]: true }));
+      const res = await apiClient.get(`/api/tickets/${ticketId}/tasks/${taskId}/comments`);
+      if (res.success) setTaskComments(prev => ({ ...prev, [taskId]: res.data || [] }));
+      else toast.error(res.error || 'Failed to load task comments');
+    } catch (e) {
+      toast.error('Failed to load task comments');
+    } finally {
+      setTaskCommentsLoading(prev => ({ ...prev, [taskId]: false }));
+    }
+  };
+
+  const addTaskComment = async (taskId: string) => {
+    const content = (taskCommentDraft[taskId] || '').trim();
+    if (!content) { toast.error('Please enter a comment'); return; }
+    try {
+      const res = await apiClient.post(`/api/tickets/${ticketId}/tasks/${taskId}/comments`, { content, isInternal: false });
+      if (!res.success) throw new Error(res.error || 'Failed to add comment');
+      setTaskCommentDraft(prev => ({ ...prev, [taskId]: '' }));
+      await loadTaskComments(taskId);
+      toast.success('Comment added');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to add comment');
+    }
+  };
+
+  const updateTaskStatus = async (taskId: string, toStatus: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED') => {
+    try {
+      const res = await apiClient.patch(`/api/tickets/${ticketId}/tasks/${taskId}/status`, { toStatus });
+      if (!res.success) throw new Error(res.error || 'Failed to update task status');
+      toast.success('Task status updated');
+      await fetchTicket();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update task status');
+    }
   };
 
   return (
@@ -75,6 +130,81 @@ export const TicketDetailPanel: React.FC<Props> = ({ ticketId }) => {
             )}
           </CardContent>
         </Card>
+
+        {ticket?.tasks?.length > 0 && (
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">Tasks ({ticket.tasks.length})</div>
+              </div>
+
+              <div className="space-y-3">
+                {ticket.tasks.map((task: any) => {
+                  const expanded = !!expandedTasks[task.id];
+                  return (
+                    <div key={task.id} className="border rounded-lg p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium text-sm truncate">{task.title}</div>
+                          <div className="text-xs text-muted-foreground truncate">{task.description || ''}</div>
+                          <div className="mt-1 flex items-center gap-2">
+                            <Badge variant="outline" className="text-xxs">Priority: {String(task.priority || '').toLowerCase()}</Badge>
+                            {task.dueDate && <Badge variant="outline" className="text-xxs">Due: {new Date(task.dueDate).toLocaleDateString()}</Badge>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Select value={String(task.status || 'PENDING')} onValueChange={(val) => updateTaskStatus(task.id, val as any)} disabled={!canWriteTasks}>
+                            <SelectTrigger className="h-8 w-[160px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PENDING">Pending</SelectItem>
+                              <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                              <SelectItem value="COMPLETED">Completed</SelectItem>
+                              <SelectItem value="BLOCKED">Blocked</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button variant="ghost" size="sm" onClick={() => {
+                            const next = { ...expandedTasks, [task.id]: !expanded };
+                            setExpandedTasks(next);
+                            if (!expanded && !taskComments[task.id]) void loadTaskComments(task.id);
+                          }} aria-label={expanded ? 'Collapse' : 'Expand'}>
+                            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {expanded && (
+                        <div className="mt-3 space-y-3">
+                          <div className="space-y-2">
+                            <div className="text-xs text-muted-foreground flex items-center gap-1"><MessageSquare className="h-3 w-3" />Comments</div>
+                            <div className="space-y-2">
+                              {taskCommentsLoading[task.id] && <div className="text-xs text-muted-foreground">Loading comments…</div>}
+                              {(taskComments[task.id] || []).map((c: any) => (
+                                <div key={c.id} className="text-sm border rounded p-2">
+                                  <div className="text-xs text-muted-foreground">{c.author ? `${c.author.firstName} ${c.author.lastName}` : c.authorId} • {new Date(c.createdAt).toLocaleString()}</div>
+                                  <div>{c.content}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor={`task-comment-${task.id}`}>Add Comment</Label>
+                            <Textarea id={`task-comment-${task.id}`} rows={2} value={taskCommentDraft[task.id] || ''} onChange={(e) => setTaskCommentDraft(prev => ({ ...prev, [task.id]: e.target.value }))} placeholder="Write a comment…" />
+                            <div className="flex justify-end">
+                              <Button size="sm" onClick={() => addTaskComment(task.id)} disabled={!canWriteTasks}>Post Comment</Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardContent className="p-4 space-y-3">

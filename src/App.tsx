@@ -11,7 +11,8 @@ import { Dashboard } from './pages/Dashboard';
 import { HelpDeskPage } from './pages/HelpDeskPage';
 import { setupTokenRefresh } from './lib/services/authService';
 
-import { ProjectsPage } from './pages/ProjectsPage';
+import { TaskPage } from './pages/TasksPage';
+import TaskDetailPage from './pages/TaskDetailPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { ResourcesPage } from './pages/ResourcesPage';
@@ -70,8 +71,16 @@ const AppRoutes: FC = () => {
       <Route
         path="/tasks"
         element={
-          <ProtectedRoute pageTitle="Project Management" pageDescription="Please log in to manage projects and track tasks.">
-            <ProjectsPage />
+          <ProtectedRoute pageTitle="Tasks" pageDescription="Please log in to manage tasks.">
+            <TaskPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tasks/:taskId"
+        element={
+          <ProtectedRoute pageTitle="Task Details" pageDescription="Please log in to view task details.">
+            <TaskDetailPage />
           </ProtectedRoute>
         }
       />

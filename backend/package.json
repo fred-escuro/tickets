@@ -32,10 +32,12 @@
     "express": "^4.18.2",
     "google-auth-library": "^10.3.0",
     "helmet": "^7.1.0",
+    "imapflow": "^1.0.164",
     "jsonwebtoken": "^9.0.2",
+    "mailparser": "^3.7.1",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "nodemailer": "^6.10.1"
+    "nodemailer": "^6.9.13"
   },
   "devDependencies": {
     "@prisma/client": "^5.3.1",
@@ -43,10 +45,11 @@
     "@types/cors": "^2.8.13",
     "@types/express": "^4.17.17",
     "@types/jsonwebtoken": "^9.0.2",
+    "@types/mailparser": "^3.4.6",
     "@types/morgan": "^1.9.9",
     "@types/multer": "^1.4.7",
     "@types/node": "^20.6.0",
-    "@types/nodemailer": "^7.0.1",
+    "@types/nodemailer": "^6.4.15",
     "nodemon": "^3.0.1",
     "prisma": "^5.3.1",
     "ts-node": "^10.9.1",

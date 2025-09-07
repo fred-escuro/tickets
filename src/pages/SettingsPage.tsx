@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,26 +8,25 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useSearchParams } from 'react-router-dom';
 import { 
-  Settings, 
-  Building2, 
-  Mail, 
-  Bell, 
-  Users, 
-  Ticket, 
-  Globe, 
-  Clock,
+  Settings,
+  Building2,
+  Mail,
+  Bell,
+  Users,
+  Ticket,
+  Globe,
   Save,
   RefreshCw,
   AlertCircle,
   CheckCircle,
+  Download,
   Plus,
   Edit,
   Trash2,
-  Info,
   Workflow,
   Search,
   ChevronDown,
@@ -41,8 +39,8 @@ import { DepartmentSettings } from '@/components/DepartmentSettings';
 import { MenuManagement } from '@/components/MenuManagement';
 import * as LucideIcons from 'lucide-react';
 import { settingsService, type SystemSettings } from '@/lib/settingsService';
-import { settingsApi, type SystemSettingsDto } from '@/lib/services/settingsApi';
-import { buildApiUrl } from '@/lib/api';
+import { settingsApi } from '@/lib/services/settingsApi';
+import { buildApiUrl, apiClient } from '@/lib/api';
 import { ticketSystemService, type TicketCategory, type TicketPriority, type TicketStatus } from '@/lib/services/ticketSystemService';
 import { TicketStatusWorkflow } from '@/components/TicketStatusWorkflow';
 import { PriorityWorkflow } from '@/components/PriorityWorkflow';
@@ -56,11 +54,78 @@ import { UserService, type User as AppUser } from '@/lib/services/userService';
 export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [settings, setSettings] = useState<SystemSettings>(settingsService.getSettings());
-  const [serverSettings, setServerSettings] = useState<SystemSettingsDto | null>(null);
+  // const [serverSettings, setServerSettings] = useState<SystemSettingsDto | null>(null);
   // v2 generic namespaces
   const [branding, setBranding] = useState<{ appName: string; logoUrl?: string | null }>({ appName: 'TicketHub', logoUrl: null });
   const [companyNs, setCompanyNs] = useState<{ name: string; email: string; phone: string; address: string; timezone: string; language: string; currency: string; businessHours: { start: string; end: string; timezone?: string }; logoUrl?: string | null }>({ name: '', email: '', phone: '', address: '', timezone: 'UTC', language: 'en', currency: 'USD', businessHours: { start: '09:00', end: '17:00', timezone: 'UTC' }, logoUrl: null });
   const [smtp, setSmtp] = useState<{ host: string; port: number; secure: boolean; fromAddress: string; user: string; password: string }>({ host: '', port: 587, secure: false, fromAddress: '', user: '', password: '' });
+  const [inbound, setInbound] = useState<{ imapHost: string; imapPort: number; imapSecure: boolean; imapUser: string; imapPassword: string; folder: string; moveOnSuccessFolder: string; moveOnErrorFolder: string }>(
+    { imapHost: '', imapPort: 993, imapSecure: true, imapUser: '', imapPassword: '', folder: 'INBOX', moveOnSuccessFolder: 'Processed', moveOnErrorFolder: 'Errors' }
+  );
+  const [taskStatuses, setTaskStatuses] = useState<Array<{ id?: string; key: string; name: string; color?: string; sortOrder?: number }>>([]);
+  const [taskPriorities, setTaskPriorities] = useState<Array<{ id?: string; key: string; name: string; color?: string; level?: number; sortOrder?: number }>>([]);
+  const [taskMetaLoading, setTaskMetaLoading] = useState(false);
+
+  // Task meta CRUD dialog state
+  const [showTaskStatusDialog, setShowTaskStatusDialog] = useState(false);
+  const [editingTaskStatus, setEditingTaskStatus] = useState<{ id?: string } | null>(null);
+  const [taskStatusForm, setTaskStatusForm] = useState<{ key: string; name: string; color: string; sortOrder?: number }>({ key: '', name: '', color: 'blue', sortOrder: undefined });
+
+  const [showTaskPriorityDialog, setShowTaskPriorityDialog] = useState(false);
+  const [editingTaskPriority, setEditingTaskPriority] = useState<{ id?: string } | null>(null);
+  const [taskPriorityForm, setTaskPriorityForm] = useState<{ key: string; name: string; color: string; level: number; sortOrder?: number }>({ key: '', name: '', color: 'yellow', level: 0, sortOrder: undefined });
+
+  const fetchTaskMeta = async () => {
+    try {
+      setTaskMetaLoading(true);
+      const [metaStatuses, metaPriorities] = await Promise.all([
+        apiClient.get('/api/tasks/meta/statuses'),
+        apiClient.get('/api/tasks/meta/priorities')
+      ]);
+      if (metaStatuses.success) setTaskStatuses((metaStatuses.data as any) || []);
+      if (metaPriorities.success) setTaskPriorities((metaPriorities.data as any) || []);
+    } catch {
+      // ignore fetch errors here; UI will allow adding new
+    } finally {
+      setTaskMetaLoading(false);
+    }
+  };
+
+  const saveTaskStatus = async () => {
+    try {
+      if (editingTaskStatus?.id) {
+        const res = await apiClient.put(`/api/tasks/meta/statuses/${editingTaskStatus.id}`, taskStatusForm);
+        if (!res.success) throw new Error(res.error || 'Failed');
+      } else {
+        const res = await apiClient.post(`/api/tasks/meta/statuses`, taskStatusForm);
+        if (!res.success) throw new Error(res.error || 'Failed');
+      }
+      toast.success('Task status saved');
+      setShowTaskStatusDialog(false);
+      setEditingTaskStatus(null);
+      void fetchTaskMeta();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save status');
+    }
+  };
+
+  const saveTaskPriority = async () => {
+    try {
+      if (editingTaskPriority?.id) {
+        const res = await apiClient.put(`/api/tasks/meta/priorities/${editingTaskPriority.id}`, taskPriorityForm);
+        if (!res.success) throw new Error(res.error || 'Failed');
+      } else {
+        const res = await apiClient.post(`/api/tasks/meta/priorities`, taskPriorityForm);
+        if (!res.success) throw new Error(res.error || 'Failed');
+      }
+      toast.success('Task priority saved');
+      setShowTaskPriorityDialog(false);
+      setEditingTaskPriority(null);
+      void fetchTaskMeta();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save priority');
+    }
+  };
   // App logo staging (save on Save Preferences)
   const [brandingLogoFile, setBrandingLogoFile] = useState<File | null>(null);
   const [brandingLogoPreviewUrl, setBrandingLogoPreviewUrl] = useState<string | null>(null);
@@ -87,8 +152,8 @@ export default function SettingsPage() {
   const [showRoleDialog, setShowRoleDialog] = useState(false);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [showPolicyDialog, setShowPolicyDialog] = useState(false);
-  const [userRolesTableLoading, setUserRolesTableLoading] = useState(false);
-  const [userRoleRows, setUserRoleRows] = useState<Array<{ user: AppUser; roles: Array<{ id: string; name: string; isPrimary?: boolean }> }>>([]);
+  // const [userRolesTableLoading, setUserRolesTableLoading] = useState(false);
+  // const [userRoleRows, setUserRoleRows] = useState<Array<{ user: AppUser; roles: Array<{ id: string; name: string; isPrimary?: boolean }> }>>([]);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [editingPermission, setEditingPermission] = useState<Permission | null>(null);
   const [editingPolicy, setEditingPolicy] = useState<AccessPolicy | null>(null);
@@ -219,7 +284,7 @@ export default function SettingsPage() {
     setSettings(settingsService.getSettings());
     // Load generic namespaces
     (async () => {
-      const res = await settingsApi.getNamespaces(['branding','company','email.smtp','notifications','auth.google']);
+      const res = await settingsApi.getNamespaces(['branding','company','email.smtp','email.inbound','notifications','auth.google']);
       if (res.success && res.data) {
         const b = res.data['branding'] || {};
         setBranding({ appName: b.appName || b.name || 'TicketHub', logoUrl: b.logoUrl || null });
@@ -234,6 +299,17 @@ export default function SettingsPage() {
         setSmtp({ host: s.host || '', port: Number(s.port ?? 587), secure: !!s.secure, fromAddress: s.fromAddress || '', user: s.user || '', password: s.password || '' });
         const n = res.data['notifications'] || {};
         setNotifyNs({ emailEnabled: !!n.emailEnabled, inAppEnabled: !!n.inAppEnabled, pushEnabled: !!n.pushEnabled, frequency: n.frequency || 'immediate' });
+        const ib = res.data['email.inbound'] || {};
+        setInbound({
+          imapHost: ib.imapHost || '', imapPort: Number(ib.imapPort ?? 993), imapSecure: !!ib.imapSecure,
+          imapUser: ib.imapUser || '', imapPassword: ib.imapPassword || '', folder: ib.folder || 'INBOX',
+          moveOnSuccessFolder: ib.moveOnSuccessFolder || 'Processed', moveOnErrorFolder: ib.moveOnErrorFolder || 'Errors'
+        });
+        const ts = res.data['tasks'] || {};
+        setSettings(prev => ({ ...(prev as any), tasks: ts } as any));
+
+        // Preload task meta
+        void fetchTaskMeta();
         const g = res.data['auth.google'] || {};
         setGoogleAuth({ enabled: !!g.enabled, redirectUri: g.redirectUri || '', clientId: g.clientId || '', clientSecret: g.clientSecret || '' });
       }
@@ -360,23 +436,22 @@ export default function SettingsPage() {
     }
   };
 
-  const loadUserRolesTable = async () => {
-    try {
-      setUserRolesTableLoading(true);
-      const res: any = await UserService.getUsers({ limit: 100 });
-      const users: AppUser[] = (res.data || res) as any;
-      // If backend sends roles in list, map them; otherwise leave empty
-      const rows = users.map((u: any) => ({
-        user: u,
-        roles: ((u.roles || []) as any[]).map((ur: any) => ({ id: ur.role.id, name: ur.role.name, isPrimary: ur.isPrimary }))
-      }));
-      setUserRoleRows(rows);
-    } catch (e) {
-      console.error('Failed to load users for user-roles table', e);
-    } finally {
-      setUserRolesTableLoading(false);
-    }
-  };
+  // const loadUserRolesTable = async () => {
+  //   try {
+  //     setUserRolesTableLoading(true);
+  //     const res: any = await UserService.getUsers({ limit: 100 });
+  //     const users: AppUser[] = (res.data || res) as any;
+  //     const rows = users.map((u: any) => ({
+  //       user: u,
+  //       roles: ((u.roles || []) as any[]).map((ur: any) => ({ id: ur.role.id, name: ur.role.name, isPrimary: ur.isPrimary }))
+  //     }));
+  //     setUserRoleRows(rows);
+  //   } catch (e) {
+  //     console.error('Failed to load users for user-roles table', e);
+  //   } finally {
+  //     setUserRolesTableLoading(false);
+  //   }
+  // };
 
   // Handle tab changes
   const handleTabChange = (value: string) => {
@@ -385,6 +460,7 @@ export default function SettingsPage() {
     } else {
       setSearchParams({ tab: value });
     }
+    if (value === 'tasks') void fetchTaskMeta();
   };
 
   // Color mapping for categories
@@ -447,16 +523,16 @@ export default function SettingsPage() {
   };
 
   // Save helpers for namespaces
-  const saveBranding = async () => {
-    try {
-      const res = await settingsApi.updateNamespace('branding', { appName: branding.appName });
-      if (!res.success) throw new Error(res.error || 'Failed to save branding');
-      toast.success('Branding saved');
-      try { window.dispatchEvent(new CustomEvent('branding-updated', { detail: { appName: branding.appName, appLogoUrl: branding.logoUrl } })); } catch {}
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to save branding');
-    }
-  };
+  // const saveBranding = async () => {
+  //   try {
+  //     const res = await settingsApi.updateNamespace('branding', { appName: branding.appName });
+  //     if (!res.success) throw new Error(res.error || 'Failed to save branding');
+  //     toast.success('Branding saved');
+  //     try { window.dispatchEvent(new CustomEvent('branding-updated', { detail: { appName: branding.appName, appLogoUrl: branding.logoUrl } })); } catch {}
+  //   } catch (e: any) {
+  //     toast.error(e?.message || 'Failed to save branding');
+  //   }
+  // };
 
   const saveCompany = async () => {
     try {
@@ -486,6 +562,16 @@ export default function SettingsPage() {
       toast.success('SMTP settings saved');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to save SMTP');
+    }
+  };
+
+  const saveInbound = async () => {
+    try {
+      const res = await settingsApi.updateNamespace('email.inbound', inbound as any);
+      if (!res.success) throw new Error(res.error || 'Failed to save inbound');
+      toast.success('Inbound settings saved');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save inbound');
     }
   };
 
@@ -1081,7 +1167,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
             General
@@ -1097,6 +1183,10 @@ export default function SettingsPage() {
           <TabsTrigger value="notifications" className="flex items-center gap-2">
             <Bell className="h-4 w-4" />
             Notifications
+          </TabsTrigger>
+          <TabsTrigger value="tasks" className="flex items-center gap-2">
+            <Workflow className="h-4 w-4" />
+            Tasks
           </TabsTrigger>
         </TabsList>
 
@@ -1175,6 +1265,37 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex justify-end">
                     <Button type="button" onClick={saveCompany}>Save Company</Button>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+            {/* Email Intake (Inbound) */}
+            <AccordionItem value="email-intake" className="border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-indigo-100 text-indigo-600">
+                    <Download className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">Email Intake</h3>
+                    <p className="text-sm text-muted-foreground">Fetch new emails and create tickets</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Uses IMAP inbox; one-time fetch. Configure IMAP under SMTP.</p>
+                  <div className="flex items-center gap-3">
+                    <Button type="button" variant="secondary" onClick={async () => {
+                      try {
+                        const res = await settingsApi.runEmailIngest();
+                        if (!res.success) throw new Error(res.error || 'Failed');
+                        const d: any = res.data || {};
+                        toast.success(`Fetched ${d.fetched ?? 0}, created ${d.created ?? 0}, replies ${d.replies ?? 0}, skipped ${d.skipped ?? 0}, errors ${d.errors ?? 0}`);
+                      } catch (e: any) {
+                        toast.error(e?.message || 'Failed to ingest emails');
+                      }
+                    }}>Fetch Emails Now</Button>
                   </div>
                 </div>
               </AccordionContent>
@@ -1272,6 +1393,236 @@ export default function SettingsPage() {
             </AccordionItem>
           </Accordion>
         </TabsContent>
+
+        {/* Tasks Settings */}
+        <TabsContent value="tasks" className="space-y-6">
+          <Accordion type="multiple" value={expandedSections} onValueChange={setExpandedSections} className="space-y-4">
+            <AccordionItem value="tasks-general" className="border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
+                    <Workflow className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">Task Settings</h3>
+                    <p className="text-sm text-muted-foreground">Defaults and notifications for tasks</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2 col-span-2">
+                    <Label>Default Assignee (user id)</Label>
+                    <Input value={(settings as any)?.tasks?.defaultAssignee || ''} onChange={(e) => {
+                      const v = e.target.value; setSettings(prev => ({ ...prev, tasks: { ...(prev as any).tasks, defaultAssignee: v } as any } as any));
+                    }} placeholder="user id or leave blank" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Notify on Assignment</Label>
+                    <Switch checked={(settings as any)?.tasks?.notifyOnAssignment ?? true} onCheckedChange={(c) => setSettings(prev => ({ ...prev, tasks: { ...(prev as any).tasks, notifyOnAssignment: !!c } as any } as any))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Notify on Due Soon</Label>
+                    <Switch checked={(settings as any)?.tasks?.notifyOnDueSoon ?? true} onCheckedChange={(c) => setSettings(prev => ({ ...prev, tasks: { ...(prev as any).tasks, notifyOnDueSoon: !!c } as any } as any))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Due Soon Threshold (hours)</Label>
+                    <Input type="number" value={(settings as any)?.tasks?.dueSoonThresholdHours ?? 24} onChange={(e) => setSettings(prev => ({ ...prev, tasks: { ...(prev as any).tasks, dueSoonThresholdHours: Number(e.target.value) || 0 } as any } as any))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Blocked Escalation (hours)</Label>
+                    <Input type="number" value={(settings as any)?.tasks?.blockedEscalationHours ?? 48} onChange={(e) => setSettings(prev => ({ ...prev, tasks: { ...(prev as any).tasks, blockedEscalationHours: Number(e.target.value) || 0 } as any } as any))} />
+                  </div>
+                </div>
+
+                {/* Task statuses and priorities are now managed elsewhere. */}
+              </AccordionContent>
+            </AccordionItem>
+            {/* Task Statuses */}
+            <AccordionItem value="task-statuses" className="border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3 w-full">
+                  <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
+                    <Ticket className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">Task Statuses</h3>
+                    <p className="text-sm text-muted-foreground">Manage status keys, names and colors</p>
+                  </div>
+                  <Badge variant="outline" className="text-xs ml-auto">{taskStatuses.length} statuses</Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="space-y-3">
+                  {taskMetaLoading && (<div className="text-sm text-muted-foreground">Loading statuses…</div>)}
+                  {!taskMetaLoading && taskStatuses.length === 0 && (<div className="text-sm text-muted-foreground">No statuses yet.</div>)}
+                  <div className="space-y-2">
+                    {taskStatuses.map((s) => (
+                      <div key={s.id || s.key} className="flex items-center justify-between rounded-lg border p-3">
+                        <div className="flex items-center gap-3">
+                          <Badge className={`${ticketSystemService.getStatusColorClass(s.color || 'blue')} text-xs`}>{s.name || s.key}</Badge>
+                          <span className="text-sm text-muted-foreground">{s.color ? s.color : 'No color'}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="icon" onClick={() => { setEditingTaskStatus(s); setTaskStatusForm({ key: s.key, name: s.name, color: s.color || 'blue', sortOrder: s.sortOrder }); setShowTaskStatusDialog(true); }}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="destructive" size="icon" onClick={async () => {
+                            try {
+                              if (!s.id) return;
+                              const res = await apiClient.delete(`/api/tasks/meta/statuses/${s.id}`);
+                              if (!res.success) throw new Error(res.error || 'Failed');
+                              toast.success('Status deleted');
+                              void fetchTaskMeta();
+                            } catch (e: any) {
+                              toast.error(e?.message || 'Failed to delete status');
+                            }
+                          }}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-end pt-2">
+                    <Button size="sm" onClick={() => { setEditingTaskStatus(null); setTaskStatusForm({ key: '', name: '', color: 'blue', sortOrder: undefined }); setShowTaskStatusDialog(true); }}>
+                      <Plus className="h-4 w-4 mr-1" /> Add Status
+                    </Button>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Task Priorities */}
+            <AccordionItem value="task-priorities" className="border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3 w-full">
+                  <div className="p-2 rounded-lg bg-amber-100 text-amber-600">
+                    <Workflow className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">Task Priorities</h3>
+                    <p className="text-sm text-muted-foreground">Manage priority levels, names and colors</p>
+                  </div>
+                  <Badge variant="outline" className="text-xs ml-auto">{taskPriorities.length} priorities</Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="space-y-3">
+                  {taskMetaLoading && (<div className="text-sm text-muted-foreground">Loading priorities…</div>)}
+                  {!taskMetaLoading && taskPriorities.length === 0 && (<div className="text-sm text-muted-foreground">No priorities yet.</div>)}
+                  <div className="space-y-2">
+                    {taskPriorities.map((p) => (
+                      <div key={p.id || p.key} className="flex items-center justify-between rounded-lg border p-3">
+                        <div className="flex items-center gap-3">
+                          <Badge className={`${ticketSystemService.getPriorityColorClass(p.color || 'yellow')} text-xs`}>{p.name || p.key}</Badge>
+                          <span className="text-sm text-muted-foreground">Level {p.level ?? 0}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="icon" onClick={() => { setEditingTaskPriority(p); setTaskPriorityForm({ key: p.key, name: p.name, color: p.color || 'yellow', level: p.level ?? 0, sortOrder: p.sortOrder }); setShowTaskPriorityDialog(true); }}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="destructive" size="icon" onClick={async () => {
+                            try {
+                              if (!p.id) return;
+                              const res = await apiClient.delete(`/api/tasks/meta/priorities/${p.id}`);
+                              if (!res.success) throw new Error(res.error || 'Failed');
+                              toast.success('Priority deleted');
+                              void fetchTaskMeta();
+                            } catch (e: any) {
+                              toast.error(e?.message || 'Failed to delete priority');
+                            }
+                          }}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-end pt-2">
+                    <Button size="sm" onClick={() => { setEditingTaskPriority(null); setTaskPriorityForm({ key: '', name: '', color: 'yellow', level: 0, sortOrder: undefined }); setShowTaskPriorityDialog(true); }}>
+                      <Plus className="h-4 w-4 mr-1" /> Add Priority
+                    </Button>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </TabsContent>
+
+        {/* Task Status Dialog */}
+        <Dialog open={showTaskStatusDialog} onOpenChange={setShowTaskStatusDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{editingTaskStatus ? 'Edit Task Status' : 'Add Task Status'}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label>Key</Label>
+                  <Input value={taskStatusForm.key} onChange={(e) => setTaskStatusForm(prev => ({ ...prev, key: e.target.value.toUpperCase() }))} placeholder="KEY" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Name</Label>
+                  <Input value={taskStatusForm.name} onChange={(e) => setTaskStatusForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Display name" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label>Color</Label>
+                  <Input value={taskStatusForm.color} onChange={(e) => setTaskStatusForm(prev => ({ ...prev, color: e.target.value }))} placeholder="blue" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Sort Order</Label>
+                  <Input type="number" value={taskStatusForm.sortOrder ?? 0} onChange={(e) => setTaskStatusForm(prev => ({ ...prev, sortOrder: Number(e.target.value) || 0 }))} />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowTaskStatusDialog(false)}>Cancel</Button>
+              <Button onClick={saveTaskStatus}>Save</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Task Priority Dialog */}
+        <Dialog open={showTaskPriorityDialog} onOpenChange={setShowTaskPriorityDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{editingTaskPriority ? 'Edit Task Priority' : 'Add Task Priority'}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label>Key</Label>
+                  <Input value={taskPriorityForm.key} onChange={(e) => setTaskPriorityForm(prev => ({ ...prev, key: e.target.value.toUpperCase() }))} placeholder="KEY" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Name</Label>
+                  <Input value={taskPriorityForm.name} onChange={(e) => setTaskPriorityForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Display name" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-2">
+                  <Label>Color</Label>
+                  <Input value={taskPriorityForm.color} onChange={(e) => setTaskPriorityForm(prev => ({ ...prev, color: e.target.value }))} placeholder="yellow" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Level</Label>
+                  <Input type="number" value={taskPriorityForm.level} onChange={(e) => setTaskPriorityForm(prev => ({ ...prev, level: Number(e.target.value) || 0 }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Sort Order</Label>
+                  <Input type="number" value={taskPriorityForm.sortOrder ?? 0} onChange={(e) => setTaskPriorityForm(prev => ({ ...prev, sortOrder: Number(e.target.value) || 0 }))} />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowTaskPriorityDialog(false)}>Cancel</Button>
+              <Button onClick={saveTaskPriority}>Save</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Authentication Settings */}
         {/* Reuse notifications tab for now; optionally a new tab can be added */}
@@ -2050,7 +2401,7 @@ export default function SettingsPage() {
             onValueChange={setExpandedSections}
             className="space-y-4"
           >
-            {/* SMTP */}
+            {/* SMTP (Outgoing) */}
             <AccordionItem value="smtp" className="border rounded-lg">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
                 <div className="flex items-center gap-3">
@@ -2110,6 +2461,68 @@ export default function SettingsPage() {
                 </div>
               </AccordionContent>
             </AccordionItem>
+            {/* Email Intake (Inbound) */}
+            <AccordionItem value="email-intake" className="border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-indigo-100 text-indigo-600">
+                    <Download className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">Email Intake (IMAP)</h3>
+                    <p className="text-sm text-muted-foreground">Incoming mail server configuration</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>IMAP Host</Label>
+                    <Input value={inbound.imapHost} onChange={(e) => setInbound(prev => ({ ...prev, imapHost: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>IMAP Port</Label>
+                    <Input type="number" value={inbound.imapPort} onChange={(e) => setInbound(prev => ({ ...prev, imapPort: Number(e.target.value) || 0 }))} />
+                  </div>
+                  <div className="flex items-center gap-2 mt-8">
+                    <Switch id="imap-secure" checked={inbound.imapSecure} onCheckedChange={(c) => setInbound(prev => ({ ...prev, imapSecure: !!c }))} />
+                    <Label htmlFor="imap-secure">Use TLS/SSL</Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Folder</Label>
+                    <Input value={inbound.folder} onChange={(e) => setInbound(prev => ({ ...prev, folder: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label>User</Label>
+                    <Input value={inbound.imapUser} onChange={(e) => setInbound(prev => ({ ...prev, imapUser: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label>Password</Label>
+                    <Input type="password" value={inbound.imapPassword} onChange={(e) => setInbound(prev => ({ ...prev, imapPassword: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Move to (Success)</Label>
+                    <Input value={inbound.moveOnSuccessFolder} onChange={(e) => setInbound(prev => ({ ...prev, moveOnSuccessFolder: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Move to (Error)</Label>
+                    <Input value={inbound.moveOnErrorFolder} onChange={(e) => setInbound(prev => ({ ...prev, moveOnErrorFolder: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 mt-4">
+                  <Button type="button" variant="secondary" onClick={async () => {
+                    try {
+                      const res = await settingsApi.runEmailIngest();
+                      if (!res.success) throw new Error(res.error || 'Failed');
+                      const d: any = res.data || {};
+                      toast.success(`Fetched ${d.fetched ?? 0}, created ${d.created ?? 0}, replies ${d.replies ?? 0}, skipped ${d.skipped ?? 0}, errors ${d.errors ?? 0}`);
+                    } catch (e: any) { toast.error(e?.message || 'Failed to ingest emails'); }
+                  }}>Fetch Emails Now</Button>
+                  <Button type="button" onClick={saveInbound}>Save Inbound</Button>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
             {/* Email Notifications */}
             <AccordionItem value="email" className="border rounded-lg" data-section="email">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">

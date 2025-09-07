@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, requireAgent, authorize, authorizePermission } from '../middleware/auth';
-import { CreateTicketRequest, UpdateTicketRequest, TicketFilters, ApiResponse } from '../types';
+import { CreateTicketRequest, UpdateTicketRequest, TicketFilters, ApiResponse, TicketSource } from '../types';
 
 const router = Router();
 
@@ -272,7 +272,11 @@ router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req
         },
         attachments: true,
         tasks: {
-          orderBy: { createdAt: 'desc' }
+          orderBy: { createdAt: 'desc' },
+          include: {
+            status: { select: { id: true, key: true, name: true, color: true, sortOrder: true } },
+            priority: { select: { id: true, key: true, name: true, color: true, level: true, sortOrder: true } }
+          }
         },
         events: {
           orderBy: { date: 'desc' }
@@ -304,6 +308,7 @@ router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req
 router.post('/', authenticate, authorizePermission('tickets:write'), async (req, res) => {
   try {
     const { title, description, category, priority, dueDate, tags }: CreateTicketRequest = req.body as any;
+    const source: TicketSource = (req.body as any)?.source || 'WEB';
     const { priorityId } = (req.body as any);
     const userId = (req as any).user.id;
 
@@ -353,7 +358,7 @@ router.post('/', authenticate, authorizePermission('tickets:write'), async (req,
     }
 
     const ticket = await prisma.ticket.create({
-      data: {
+      data: ({
         title,
         description,
         categoryId: category,
@@ -361,8 +366,9 @@ router.post('/', authenticate, authorizePermission('tickets:write'), async (req,
         statusId: defaultStatus.id,
         submittedBy: userId,
         dueDate: dueDate ? new Date(dueDate) : undefined,
-        tags: tags || []
-      },
+        tags: tags || [],
+        source: source as any
+      } as any),
       include: {
         submitter: {
           select: {
@@ -388,6 +394,58 @@ router.post('/', authenticate, authorizePermission('tickets:write'), async (req,
       success: false,
       error: 'Failed to create ticket'
     });
+  }
+});
+
+// Create task for a ticket
+router.post('/:id/tasks', authenticate, authorizePermission('tickets:write'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, priority = 'MEDIUM', dueDate, assignedTo } = req.body as any;
+
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return res.status(400).json({ success: false, error: 'Task title is required' });
+    }
+
+    const ticket = await prisma.ticket.findUnique({ where: { id } });
+    if (!ticket) return res.status(404).json({ success: false, error: 'Ticket not found' });
+
+    // Resolve task priority and status defaults
+    const [statusDef, priorityDef] = await Promise.all([
+      prisma.taskStatusDef.findFirst({ where: { key: 'PENDING' } }) || prisma.taskStatusDef.findFirst(),
+      prisma.taskPriorityDef.findFirst({ where: { key: String(priority || 'MEDIUM').toUpperCase() } }) || prisma.taskPriorityDef.findFirst()
+    ]);
+
+    const created = await prisma.ticketTask.create({
+      data: {
+        ticketId: id,
+        title: title.trim(),
+        description: (description || '').toString(),
+        taskPriorityId: (priorityDef as any)?.id,
+        taskStatusId: (statusDef as any)?.id,
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+        assignedTo: assignedTo || undefined
+      }
+    });
+
+    return res.status(201).json({ success: true, data: created, message: 'Task created' });
+  } catch (e) {
+    console.error('Create task error:', e);
+    return res.status(500).json({ success: false, error: 'Failed to create task' });
+  }
+});
+
+// Get tasks for a ticket
+router.get('/:id/tasks', authenticate, authorizePermission('tickets:read'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ticket = await prisma.ticket.findUnique({ where: { id }, select: { id: true } });
+    if (!ticket) return res.status(404).json({ success: false, error: 'Ticket not found' });
+    const tasks = await prisma.ticketTask.findMany({ where: { ticketId: id }, orderBy: { createdAt: 'desc' }, include: { status: true, priority: true } });
+    return res.json({ success: true, data: tasks });
+  } catch (e) {
+    console.error('Get tasks error:', e);
+    return res.status(500).json({ success: false, error: 'Failed to get tasks' });
   }
 });
 
@@ -1013,3 +1071,64 @@ router.get('/stats/metrics', authenticate, authorizePermission('tickets:read'), 
 });
 
 export default router;
+
+// Task comments
+router.get('/:ticketId/tasks/:taskId/comments', authenticate, authorizePermission('tickets:read'), async (req, res) => {
+  try {
+    const { ticketId, taskId } = req.params;
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { id: true } });
+    if (!ticket) return res.status(404).json({ success: false, error: 'Ticket not found' });
+    const comments = await (prisma as any).taskComment.findMany({
+      where: { taskId },
+      include: { author: { select: { id: true, firstName: true, lastName: true, email: true, avatar: true } } },
+      orderBy: { createdAt: 'asc' }
+    });
+    return res.json({ success: true, data: comments });
+  } catch (e) {
+    console.error('Get task comments error:', e);
+    return res.status(500).json({ success: false, error: 'Failed to get task comments' });
+  }
+});
+
+router.post('/:ticketId/tasks/:taskId/comments', authenticate, authorizePermission('tickets:write'), async (req, res) => {
+  try {
+    const { ticketId, taskId } = req.params;
+    const { content, isInternal } = req.body as { content?: string; isInternal?: boolean };
+    if (!content || !content.trim()) return res.status(400).json({ success: false, error: 'Content is required' });
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { id: true } });
+    if (!ticket) return res.status(404).json({ success: false, error: 'Ticket not found' });
+    const created = await (prisma as any).taskComment.create({
+      data: { taskId, authorId: (req as any).user.id, content: content.trim(), isInternal: !!isInternal }
+    });
+    return res.status(201).json({ success: true, data: created, message: 'Task comment added' });
+  } catch (e) {
+    console.error('Create task comment error:', e);
+    return res.status(500).json({ success: false, error: 'Failed to add task comment' });
+  }
+});
+
+// Task status update with history logging
+router.patch('/:ticketId/tasks/:taskId/status', authenticate, authorizePermission('tickets:write'), async (req, res) => {
+  try {
+    const { ticketId, taskId } = req.params;
+    const { toStatus, reason } = req.body as { toStatus?: string; reason?: string };
+    if (!toStatus) return res.status(400).json({ success: false, error: 'toStatus is required' });
+
+    const task = await prisma.ticketTask.findUnique({ where: { id: taskId } });
+    if (!task || task.ticketId !== ticketId) return res.status(404).json({ success: false, error: 'Task not found' });
+
+    const statusDef = await prisma.taskStatusDef.findFirst({ where: { key: String(toStatus).toUpperCase() } });
+    if (!statusDef) return res.status(400).json({ success: false, error: 'Invalid toStatus' });
+
+    const updated = await prisma.$transaction(async (tx: any) => {
+      const prev = await tx.ticketTask.update({ where: { id: taskId }, data: { taskStatusId: statusDef.id, completedDate: (String(toStatus).toUpperCase() === 'COMPLETED' ? new Date() : task.completedDate) } });
+      await tx.taskStatusHistory.create({ data: { taskId, fromStatus: (task as any).taskStatusId as any, toStatus: statusDef.id as any, changedBy: (req as any).user.id, reason: reason || undefined } });
+      return prev;
+    });
+
+    return res.json({ success: true, data: updated, message: 'Task status updated' });
+  } catch (e) {
+    console.error('Update task status error:', e);
+    return res.status(500).json({ success: false, error: 'Failed to update task status' });
+  }
+});

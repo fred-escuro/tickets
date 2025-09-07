@@ -55,6 +55,10 @@ class SettingsApi {
   async sendSmtpTest(to: string): Promise<ApiResponse<{ messageId: string }>> {
     return apiClient.post(`/api/settings/v2/email/smtp/test`, { to }) as any;
   }
+
+  async runEmailIngest(): Promise<ApiResponse<{ fetched: number; created: number; replies: number; skipped: number; errors: number }>> {
+    return apiClient.post(`/api/email-ingest/run`, {}) as any;
+  }
 }
 
 export const settingsApi = new SettingsApi();

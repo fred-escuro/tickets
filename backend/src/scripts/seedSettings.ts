@@ -68,6 +68,32 @@ async function main() {
   await upsert('notifications', 'pushEnabled', false);
   await upsert('notifications', 'frequency', 'immediate');
 
+  // Inbound email (IMAP) defaults
+  await upsert('email.inbound', 'imapHost', 'imap.example.com');
+  await upsert('email.inbound', 'imapPort', 993);
+  await upsert('email.inbound', 'imapSecure', true);
+  await upsertSecret('email.inbound', 'imapUser', 'support@example.com');
+  await upsertSecret('email.inbound', 'imapPassword', 'change-me');
+  await upsert('email.inbound', 'folder', 'INBOX');
+  await upsert('email.inbound', 'moveOnSuccessFolder', 'Processed');
+  await upsert('email.inbound', 'moveOnErrorFolder', 'Errors');
+  await upsert('email.inbound', 'allowedSenderDomains', ['company.com']);
+  await upsert('email.inbound', 'defaultCategoryId', null);
+  await upsert('email.inbound', 'defaultPriorityId', null);
+  await upsert('email.inbound', 'autoreplyEnabled', false);
+  await upsert('email.inbound', 'autoreplyFromName', 'TicketHub');
+  await upsert('email.inbound', 'autoreplyFromEmail', 'no-reply@example.com');
+
+  // Task settings defaults
+  await upsert('tasks', 'defaultAssignee', null);
+  await upsert('tasks', 'allowedStatuses', ['PENDING','IN_PROGRESS','COMPLETED','BLOCKED']);
+  await upsert('tasks', 'enableComments', true);
+  await upsert('tasks', 'notifyOnAssignment', true);
+  await upsert('tasks', 'notifyOnDueSoon', true);
+  await upsert('tasks', 'dueSoonThresholdHours', 24);
+  await upsert('tasks', 'blockedEscalationHours', 48);
+  // NOTE: task statuses and priorities are now first-class tables
+
   // Google auth defaults
   await upsert('auth.google', 'enabled', false);
   await upsert('auth.google', 'redirectUri', 'http://localhost:3000/auth/callback/google');

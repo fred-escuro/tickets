@@ -94,6 +94,27 @@ async function main() {
     }
   });
 
+  // Link users to roles
+  const adminRole = await prisma.role.upsert({ where: { name: 'admin' }, update: {}, create: { name: 'admin', description: 'System Administrator', isSystem: true } });
+  const managerRole = await prisma.role.upsert({ where: { name: 'manager' }, update: {}, create: { name: 'manager', description: 'Team/Department Manager', isSystem: true } });
+  const agentRole = await prisma.role.upsert({ where: { name: 'agent' }, update: {}, create: { name: 'agent', description: 'Support Agent', isSystem: true } });
+  const userRole = await prisma.role.upsert({ where: { name: 'user' }, update: {}, create: { name: 'user', description: 'End User', isSystem: true } });
+
+  const link = async (userId: string, roleId: string, isPrimary = false) => {
+    await prisma.userRole.upsert({
+      where: { userId_roleId: { userId, roleId } },
+      update: { isPrimary },
+      create: { userId, roleId, isPrimary }
+    } as any);
+  };
+
+  await link(admin.id, adminRole.id, true);
+  await link(john.id, agentRole.id, true);
+  await link(sarah.id, managerRole.id, true);
+  await link(mike.id, agentRole.id, true);
+  await link(alice.id, userRole.id, true);
+  await link(bob.id, userRole.id, true);
+
   // Create sample tickets
   // Get default category, priority, and status IDs
   const defaultCategory = await prisma.ticketCategory.findFirst({ where: { name: 'Technical Support' } });

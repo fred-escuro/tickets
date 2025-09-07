@@ -62,6 +62,7 @@ export interface AuthResponse {
 // Ticket types
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type Status = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED' | 'ESCALATED';
+export type TicketSource = 'WEB' | 'EMAIL' | 'API' | 'MOBILE' | 'OTHER';
 
 export interface Ticket extends BaseEntity {
   ticketNumber: number;
@@ -70,6 +71,7 @@ export interface Ticket extends BaseEntity {
   category: string;
   priority: Priority;
   status: Status;
+  source?: TicketSource;
   submittedBy: string;
   submittedAt: Date;
   assignedTo?: string;
@@ -165,6 +167,22 @@ export interface TicketTask extends BaseEntity {
   completedDate?: Date;
   estimatedHours?: number;
   actualHours?: number;
+}
+
+export interface TaskComment extends BaseEntity {
+  taskId: string;
+  authorId: string;
+  content: string;
+  isInternal: boolean;
+}
+
+export interface TaskStatusHistory extends BaseEntity {
+  taskId: string;
+  fromStatus: TaskStatus;
+  toStatus: TaskStatus;
+  changedBy: string;
+  changedAt: Date;
+  reason?: string;
 }
 
 export interface CreateTaskRequest {

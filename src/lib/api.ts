@@ -54,6 +54,10 @@ export const API_ENDPOINTS = {
     STATS_OVERVIEW: '/api/tickets/stats/overview',
     STATS_ACTIVITY: '/api/tickets/stats/activity',
     STATS_METRICS: '/api/tickets/stats/metrics',
+    TASKS: (id: string) => `/api/tickets/${id}/tasks`,
+    TASKS_CREATE: (id: string) => `/api/tickets/${id}/tasks`,
+    TASK_COMMENTS: (ticketId: string, taskId: string) => `/api/tickets/${ticketId}/tasks/${taskId}/comments`,
+    TASK_STATUS: (ticketId: string, taskId: string) => `/api/tickets/${ticketId}/tasks/${taskId}/status`,
   },
   // Comments
   COMMENTS: {
