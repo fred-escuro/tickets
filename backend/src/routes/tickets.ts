@@ -1081,7 +1081,7 @@ router.get('/:ticketId/tasks/:taskId/comments', authenticate, authorizePermissio
     const comments = await (prisma as any).taskComment.findMany({
       where: { taskId },
       include: { author: { select: { id: true, firstName: true, lastName: true, email: true, avatar: true } } },
-      orderBy: { createdAt: 'asc' }
+      orderBy: { createdAt: 'desc' }
     });
     return res.json({ success: true, data: comments });
   } catch (e) {
@@ -1121,8 +1121,9 @@ router.patch('/:ticketId/tasks/:taskId/status', authenticate, authorizePermissio
     if (!statusDef) return res.status(400).json({ success: false, error: 'Invalid toStatus' });
 
     const updated = await prisma.$transaction(async (tx: any) => {
+      const prevStatusDef = await tx.taskStatusDef.findUnique({ where: { id: (task as any).taskStatusId } });
       const prev = await tx.ticketTask.update({ where: { id: taskId }, data: { taskStatusId: statusDef.id, completedDate: (String(toStatus).toUpperCase() === 'COMPLETED' ? new Date() : task.completedDate) } });
-      await tx.taskStatusHistory.create({ data: { taskId, fromStatus: (task as any).taskStatusId as any, toStatus: statusDef.id as any, changedBy: (req as any).user.id, reason: reason || undefined } });
+      await tx.taskStatusHistory.create({ data: { taskId, fromStatus: (prevStatusDef?.key || 'PENDING') as any, toStatus: (statusDef.key as any), changedBy: (req as any).user.id, reason: reason || undefined } });
       return prev;
     });
 
@@ -1130,5 +1131,43 @@ router.patch('/:ticketId/tasks/:taskId/status', authenticate, authorizePermissio
   } catch (e) {
     console.error('Update task status error:', e);
     return res.status(500).json({ success: false, error: 'Failed to update task status' });
+  }
+});
+
+// Get task status history
+router.get('/:ticketId/tasks/:taskId/status-history', authenticate, authorizePermission('tickets:read'), async (req, res) => {
+  try {
+    const { ticketId, taskId } = req.params;
+    const task = await prisma.ticketTask.findUnique({ where: { id: taskId }, select: { id: true, ticketId: true } });
+    if (!task || task.ticketId !== ticketId) return res.status(404).json({ success: false, error: 'Task not found' });
+
+    const history = await (prisma as any).taskStatusHistory.findMany({
+      where: { taskId },
+      orderBy: { changedAt: 'desc' },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true } },
+        task: false
+      }
+    });
+
+    // Map to response with resolved names for from/to
+    const defs = await prisma.taskStatusDef.findMany();
+    const mapName = (id: string) => defs.find(d => d.id === id)?.name || defs.find(d => d.id === id)?.key || id;
+
+    const data = history.map((h: any) => ({
+      id: h.id,
+      fromStatusId: h.fromStatus,
+      fromStatusName: mapName(h.fromStatus),
+      toStatusId: h.toStatus,
+      toStatusName: mapName(h.toStatus),
+      changedBy: `${h.user?.firstName || ''} ${h.user?.lastName || ''}`.trim() || h.changedBy,
+      changedAt: h.changedAt,
+      reason: h.reason || undefined
+    }));
+
+    return res.json({ success: true, data });
+  } catch (e) {
+    console.error('Get task status history error:', e);
+    return res.status(500).json({ success: false, error: 'Failed to get task status history' });
   }
 });

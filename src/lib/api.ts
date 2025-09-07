@@ -58,6 +58,7 @@ export const API_ENDPOINTS = {
     TASKS_CREATE: (id: string) => `/api/tickets/${id}/tasks`,
     TASK_COMMENTS: (ticketId: string, taskId: string) => `/api/tickets/${ticketId}/tasks/${taskId}/comments`,
     TASK_STATUS: (ticketId: string, taskId: string) => `/api/tickets/${ticketId}/tasks/${taskId}/status`,
+    TASK_STATUS_HISTORY: (ticketId: string, taskId: string) => `/api/tickets/${ticketId}/tasks/${taskId}/status-history`,
   },
   // Comments
   COMMENTS: {

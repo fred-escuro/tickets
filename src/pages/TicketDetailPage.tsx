@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,8 +16,9 @@ import { CommentService } from '@/lib/services/commentService';
 import type { FileAttachment } from '@/components/ui/file-upload';
 import { apiClient, API_ENDPOINTS } from '@/lib/api';
 import { toast } from 'sonner';
-import { ArrowLeft, Calendar, Paperclip, User, MessageSquare, ChevronDown, ChevronRight, FileText, Settings, Clock, ChevronUp, ChevronLeft } from 'lucide-react';
+import { ArrowLeft, Calendar, Paperclip, User, MessageSquare, ChevronDown, ChevronRight, FileText, Settings, Clock, ChevronUp, ChevronLeft, CheckSquare } from 'lucide-react';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TicketStatusHistory } from '@/components/TicketStatusHistory';
@@ -30,6 +31,7 @@ export const TicketDetailPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [ticket, setTicket] = useState<LoadedTicket | null>(null);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [showAddComment, setShowAddComment] = useState(false);
@@ -39,11 +41,34 @@ export const TicketDetailPage: React.FC = () => {
   const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
   const [isOverviewOpen, setIsOverviewOpen] = useState(true);
   const [isTimelineOpen, setIsTimelineOpen] = useState(true);
-  const [isStatusOpen, setIsStatusOpen] = useState(true);
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
   const [taskComments, setTaskComments] = useState<Record<string, any[]>>({});
   const [taskCommentDraft, setTaskCommentDraft] = useState<Record<string, string>>({});
   const [taskCommentsLoading, setTaskCommentsLoading] = useState<Record<string, boolean>>({});
+  const [taskStatusHistory, setTaskStatusHistory] = useState<Record<string, any[]>>({});
+  const [taskStatusHistoryLoading, setTaskStatusHistoryLoading] = useState<Record<string, boolean>>({});
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDescription, setNewTaskDescription] = useState('');
+  const [newTaskPriority, setNewTaskPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM');
+
+  // Persist selected tab via URL param (?tab=overview|status|timeline|tasks)
+  const initialTab = (searchParams.get('tab') || 'overview') as 'overview' | 'status' | 'timeline' | 'tasks';
+  const [activeTab, setActiveTab] = useState<'overview' | 'status' | 'timeline' | 'tasks'>(initialTab);
+
+  useEffect(() => {
+    const tab = (searchParams.get('tab') as any) as 'overview' | 'status' | 'timeline' | 'tasks' | null;
+    if (tab && tab !== activeTab) setActiveTab(tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const handleTabChange = (val: string) => {
+    const next = (val as any) as 'overview' | 'status' | 'timeline' | 'tasks';
+    setActiveTab(next);
+    const p = new URLSearchParams(searchParams);
+    p.set('tab', next);
+    setSearchParams(p, { replace: true });
+  };
 
   const fetchTicket = async () => {
     if (!id) return;
@@ -70,10 +95,7 @@ export const TicketDetailPage: React.FC = () => {
     return typeof ticket.status === 'string' ? ticket.status : ticket.status?.name || '';
   }, [ticket]);
 
-  const priorityName = useMemo(() => {
-    if (!ticket) return '';
-    return typeof ticket.priority === 'string' ? ticket.priority : ticket.priority?.name || '';
-  }, [ticket]);
+  // priorityName no longer used
 
   const canWriteTasks = useMemo(() => {
     try {
@@ -84,16 +106,58 @@ export const TicketDetailPage: React.FC = () => {
     } catch { return false; }
   }, []);
 
+  const getPriorityPillClasses = (priorityLabel: string): string => {
+    const p = String(priorityLabel || '').toLowerCase();
+    if (p === 'low') return 'bg-green-100 text-green-700 border-green-200';
+    if (p === 'medium') return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    if (p === 'high') return 'bg-orange-100 text-orange-800 border-orange-200';
+    if (p === 'critical') return 'bg-red-100 text-red-700 border-red-200';
+    return 'bg-gray-100 text-gray-700 border-gray-200';
+  };
+
+  const addTask = async () => {
+    if (!id) return;
+    const title = newTaskTitle.trim();
+    const description = newTaskDescription.trim();
+    if (!title) { toast.error('Task title is required'); return; }
+    try {
+      const res = await apiClient.post(API_ENDPOINTS.TICKETS.TASKS_CREATE(id), {
+        title,
+        description,
+        priority: newTaskPriority
+      });
+      if (!res.success) throw new Error(res.error || 'Failed to create task');
+      toast.success('Task created');
+      setShowAddTask(false);
+      setNewTaskTitle(''); setNewTaskDescription(''); setNewTaskPriority('MEDIUM');
+      await fetchTicket();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to create task');
+    }
+  };
+
   const loadTaskComments = async (taskId: string) => {
     try {
       setTaskCommentsLoading(prev => ({ ...prev, [taskId]: true }));
       const res = await apiClient.get(`/api/tickets/${id}/tasks/${taskId}/comments`);
-      if (res.success) setTaskComments(prev => ({ ...prev, [taskId]: res.data || [] }));
+      if (res.success) setTaskComments((prev: Record<string, any[]>) => ({ ...prev, [taskId]: (res.data as any[]) || [] }));
       else toast.error(res.error || 'Failed to load task comments');
     } catch (e) {
       toast.error('Failed to load task comments');
     } finally {
       setTaskCommentsLoading(prev => ({ ...prev, [taskId]: false }));
+    }
+  };
+
+  const loadTaskStatusHistory = async (taskId: string) => {
+    try {
+      setTaskStatusHistoryLoading(prev => ({ ...prev, [taskId]: true }));
+      const res = await apiClient.get(API_ENDPOINTS.TICKETS.TASK_STATUS_HISTORY(id as string, taskId));
+      if (res.success) setTaskStatusHistory((prev: Record<string, any[]>) => ({ ...prev, [taskId]: (res.data as any[]) || [] }));
+    } catch (e) {
+      // ignore; UI shows empty
+    } finally {
+      setTaskStatusHistoryLoading(prev => ({ ...prev, [taskId]: false }));
     }
   };
 
@@ -267,12 +331,13 @@ export const TicketDetailPage: React.FC = () => {
         <div className="flex items-center gap-2"></div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="w-full">
         {/* Main */}
-        <div className="lg:col-span-2">
-          <Tabs defaultValue="overview" className="space-y-4">
-            <TabsList className="w-full grid grid-cols-3 sm:w-auto sm:inline-flex">
+        <div className="w-full">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
+            <TabsList className="w-full grid grid-cols-4 sm:w-auto sm:inline-flex">
               <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="status">Status & Actions</TabsTrigger>
               <TabsTrigger value="timeline">Timeline</TabsTrigger>
               <TabsTrigger value="tasks">Tasks</TabsTrigger>
             </TabsList>
@@ -342,9 +407,12 @@ export const TicketDetailPage: React.FC = () => {
 
               <Separator />
 
-              <div className="prose max-w-none max-h-[320px] overflow-y-auto rounded-md border bg-muted/30 p-3">
+              <div className="max-w-none max-h-[320px] overflow-y-auto rounded-md border bg-muted/30 p-3">
                 {ticket ? (
-                  <RichTextDisplay content={ticket.description} />
+                  <RichTextDisplay
+                    content={ticket.description}
+                    className="prose max-w-none ticket-prose-compact prose-[9px]"
+                  />
                 ) : (
                   <p className="text-sm text-muted-foreground">{loading ? 'Loading description…' : 'No description'}</p>
                 )}
@@ -361,6 +429,52 @@ export const TicketDetailPage: React.FC = () => {
             </CardContent>
             )}
           </Card>
+
+            </TabsContent>
+
+            <TabsContent value="status" className="space-y-4">
+          {/* Status & Actions Tab */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                <CardTitle className="text-base">Status & Actions</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-5 pt-0 space-y-3">
+              {ticket && (
+                <div className="flex items-center justify-between gap-2">
+                  <TicketStatusBadge status={ticket.status as any} size="sm" />
+                  <TicketStatusChange
+                    ticketId={ticket.id}
+                    currentStatus={statusName}
+                    currentStatusId={typeof ticket.status === 'object' ? ticket.status?.id : undefined}
+                    onStatusChange={async (newId, reason, addComment) => { await handleStatusChange(newId, reason, addComment); }}
+                    className="ml-1"
+                    triggerMode="button"
+                    triggerLabel="Change Status"
+                    disabled={!(() => {
+                      try {
+                        const u: any = JSON.parse(localStorage.getItem('user') || 'null');
+                        const roleNames: string[] = Array.isArray(u?.roles) ? u.roles.map((r: any) => r?.role?.name?.toLowerCase()).filter(Boolean) : (u?.role ? [String(u.role).toLowerCase()] : []);
+                        const perms: string[] = Array.isArray(u?.permissions) ? u.permissions : [];
+                        return roleNames.includes('admin') || perms.includes('ticket-status:change');
+                      } catch { return false; }
+                    })()}
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {ticket && (
+            <TicketStatusHistory
+              ticketId={ticket.id}
+              defaultExpanded
+              maxItems={6}
+              refreshToken={historyRefreshToken}
+            />
+          )}
 
             </TabsContent>
 
@@ -420,12 +534,12 @@ export const TicketDetailPage: React.FC = () => {
                         <div className="p-4">
                           {item.type === 'issue' ? (
                             <div className="space-y-3">
-                              <RichTextDisplay content={item.data.description} />
+                              <RichTextDisplay content={item.data.description} className="ticket-prose-compact" />
                               {item.data.attachments?.length > 0 && <AttachmentDisplay attachments={item.data.attachments} />}
                             </div>
                           ) : (
                             <div className="space-y-3">
-                              <RichTextDisplay content={item.data.content} />
+                              <RichTextDisplay content={item.data.content} className="ticket-prose-compact" />
                               {item.data.attachments?.length > 0 && <AttachmentDisplay attachments={item.data.attachments} />}
                             </div>
                           )}
@@ -445,12 +559,33 @@ export const TicketDetailPage: React.FC = () => {
           {/* Tasks */}
           {ticket && (
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Tasks ({(ticket.tasks?.length || 0)})</CardTitle>
+              <CardHeader className="pb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckSquare className="h-4 w-4" />
+                  <CardTitle className="text-base">Tasks ({(ticket.tasks?.length || 0)})</CardTitle>
+                </div>
+                <Button onClick={() => setShowAddTask(true)} className="gap-2" disabled={!canWriteTasks}>
+                  <MessageSquare className="h-4 w-4" />
+                  Add Task
+                </Button>
               </CardHeader>
-              <CardContent className="p-5 pt-0 space-y-3">
-                {Array.isArray(ticket.tasks) && ticket.tasks.length > 0 ? ticket.tasks.map((task: any) => {
+              <CardContent className="p-5 pt-0">
+                {Array.isArray(ticket.tasks) && ticket.tasks.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {ticket.tasks.map((task: any) => {
                   const expanded = !!expandedTasks[task.id];
+                  const statusValue: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED' = ((): any => {
+                    if (!task) return 'PENDING';
+                    if (typeof task.status === 'string') return task.status as any;
+                    if (task.status && typeof task.status.name === 'string') return (task.status.name as string).toUpperCase() as any;
+                    if (typeof task.taskStatus === 'string') return (task.taskStatus as string).toUpperCase() as any;
+                    if (task.taskStatus && typeof task.taskStatus.name === 'string') return (task.taskStatus.name as string).toUpperCase() as any;
+                    return 'PENDING';
+                  })();
+                  const priorityLabel: string = ((): string => {
+                    const raw = (task.priority?.name ?? task.priority ?? task.taskPriority?.name ?? task.taskPriority ?? '') as string;
+                    return String(raw).toLowerCase();
+                  })();
                   return (
                     <div key={task.id} className="border rounded-lg p-3">
                       <div className="flex items-start justify-between gap-3">
@@ -458,12 +593,12 @@ export const TicketDetailPage: React.FC = () => {
                           <div className="font-medium text-sm truncate">{task.title}</div>
                           <div className="text-xs text-muted-foreground truncate">{task.description || ''}</div>
                           <div className="mt-1 flex items-center gap-2">
-                            <Badge variant="outline" className="text-xxs">Priority: {String(task.priority || '').toLowerCase()}</Badge>
+                            <Badge variant="outline" className={`text-xxs border ${getPriorityPillClasses(priorityLabel)}`}>Priority: {priorityLabel || 'unknown'}</Badge>
                             {task.dueDate && <Badge variant="outline" className="text-xxs">Due: {new Date(task.dueDate).toLocaleDateString()}</Badge>}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <Select value={String(task.status || 'PENDING')} onValueChange={(val) => updateTaskStatus(task.id, val as any)} disabled={!canWriteTasks}>
+                          <Select value={statusValue} onValueChange={(val) => updateTaskStatus(task.id, val as any)} disabled={!canWriteTasks}>
                             <SelectTrigger className="h-8 w-[160px]">
                               <SelectValue />
                             </SelectTrigger>
@@ -477,7 +612,7 @@ export const TicketDetailPage: React.FC = () => {
                           <Button variant="ghost" size="sm" onClick={() => {
                             const next = { ...expandedTasks, [task.id]: !expanded };
                             setExpandedTasks(next);
-                            if (!expanded && !taskComments[task.id]) void loadTaskComments(task.id);
+                            if (!expanded) { if (!taskComments[task.id]) void loadTaskComments(task.id); if (!taskStatusHistory[task.id]) void loadTaskStatusHistory(task.id);} 
                           }} aria-label={expanded ? 'Collapse' : 'Expand'}>
                             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                           </Button>
@@ -500,6 +635,24 @@ export const TicketDetailPage: React.FC = () => {
                           </div>
 
                           <div className="space-y-2">
+                            <div className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" />Status History</div>
+                            {taskStatusHistoryLoading[task.id] && <div className="text-xs text-muted-foreground">Loading history…</div>}
+                            <div className="space-y-1">
+                              {(taskStatusHistory[task.id] || []).map((h: any) => (
+                                <div key={h.id} className="text-xs text-muted-foreground flex items-center gap-2">
+                                  <Badge variant="outline" className="text-xxs">{h.fromStatusName || h.fromStatusId}</Badge>
+                                  <ChevronRight className="h-3 w-3" />
+                                  <Badge variant="outline" className="text-xxs">{h.toStatusName || h.toStatusId}</Badge>
+                                  <span>• {new Date(h.changedAt).toLocaleString()}</span>
+                                </div>
+                              ))}
+                              {(taskStatusHistory[task.id] || []).length === 0 && !taskStatusHistoryLoading[task.id] && (
+                                <div className="text-xs text-muted-foreground">No history</div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
                             <Label htmlFor={`task-comment-${task.id}`}>Add Comment</Label>
                             <Textarea id={`task-comment-${task.id}`} rows={2} value={taskCommentDraft[task.id] || ''} onChange={(e) => setTaskCommentDraft(prev => ({ ...prev, [task.id]: e.target.value }))} placeholder="Write a comment…" />
                             <div className="flex justify-end">
@@ -510,7 +663,9 @@ export const TicketDetailPage: React.FC = () => {
                       )}
                     </div>
                   );
-                }) : (
+                })}
+                  </div>
+                ) : (
                   <div className="text-sm text-muted-foreground">No tasks yet.</div>
                 )}
               </CardContent>
@@ -519,57 +674,6 @@ export const TicketDetailPage: React.FC = () => {
             </TabsContent>
 
           </Tabs>
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="pb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Settings className="h-4 w-4" />
-                <CardTitle className="text-base">Status & Actions</CardTitle>
-              </div>
-              <button type="button" className="text-muted-foreground" onClick={() => setIsStatusOpen(v => !v)} aria-label={isStatusOpen ? 'Collapse' : 'Expand'}>
-                {isStatusOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </button>
-            </CardHeader>
-            {isStatusOpen && (
-            <CardContent className="p-5 pt-0 space-y-3">
-              {ticket && (
-                <div className="flex items-center justify-between gap-2">
-                  <TicketStatusBadge status={ticket.status as any} size="sm" />
-                  <TicketStatusChange
-                    ticketId={ticket.id}
-                    currentStatus={statusName}
-                    currentStatusId={typeof ticket.status === 'object' ? ticket.status?.id : undefined}
-                    onStatusChange={async (newId, reason, addComment) => { await handleStatusChange(newId, reason, addComment); }}
-                    className="ml-1"
-                    triggerMode="button"
-                    triggerLabel="Change Status"
-                    disabled={!(() => {
-                      try {
-                        const u: any = JSON.parse(localStorage.getItem('user') || 'null');
-                        const roleNames: string[] = Array.isArray(u?.roles) ? u.roles.map((r: any) => r?.role?.name?.toLowerCase()).filter(Boolean) : (u?.role ? [String(u.role).toLowerCase()] : []);
-                        const perms: string[] = Array.isArray(u?.permissions) ? u.permissions : [];
-                        return roleNames.includes('admin') || perms.includes('ticket-status:change');
-                      } catch { return false; }
-                    })()}
-                  />
-                </div>
-              )}
-            </CardContent>
-            )}
-          </Card>
-
-          {/* Status History Card */}
-          {ticket && (
-            <TicketStatusHistory
-              ticketId={ticket.id}
-              defaultExpanded
-              maxItems={6}
-              refreshToken={historyRefreshToken}
-            />
-          )}
         </div>
       </div>
 
@@ -581,6 +685,43 @@ export const TicketDetailPage: React.FC = () => {
           </DialogHeader>
           <div className="flex-1 overflow-auto px-4 pb-4">
             {ticket && <TicketDetailPanel ticketId={ticket.id} />}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Task Dialog */}
+      <Dialog open={showAddTask} onOpenChange={setShowAddTask}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Task</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="task-title">Title</Label>
+              <Input id="task-title" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="Task title" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="task-desc">Description</Label>
+              <Textarea id="task-desc" rows={3} value={newTaskDescription} onChange={(e) => setNewTaskDescription(e.target.value)} placeholder="Task description" />
+            </div>
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <Select value={newTaskPriority} onValueChange={(v) => setNewTaskPriority(v as any)}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="CRITICAL">Critical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowAddTask(false)}>Cancel</Button>
+              <Button onClick={addTask}>Add Task</Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -21,7 +21,8 @@ import {
   Ticket,
   Bell,
   Wrench,
-  Menu
+  Menu,
+  CheckSquare
 } from 'lucide-react';
 import { type FC, useState, useEffect, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -157,6 +158,7 @@ export const Header: FC = () => {
     Building2,
     Ticket,
     Bell,
+    CheckSquare,
   } as Record<string, any>), []);
 
   // Helpers to extract sections by label from hierarchical menu
@@ -269,7 +271,7 @@ export const Header: FC = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="center" className="w-48">
                     {supportNavItems.map((item) => {
-                      const Icon = iconMap[item.icon || ''] || Users;
+                      const Icon = item.label === 'Tasks' ? CheckSquare : (iconMap[item.icon || ''] || Users);
                       return (
                         <DropdownMenuItem key={item.path || item.label} asChild>
                           <Link
@@ -398,7 +400,7 @@ export const Header: FC = () => {
               )}
               <div className={`space-y-1 ${sectionCollapsed.support ? 'hidden' : ''}`}> 
                 {supportNavItems.map((item) => {
-                  const Icon = iconMap[item.icon || ''] || Users;
+                  const Icon = item.label === 'Tasks' ? CheckSquare : (iconMap[item.icon || ''] || Users);
                   const isActive = location.pathname === item.path;
                   return (
                     <Link key={item.path || item.label} to={item.path || '#'} className={`flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md transition-colors ${isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}`}>
