@@ -12,35 +12,47 @@ export const Dashboard: FC = () => {
   return (
     <div className="min-h-screen bg-background">
       <main className="relative z-0 mx-auto max-w-[1500px] px-4 sm:px-6 lg:px-8 py-6 lg:pl-[calc(var(--sidebar-width,14rem)+1.5rem)] transition-[padding]">
-        <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-12">
+        <div className="grid gap-6 grid-cols-1 lg:grid-cols-12 items-start">
           {/* Main Content - Left Column */}
-          <div className="lg:col-span-8 space-y-4 sm:gap-6">
+          <div className="lg:col-span-8 space-y-6">
             {/* Tickets Overview */}
-            <Helpdesk showStatusChange={false} />
-            
-            {/* Ticket List removed from Dashboard */}
+            <div className="animate-in fade-in slide-in-from-left-4 duration-700">
+              <Helpdesk showStatusChange={false} />
+            </div>
             
             {/* Analytics Overview */}
-            <Analytics />
+            <div className="animate-in fade-in slide-in-from-left-4 duration-700 delay-200">
+              <Analytics />
+            </div>
 
             {/* Knowledge Base */}
-            <Resources />
+            <div className="animate-in fade-in slide-in-from-left-4 duration-700 delay-400">
+              <Resources />
+            </div>
           </div>
 
           {/* Sidebar - Right Column */}
           <div className="lg:col-span-4">
-            <div className="sticky top-32 space-y-4 sm:gap-6">
+            <div className="space-y-6">
               {/* Ticket Calendar */}
-              <TeamCalendar />
+              <div className="animate-in fade-in slide-in-from-right-4 duration-700 delay-100">
+                <TeamCalendar />
+              </div>
               
               {/* Ticket Tasks */}
-              <Projects />
+              <div className="animate-in fade-in slide-in-from-right-4 duration-700 delay-300">
+                <Projects />
+              </div>
               
               {/* Support Team */}
-              <EmployeeDirectory />
+              <div className="animate-in fade-in slide-in-from-right-4 duration-700 delay-500">
+                <EmployeeDirectory />
+              </div>
               
               {/* API Connection Test */}
-              <ApiTest />
+              <div className="animate-in fade-in slide-in-from-right-4 duration-700 delay-700">
+                <ApiTest />
+              </div>
             </div>
           </div>
         </div>

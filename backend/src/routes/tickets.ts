@@ -183,7 +183,8 @@ router.get('/', authenticate, authorizePermission('tickets:read'), async (req, r
         },
         _count: {
           select: {
-            comments: true
+            comments: true,
+            tasks: true
           }
         }
       },
@@ -1070,7 +1071,41 @@ router.get('/stats/metrics', authenticate, authorizePermission('tickets:read'), 
   }
 });
 
-export default router;
+// Get task assignment history
+router.get('/:ticketId/tasks/:taskId/assignment-history', authenticate, authorizePermission('tickets:read'), async (req, res) => {
+  try {
+    const { ticketId, taskId } = req.params;
+    const task = await prisma.ticketTask.findUnique({ where: { id: taskId }, select: { id: true, ticketId: true } });
+    if (!task || task.ticketId !== ticketId) return res.status(404).json({ success: false, error: 'Task not found' });
+
+    // For now, we'll create assignment history from task changes
+    // In a real implementation, you might want to create a separate assignment history table
+    const history = await (prisma as any).taskAssignmentHistory.findMany({
+      where: { taskId },
+      orderBy: { assignedAt: 'desc' },
+      include: {
+        assignedBy: { select: { id: true, firstName: true, lastName: true } },
+        fromUser: { select: { id: true, firstName: true, lastName: true } },
+        toUser: { select: { id: true, firstName: true, lastName: true } }
+      }
+    });
+
+    // Map to response format
+    const data = history.map((h: any) => ({
+      id: h.id,
+      fromAssignee: h.fromUser ? `${h.fromUser.firstName} ${h.fromUser.lastName}` : null,
+      toAssignee: h.toUser ? `${h.toUser.firstName} ${h.toUser.lastName}` : null,
+      assignedBy: `${h.assignedBy?.firstName || ''} ${h.assignedBy?.lastName || ''}`.trim() || h.assignedById,
+      assignedAt: h.assignedAt,
+      reason: h.reason || undefined
+    }));
+
+    return res.json({ success: true, data });
+  } catch (e) {
+    console.error('Get task assignment history error:', e);
+    return res.status(500).json({ success: false, error: 'Failed to get task assignment history' });
+  }
+});
 
 // Task comments
 router.get('/:ticketId/tasks/:taskId/comments', authenticate, authorizePermission('tickets:read'), async (req, res) => {
@@ -1134,6 +1169,52 @@ router.patch('/:ticketId/tasks/:taskId/status', authenticate, authorizePermissio
   }
 });
 
+// Task assignment update
+router.patch('/:ticketId/tasks/:taskId/assign', authenticate, authorizePermission('tickets:write'), async (req, res) => {
+  try {
+    const { ticketId, taskId } = req.params;
+    const { assignedTo } = req.body as { assignedTo?: string | null };
+
+    const task = await prisma.ticketTask.findUnique({ where: { id: taskId } });
+    if (!task || task.ticketId !== ticketId) return res.status(404).json({ success: false, error: 'Task not found' });
+
+    // If assignedTo is provided, verify the user exists
+    if (assignedTo) {
+      const user = await prisma.user.findUnique({ where: { id: assignedTo } });
+      if (!user) return res.status(400).json({ success: false, error: 'User not found' });
+    }
+
+    const updated = await prisma.$transaction(async (tx: any) => {
+      // Get current assignment before updating
+      const currentTask = await tx.ticketTask.findUnique({ where: { id: taskId } });
+      
+      // Update the task assignment
+      const task = await tx.ticketTask.update({
+        where: { id: taskId },
+        data: { assignedTo: assignedTo || null }
+      });
+
+      // Create assignment history entry
+      await tx.taskAssignmentHistory.create({
+        data: {
+          taskId: taskId,
+          fromUserId: currentTask?.assignedTo || null,
+          toUserId: assignedTo || null,
+          assignedById: (req as any).user.id,
+          reason: req.body.reason || undefined
+        }
+      });
+
+      return task;
+    });
+
+    return res.json({ success: true, data: updated, message: 'Task assignment updated' });
+  } catch (e) {
+    console.error('Update task assignment error:', e);
+    return res.status(500).json({ success: false, error: 'Failed to update task assignment' });
+  }
+});
+
 // Get task status history
 router.get('/:ticketId/tasks/:taskId/status-history', authenticate, authorizePermission('tickets:read'), async (req, res) => {
   try {
@@ -1171,3 +1252,5 @@ router.get('/:ticketId/tasks/:taskId/status-history', authenticate, authorizePer
     return res.status(500).json({ success: false, error: 'Failed to get task status history' });
   }
 });
+
+export default router;

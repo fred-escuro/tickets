@@ -100,20 +100,20 @@ export const TeamCalendar: FC = () => {
               {upcomingEvents.map((event, index) => (
                 <div 
                   key={event.id} 
-                  className={getItemClassName("p-2 rounded-lg bg-muted/30 space-y-2")}
+                  className={getItemClassName("p-3 rounded-lg bg-muted/30 space-y-2 min-h-[100px] hover:bg-muted/50 transition-all duration-300 hover:scale-[1.02]")}
                   style={getItemStyle(1 + index)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-medium truncate">{event.title}</p>
                       {event.description && (
-                        <p className="text-xs text-muted-foreground line-clamp-1">
+                        <p className="text-xs text-muted-foreground line-clamp-1 mt-1">
                           {event.description}
                         </p>
                       )}
                     </div>
                     <div className="flex items-center gap-1 ml-2">
-                      <Badge variant="outline" className="text-xs capitalize">
+                      <Badge variant="outline" className="text-xs capitalize transition-all duration-200 hover:scale-105">
                         {event.type.replace('-', ' ')}
                       </Badge>
                     </div>
@@ -121,7 +121,7 @@ export const TeamCalendar: FC = () => {
                   
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <div className="flex items-center gap-2">
-                      <div className={`${getEventColor(event.type)}`}>
+                      <div className={`${getEventColor(event.type)} transition-all duration-200 hover:scale-110`}>
                         {getEventIcon(event.type)}
                       </div>
                       <span>{formatDate(event.date)}</span>
@@ -141,11 +141,12 @@ export const TeamCalendar: FC = () => {
             </div>
           ) : (
             <div 
-              className={getItemClassName("text-center py-4")}
+              className={getItemClassName("text-center py-8")}
               style={getItemStyle(1)}
             >
-              <Calendar className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-xs text-muted-foreground">No upcoming events</p>
+              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground mb-2">No upcoming events</p>
+              <p className="text-xs text-muted-foreground">Check back later for new events</p>
             </div>
           )}
         </div>
@@ -156,7 +157,7 @@ export const TeamCalendar: FC = () => {
           style={getItemStyle(4)}
         >
           <Link to="/calendar" className="block">
-            <Button variant="outline" size="sm" className="w-full justify-center gap-2 h-8">
+            <Button variant="outline" size="sm" className="w-full justify-center gap-2 h-8 hover:scale-105 transition-all duration-300 hover:shadow-md">
               <Calendar className="h-3 w-3" />
               <span className="text-xs">View Calendar</span>
             </Button>

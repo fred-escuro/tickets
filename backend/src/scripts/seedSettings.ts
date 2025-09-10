@@ -103,13 +103,20 @@ async function main() {
   console.log('✅ Seeded settings: branding, company, features, SMTP, notifications, auth.google');
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+export async function seedSettings() {
+  await ensureEnum();
+  await main();
+}
+
+if (require.main === module) {
+  main()
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
 
 

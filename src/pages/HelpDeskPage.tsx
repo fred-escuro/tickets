@@ -13,12 +13,15 @@ import { FileUpload, type FileAttachment } from '@/components/ui/file-upload';
 import { RichTextDisplay } from '@/components/ui/rich-text-display';
 import { AttachmentDisplay } from '@/components/ui/attachment-display';
 import { AddCommentDialog } from '@/components/ui/add-comment-dialog';
+import { Breadcrumb } from '@/components/Breadcrumb';
 
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { TicketService, type Ticket } from '@/lib/services/ticketService';
 import { AttachmentService } from '@/lib/services/attachmentService';
 import { CommentService, type Comment } from '@/lib/services/commentService';
+import { UserService, type User as UserType } from '@/lib/services/userService';
 import { useApi } from '@/hooks/useApi';
+import { apiClient, API_ENDPOINTS } from '@/lib/api';
 import { type TicketAttachment } from '@/data/mockData';
 import { 
   ArrowLeft, 
@@ -190,10 +193,11 @@ const formatDate = (date: Date | string) => {
   }).format(dateObj);
 };
 
-const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[]; onTicketUpdated?: () => void }> = ({ ticket, index = 0, statuses, onTicketUpdated }) => {
+const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[]; onTicketUpdated?: () => void; users: UserType[]; loadingUsers: boolean }> = ({ ticket, index = 0, statuses, onTicketUpdated, users, loadingUsers }) => {
   const navigate = useNavigate();
   const [showAddComment, setShowAddComment] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
+  const [showUserSuggestions, setShowUserSuggestions] = useState(false);
   // Attachment viewing is now handled by AttachmentDisplay component
 
   const handleAddComment = async (commentData: { content: string; attachments: FileAttachment[]; isInternal: boolean }) => {
@@ -364,11 +368,12 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
                     e.stopPropagation();
                     setShowAddComment(true);
                   }}
-                  className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary"
+                  className="h-7 px-2 hover:bg-primary/10 hover:text-primary flex items-center gap-1"
                   title="Add Comment"
                   disabled={!(() => { try { const u: any = JSON.parse(localStorage.getItem('user') || 'null'); const roleNames: string[] = Array.isArray(u?.roles) ? u.roles.map((r: any) => r?.role?.name?.toLowerCase()).filter(Boolean) : (u?.role ? [String(u.role).toLowerCase()] : []); const perms: string[] = Array.isArray(u?.permissions) ? u.permissions : []; return roleNames.includes('admin') || perms.includes('comments:write'); } catch { return false; } })()}
                 >
                   <MessageSquare className="h-3 w-3" />
+                  <span className="text-xs font-medium">{(ticket as any)._count?.comments || 0}</span>
                 </Button>
                 <Button
                   variant="ghost"
@@ -377,10 +382,11 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
                     e.stopPropagation();
                     setShowAddTask(true);
                   }}
-                  className="h-7 w-7 p-0 hover:bg-primary/10 hover:text-primary"
+                  className="h-7 px-2 hover:bg-primary/10 hover:text-primary flex items-center gap-1"
                   title="Add Task"
                 >
                   <CheckSquare className="h-3 w-3" />
+                  <span className="text-xs font-medium">{(ticket as any)._count?.tasks || 0}</span>
                 </Button>
                 
               </div>
@@ -423,19 +429,66 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
               if (!title.trim()) e.title = 'Task title is required';
               if (!description.trim()) e.description = 'Description is required';
               if (!priority) e.priority = 'Priority is required';
-              if (!assignee) e.assignee = 'Assignee is required';
+              // Assignee is optional, so no validation needed
               setErrors(e);
               return Object.keys(e).length === 0;
             };
 
-            const submit = () => {
+            const submit = async () => {
               if (!validate()) {
                 toast.error('Please fill in all required fields');
                 return;
               }
-              // TODO: integrate with backend task creation
-              toast.success('Task added successfully!');
-              setShowAddTask(false);
+              
+              try {
+                // Create the task
+                const res = await apiClient.post(API_ENDPOINTS.TICKETS.TASKS_CREATE(ticket.id), {
+                  title: title.trim(),
+                  description: description.trim(),
+                  priority: priority.toUpperCase(),
+                  ...(assignee && { assignee })
+                });
+                
+                if (!res.success) throw new Error(res.error || 'Failed to create task');
+                
+                // Automatically add a comment to the ticket timeline
+                try {
+                  const assignedUser = assignee ? users.find(u => u.id === assignee) : null;
+                  const assigneeText = assignedUser 
+                    ? ` assigned to ${assignedUser.firstName} ${assignedUser.lastName}`
+                    : '';
+                  
+                  const commentContent = `Task "${title}" created${assigneeText} with ${priority.toLowerCase()} priority.`;
+                  
+                  await CommentService.createComment({
+                    ticketId: ticket.id,
+                    content: commentContent,
+                    isInternal: false
+                  });
+                  
+                  console.log('Task creation comment added successfully');
+                } catch (commentError) {
+                  console.error('Failed to add task creation comment:', commentError);
+                  // Don't fail the task creation if comment fails
+                }
+                
+                toast.success('Task added successfully!');
+                setShowAddTask(false);
+                
+                // Reset form
+                setTitle('');
+                setDescription('');
+                setPriority('');
+                setAssignee('');
+                
+                // Refresh ticket data if callback provided
+                if (onTicketUpdated) {
+                  await Promise.resolve(onTicketUpdated());
+                }
+              } catch (error: any) {
+                console.error('Failed to create task:', error);
+                toast.error(error?.message || 'Failed to create task');
+              }
             };
 
             return (
@@ -467,17 +520,76 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
                     {errors.priority && (<p className="text-sm text-red-600">{errors.priority}</p>)}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="task-assignee">Assignee</Label>
-                    <Select value={assignee} onValueChange={(v) => { setAssignee(v); if (errors.assignee) setErrors(prev => ({ ...prev, assignee: undefined })); }}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select assignee" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="john">John Support</SelectItem>
-                        <SelectItem value="sarah">Sarah Tech</SelectItem>
-                        <SelectItem value="mike">Mike Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="task-assignee" className="text-sm font-medium">
+                      Assigned To
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="task-assignee"
+                        placeholder="Type to search assignees..."
+                        value={assignee === 'unassigned' ? 'Unassigned' : 
+                               assignee ? (() => {
+                                 const user = users.find(u => u.id === assignee);
+                                 if (user) {
+                                   return `${user.firstName} ${user.lastName}`;
+                                 }
+                                 return '';
+                               })() : ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value.toLowerCase() === 'unassigned') {
+                            setAssignee('unassigned');
+                          } else {
+                            // Find matching user
+                            const matchingUser = users.find(user => 
+                              `${user.firstName} ${user.lastName}`.toLowerCase().includes(value.toLowerCase()) ||
+                              user.email.toLowerCase().includes(value.toLowerCase())
+                            );
+                            if (matchingUser) {
+                              setAssignee(matchingUser.id);
+                            } else {
+                              setAssignee('');
+                            }
+                          }
+                        }}
+                        onFocus={() => setShowUserSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowUserSuggestions(false), 200)}
+                      />
+                      {showUserSuggestions && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-32 overflow-auto">
+                          <div 
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                            onClick={() => {
+                              setAssignee('unassigned');
+                              setShowUserSuggestions(false);
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              <span>Unassigned</span>
+                            </div>
+                          </div>
+                          {users.map((user) => (
+                            <div 
+                              key={user.id}
+                              className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                              onClick={() => {
+                                setAssignee(user.id);
+                                setShowUserSuggestions(false);
+                              }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                                <div className="flex-1">
+                                  <div className="font-medium">{user.firstName} {user.lastName}</div>
+                                  <div className="text-xs text-muted-foreground">{user.email}</div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     {errors.assignee && (<p className="text-sm text-red-600">{errors.assignee}</p>)}
                   </div>
                 </div>
@@ -910,6 +1022,10 @@ export const HelpDeskPage: FC = () => {
   const [categoryOptions, setCategoryOptions] = useState<TicketCategory[]>([]);
   const [loadingCategoryOptions, setLoadingCategoryOptions] = useState(false);
   const [totalTickets, setTotalTickets] = useState<number>(0);
+  
+  // User management for task assignment
+  const [users, setUsers] = useState<UserType[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const fetchTickets = async (nextPage = 1) => {
     try {
@@ -1020,6 +1136,24 @@ export const HelpDeskPage: FC = () => {
     loadCategoriesForFilter();
   }, []);
   
+  // Load users for task assignment
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        setLoadingUsers(true);
+        const response = await UserService.getUsers({ isActive: true });
+        if (response.success && response.data) {
+          setUsers(response.data.data || []);
+        }
+      } catch (e) {
+        console.error('Failed to load users:', e);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+    loadUsers();
+  }, []);
+  
   // Handle URL parameters on component mount
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -1054,6 +1188,12 @@ export const HelpDeskPage: FC = () => {
       <PageWrapper className="max-w-[1500px] lg:pl-[calc(var(--sidebar-width,14rem)+1.5rem)] py-6 transition-[padding]">
         {/* Header Section */}
         <PageSection index={0} className="mb-6">
+          <Breadcrumb 
+            items={[
+              { label: 'Tickets', current: true }
+            ]} 
+            className="mb-4"
+          />
           <div className="flex items-center gap-4 mb-4">
             <Link to="/">
               <Button variant="ghost" size="sm" className="gap-2">
@@ -1114,16 +1254,7 @@ export const HelpDeskPage: FC = () => {
 
         {/* Tabs */}
         <PageSection index={3}>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-1 max-w-md">
-            <TabsTrigger value="tickets" className="gap-2">
-              <MessageSquare className="h-4 w-4 hidden sm:inline" />
-              My Tickets
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Tickets Tab */}
-          <TabsContent value="tickets" className="space-y-6">
+          <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 Support Tickets
@@ -1171,7 +1302,7 @@ export const HelpDeskPage: FC = () => {
             <PageSection index={4}>
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredTickets.map((ticket: Ticket, index: number) => (
-                  <TicketCard key={ticket.id} ticket={ticket} index={index} statuses={statuses} onTicketUpdated={() => fetchTickets(1)} />
+                  <TicketCard key={ticket.id} ticket={ticket} index={index} statuses={statuses} onTicketUpdated={() => fetchTickets(1)} users={users} loadingUsers={loadingUsers} />
                 ))}
               </div>
               <div className="flex justify-center mt-6">
@@ -1198,10 +1329,7 @@ export const HelpDeskPage: FC = () => {
                 </Card>
               </PageSection>
             )}
-          </TabsContent>
-
-          {/* Knowledge Base and Contact tabs removed */}
-        </Tabs>
+          </div>
         </PageSection>
       </PageWrapper>
       

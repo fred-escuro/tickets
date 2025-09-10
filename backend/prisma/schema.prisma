@@ -47,6 +47,9 @@ model User {
   statusHistory   TicketStatusHistory[]
   taskComments    TaskComment[]
   taskStatusHistory TaskStatusHistory[]
+  taskAssignmentHistoryFrom TaskAssignmentHistory[] @relation("TaskAssignmentFrom")
+  taskAssignmentHistoryTo TaskAssignmentHistory[] @relation("TaskAssignmentTo")
+  taskAssignmentHistoryBy TaskAssignmentHistory[] @relation("TaskAssignmentBy")
 
   // Department relation
   departmentEntity Department? @relation("UserDepartment", fields: [departmentId], references: [id])
@@ -180,6 +183,7 @@ model TicketTask {
   priority       TaskPriorityDef @relation(fields: [taskPriorityId], references: [id])
   comments       TaskComment[]
   statusHistory  TaskStatusHistory[]
+  assignmentHistory TaskAssignmentHistory[]
 
   @@map("ticket_tasks")
 }
@@ -213,6 +217,24 @@ model TaskStatusHistory {
   user User       @relation(fields: [changedBy], references: [id])
 
   @@map("task_status_history")
+}
+
+model TaskAssignmentHistory {
+  id         String    @id @default(cuid())
+  taskId     String
+  fromUserId String?
+  toUserId   String?
+  assignedById String
+  assignedAt DateTime @default(now())
+  reason     String?
+
+  // Relations
+  task      TicketTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fromUser  User?      @relation("TaskAssignmentFrom", fields: [fromUserId], references: [id])
+  toUser    User?      @relation("TaskAssignmentTo", fields: [toUserId], references: [id])
+  assignedBy User      @relation("TaskAssignmentBy", fields: [assignedById], references: [id])
+
+  @@map("task_assignment_history")
 }
 
 model TaskStatusDef {

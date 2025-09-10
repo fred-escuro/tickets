@@ -483,9 +483,9 @@ export const UsersPage: FC = () => {
                               </div>
                             </div>
                             
-                            {user.department && (
-                              <Badge className={`${getDepartmentBadgeColor(user.department)} text-xs mb-3 group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
-                                {user.department}
+                            {user.departmentEntity && (
+                              <Badge className={`${getDepartmentBadgeColor(user.departmentEntity.name)} text-xs mb-3 group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
+                                {user.departmentEntity.name}
                               </Badge>
                             )}
                             

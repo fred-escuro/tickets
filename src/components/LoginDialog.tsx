@@ -8,6 +8,7 @@ import { config } from '@/config/environment';
 import { AuthService, setupTokenRefresh } from '@/lib/services/authService';
 import { toast } from 'sonner';
 import { User, Lock } from 'lucide-react';
+import { useAppTitle } from '@/hooks/useAppTitle';
 
 interface LoginDialogProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
   onClose,
   onLoginSuccess
 }) => {
+  const { appName } = useAppTitle();
   const [credentials, setCredentials] = useState({
     email: '',
     password: ''
@@ -196,12 +198,13 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
     }
   };
 
-  const handleDemoLogin = async (type: 'admin' | 'agent' | 'user') => {
+  const handleDemoLogin = async (type: 'admin' | 'manager' | 'agent' | 'user') => {
     // Match seeded users and passwords from backend seed scripts
     const demoCredentials = {
-      admin: { email: 'admin@company.com', password: 'admin123' },
-      agent: { email: 'john.support@company.com', password: 'agent123' },
-      user: { email: 'alice.user@company.com', password: 'user123' }
+      admin: { email: 'admin@tickethub.com', password: 'password123' },
+      manager: { email: 'manager@tickethub.com', password: 'password123' },
+      agent: { email: 'agent@tickethub.com', password: 'password123' },
+      user: { email: 'user@tickethub.com', password: 'password123' }
     } as const;
 
     setCredentials(demoCredentials[type]);
@@ -241,8 +244,8 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            <img src="/ticket.ico" alt={config.app.name} className="h-6 w-6 rounded" />
-            <span className="font-semibold">{config.app.name}</span>
+            <img src="/ticket.ico" alt={appName || config.app.name} className="h-6 w-6 rounded" />
+            <span className="font-semibold">{appName || config.app.name}</span>
           </DialogTitle>
         </DialogHeader>
         
@@ -337,8 +340,9 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
           {!isRegister && (
             <details>
               <summary className="text-xs text-muted-foreground cursor-pointer">Use demo credentials</summary>
-              <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="mt-2 grid grid-cols-2 gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => handleDemoLogin('admin')} disabled={isLoading}>Admin</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => handleDemoLogin('manager')} disabled={isLoading}>Manager</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => handleDemoLogin('agent')} disabled={isLoading}>Agent</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => handleDemoLogin('user')} disabled={isLoading}>User</Button>
               </div>

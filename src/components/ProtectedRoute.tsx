@@ -4,6 +4,7 @@ import { LoginDialog } from '@/components/LoginDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HelpCircle, LogIn } from 'lucide-react';
+import { useAppTitle } from '@/hooks/useAppTitle';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -24,6 +25,9 @@ export const ProtectedRoute: FC<ProtectedRouteProps> = ({
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showLoginDialog, setShowLoginDialog] = useState(true);
   const [hasAccess, setHasAccess] = useState(true);
+
+  // Use the app title hook to set the page title with app name and company name
+  useAppTitle(pageTitle);
 
   useEffect(() => {
     const checkAuth = async () => {

@@ -10,6 +10,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { Dashboard } from './pages/Dashboard';
 import { HelpDeskPage } from './pages/HelpDeskPage';
 import { setupTokenRefresh } from './lib/services/authService';
+import { useAppTitle } from './hooks/useAppTitle';
 
 import { TaskPage } from './pages/TasksPage';
 import TaskDetailPage from './pages/TaskDetailPage';

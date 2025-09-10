@@ -7,90 +7,108 @@ async function main() {
   console.log('🌱 Starting database seeding...');
 
   // Create admin user
-  const adminPassword = await bcrypt.hash('admin123', 12);
+  const adminPassword = await bcrypt.hash('password123', 12);
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@company.com' },
+    where: { email: 'admin@tickethub.com' },
     update: {},
     create: {
-      firstName: 'System',
-      lastName: 'Administrator',
-      email: 'admin@company.com',
+      firstName: 'John',
+      lastName: 'Admin',
+      email: 'admin@tickethub.com',
       password: adminPassword,
       
       isAgent: true,
-      skills: ['System Administration', 'Security', 'Networking']
+      skills: {
+        technical: ['System Administration', 'Database Management', 'Security'],
+        soft: ['Leadership', 'Problem Solving', 'Communication']
+      },
+      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face'
     }
   });
 
   // Create support agents
-  const agentPassword = await bcrypt.hash('agent123', 12);
-  const john = await prisma.user.upsert({
-    where: { email: 'john.support@company.com' },
-    update: {},
-    create: {
-      firstName: 'John',
-      lastName: 'Support',
-      email: 'john.support@company.com',
-      password: agentPassword,
-      
-      isAgent: true,
-      skills: ['Network', 'Hardware', 'Software', 'Security']
-    }
-  });
-
-  const sarah = await prisma.user.upsert({
-    where: { email: 'sarah.tech@company.com' },
+  const agentPassword = await bcrypt.hash('password123', 12);
+  const manager = await prisma.user.upsert({
+    where: { email: 'manager@tickethub.com' },
     update: {},
     create: {
       firstName: 'Sarah',
-      lastName: 'Tech',
-      email: 'sarah.tech@company.com',
+      lastName: 'Manager',
+      email: 'manager@tickethub.com',
       password: agentPassword,
       
       isAgent: true,
-      skills: ['Software', 'Database', 'Cloud', 'DevOps']
+      skills: {
+        technical: ['Customer Support', 'Process Management', 'Analytics'],
+        soft: ['Team Management', 'Strategic Thinking', 'Customer Relations']
+      },
+      avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face'
     }
   });
 
-  const mike = await prisma.user.upsert({
-    where: { email: 'mike.hardware@company.com' },
+  const agent = await prisma.user.upsert({
+    where: { email: 'agent@tickethub.com' },
     update: {},
     create: {
       firstName: 'Mike',
-      lastName: 'Hardware',
-      email: 'mike.hardware@company.com',
+      lastName: 'Agent',
+      email: 'agent@tickethub.com',
       password: agentPassword,
       
       isAgent: true,
-      skills: ['Hardware', 'Peripherals', 'Maintenance']
+      skills: {
+        technical: ['Hardware Support', 'Software Troubleshooting', 'Network Issues'],
+        soft: ['Customer Service', 'Technical Writing', 'Time Management']
+      },
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face'
+    }
+  });
+
+  const developer = await prisma.user.upsert({
+    where: { email: 'developer@tickethub.com' },
+    update: {},
+    create: {
+      firstName: 'Emily',
+      lastName: 'Developer',
+      email: 'developer@tickethub.com',
+      password: agentPassword,
+      
+      isAgent: true,
+      skills: {
+        technical: ['JavaScript', 'React', 'Node.js', 'Database Design'],
+        soft: ['Code Review', 'Mentoring', 'Documentation']
+      },
+      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face'
     }
   });
 
   // Create regular users
-  const userPassword = await bcrypt.hash('user123', 12);
-  const alice = await prisma.user.upsert({
-    where: { email: 'alice.user@company.com' },
+  const userPassword = await bcrypt.hash('password123', 12);
+  const customer = await prisma.user.upsert({
+    where: { email: 'customer@tickethub.com' },
     update: {},
     create: {
-      firstName: 'Alice',
-      lastName: 'User',
-      email: 'alice.user@company.com',
+      firstName: 'David',
+      lastName: 'Customer',
+      email: 'customer@tickethub.com',
       password: userPassword,
       
-      isAgent: false
+      isAgent: false,
+      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face'
     }
   });
 
-  const bob = await prisma.user.upsert({
-    where: { email: 'bob.employee@company.com' },
+  const user = await prisma.user.upsert({
+    where: { email: 'user@tickethub.com' },
     update: {},
     create: {
-      firstName: 'Bob',
-      lastName: 'Employee',
-      email: 'bob.employee@company.com',
+      firstName: 'Lisa',
+      lastName: 'User',
+      email: 'user@tickethub.com',
       password: userPassword,
       
-      isAgent: false
+      isAgent: false,
+      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face'
     }
   });
 
@@ -109,11 +127,11 @@ async function main() {
   };
 
   await link(admin.id, adminRole.id, true);
-  await link(john.id, agentRole.id, true);
-  await link(sarah.id, managerRole.id, true);
-  await link(mike.id, agentRole.id, true);
-  await link(alice.id, userRole.id, true);
-  await link(bob.id, userRole.id, true);
+  await link(manager.id, managerRole.id, true);
+  await link(agent.id, agentRole.id, true);
+  await link(developer.id, agentRole.id, true);
+  await link(customer.id, userRole.id, true);
+  await link(user.id, userRole.id, true);
 
   // Create sample tickets
   // Get default category, priority, and status IDs
@@ -128,7 +146,7 @@ async function main() {
       categoryId: defaultCategory?.id || 'default-category',
       priorityId: defaultPriority?.id || 'default-priority',
       statusId: defaultStatus?.id || 'default-status',
-      submittedBy: alice.id,
+      submittedBy: customer.id,
       tags: ['printer', 'hardware', 'urgent']
     }
   });
@@ -140,8 +158,8 @@ async function main() {
       categoryId: defaultCategory?.id || 'default-category',
       priorityId: defaultPriority?.id || 'default-priority',
       statusId: defaultStatus?.id || 'default-status',
-      submittedBy: bob.id,
-      assignedTo: john.id,
+      submittedBy: user.id,
+      assignedTo: agent.id,
       assignedAt: new Date(),
       tags: ['email', 'authentication', 'software']
     }
@@ -154,7 +172,7 @@ async function main() {
       categoryId: defaultCategory?.id || 'default-category',
       priorityId: defaultPriority?.id || 'default-priority',
       statusId: defaultStatus?.id || 'default-status',
-      submittedBy: alice.id,
+      submittedBy: customer.id,
       tags: ['wifi', 'network', 'remote-work']
     }
   });
@@ -163,7 +181,7 @@ async function main() {
   await prisma.comment.create({
     data: {
       ticketId: ticket2.id,
-      authorId: john.id,
+      authorId: agent.id,
       content: 'I\'ve identified the issue. It appears to be related to the recent password policy update. I\'m working on a solution.',
       isInternal: false
     }
@@ -172,7 +190,7 @@ async function main() {
   await prisma.comment.create({
     data: {
       ticketId: ticket2.id,
-      authorId: john.id,
+      authorId: agent.id,
       content: 'Internal note: Need to check if this affects other users in the Sales department.',
       isInternal: true
     }
@@ -185,7 +203,7 @@ async function main() {
       content: 'If you\'re having trouble accessing your account, follow these steps to reset your password...',
       category: 'account',
       tags: ['password', 'authentication', 'account'],
-      authorId: john.id
+      authorId: agent.id
     }
   });
 
@@ -195,7 +213,7 @@ async function main() {
       content: 'This guide covers the most common printer problems and how to resolve them...',
       category: 'hardware',
       tags: ['printer', 'hardware', 'troubleshooting'],
-      authorId: mike.id
+      authorId: agent.id
     }
   });
 
@@ -205,7 +223,7 @@ async function main() {
       content: 'Learn how to configure your VPN connection for secure remote access to company resources...',
       category: 'network',
       tags: ['vpn', 'remote-work', 'security'],
-      authorId: sarah.id
+      authorId: manager.id
     }
   });
 
@@ -216,9 +234,12 @@ async function main() {
   console.log(`📚 Created ${await prisma.knowledgeBase.count()} knowledge base articles`);
 
   console.log('\n🔑 Default login credentials:');
-  console.log('Admin: admin@company.com / admin123');
-  console.log('Agent: john.support@company.com / agent123');
-  console.log('User: alice.user@company.com / user123');
+  console.log('Admin: admin@tickethub.com / password123');
+  console.log('Manager: manager@tickethub.com / password123');
+  console.log('Agent: agent@tickethub.com / password123');
+  console.log('Developer: developer@tickethub.com / password123');
+  console.log('Customer: customer@tickethub.com / password123');
+  console.log('User: user@tickethub.com / password123');
 }
 
 main()

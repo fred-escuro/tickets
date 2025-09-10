@@ -50,6 +50,8 @@ import { roleService, type Role } from '@/lib/services/roleService';
 import { permissionService, type Permission } from '@/lib/services/permissionService';
 import { policyService, type AccessPolicy } from '@/lib/services/policyService';
 import { UserService, type User as AppUser } from '@/lib/services/userService';
+import { menuService } from '@/lib/services/menuService';
+import { departmentService } from '@/lib/services/departmentService';
 
 export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -149,6 +151,9 @@ export default function SettingsPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [policies, setPolicies] = useState<AccessPolicy[]>([]);
+  // Menu and Department counts
+  const [menuItemsCount, setMenuItemsCount] = useState(0);
+  const [departmentsCount, setDepartmentsCount] = useState(0);
   const [showRoleDialog, setShowRoleDialog] = useState(false);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [showPolicyDialog, setShowPolicyDialog] = useState(false);
@@ -421,14 +426,18 @@ export default function SettingsPage() {
   const loadRbacAbac = async () => {
     try {
       setRbacLoading(true);
-      const [r, p, ap] = await Promise.all([
+      const [r, p, ap, menuItems, departments] = await Promise.all([
         roleService.list().catch(() => []),
         permissionService.list().catch(() => []),
         policyService.list().catch(() => []),
+        menuService.listItems().catch(() => ({ success: false, data: [] })),
+        departmentService.list().catch(() => ({ success: false, data: [] })),
       ]);
       setRoles(r);
       setPermissions(p);
       setPolicies(ap);
+      setMenuItemsCount(menuItems.success ? menuItems.data.length : 0);
+      setDepartmentsCount(departments.success ? departments.data.length : 0);
     } catch (e) {
       console.error('Error loading RBAC/ABAC:', e);
     } finally {
@@ -539,6 +548,13 @@ export default function SettingsPage() {
       const res = await settingsApi.updateNamespace('company', companyNs as any);
       if (!res.success) throw new Error(res.error || 'Failed to save company info');
       toast.success('Company info saved');
+      
+      // Update browser title with new company name
+      if (companyNs.name) {
+        const currentTitle = document.title;
+        const baseTitle = currentTitle.split(' - ')[0] || 'TicketHub';
+        document.title = `${baseTitle} - ${companyNs.name}`;
+      }
     } catch (e: any) {
       toast.error(e?.message || 'Failed to save company info');
     }
@@ -631,6 +647,16 @@ export default function SettingsPage() {
       setCompanyLogoFile(null);
       setCompanyLogoPreviewUrl(null);
       try { window.dispatchEvent(new CustomEvent('branding-updated', { detail: { appName: branding.appName, appLogoUrl: logoUrlToSave } })); } catch {}
+      
+      // Update browser title with new app name
+      if (branding.appName) {
+        const currentTitle = document.title;
+        const parts = currentTitle.split(' - ');
+        const pageTitle = parts[0] || 'Settings';
+        const companyName = parts[parts.length - 1] || '';
+        document.title = `${pageTitle} - ${branding.appName}${companyName ? ` - ${companyName}` : ''}`;
+      }
+      
       toast.success('Preferences saved');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to save preferences');
@@ -1265,37 +1291,6 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex justify-end">
                     <Button type="button" onClick={saveCompany}>Save Company</Button>
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-            {/* Email Intake (Inbound) */}
-            <AccordionItem value="email-intake" className="border rounded-lg">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-indigo-100 text-indigo-600">
-                    <Download className="h-5 w-5" />
-                  </div>
-                  <div className="text-left">
-                    <h3 className="font-semibold">Email Intake</h3>
-                    <p className="text-sm text-muted-foreground">Fetch new emails and create tickets</p>
-                  </div>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="px-6 pb-6">
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">Uses IMAP inbox; one-time fetch. Configure IMAP under SMTP.</p>
-                  <div className="flex items-center gap-3">
-                    <Button type="button" variant="secondary" onClick={async () => {
-                      try {
-                        const res = await settingsApi.runEmailIngest();
-                        if (!res.success) throw new Error(res.error || 'Failed');
-                        const d: any = res.data || {};
-                        toast.success(`Fetched ${d.fetched ?? 0}, created ${d.created ?? 0}, replies ${d.replies ?? 0}, skipped ${d.skipped ?? 0}, errors ${d.errors ?? 0}`);
-                      } catch (e: any) {
-                        toast.error(e?.message || 'Failed to ingest emails');
-                      }
-                    }}>Fetch Emails Now</Button>
                   </div>
                 </div>
               </AccordionContent>
@@ -2061,6 +2056,9 @@ export default function SettingsPage() {
                     <h3 className="font-semibold">Menu Management</h3>
                     <p className="text-sm text-muted-foreground">Manage menu items and permissions</p>
                   </div>
+                  <Badge variant="outline" className="ml-auto">
+                    {menuItemsCount} menu items
+                  </Badge>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-6 pb-6">
@@ -2376,7 +2374,7 @@ export default function SettingsPage() {
             {/* Departments (DB-backed) */}
             <AccordionItem value="departments" className="border rounded-lg" data-section="departments">
               <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/80 rounded-lg">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 w-full">
                   <div className="p-2 rounded-lg bg-teal-100 text-teal-600">
                     <Building2 className="h-5 w-5" />
                   </div>
@@ -2384,6 +2382,9 @@ export default function SettingsPage() {
                     <h3 className="font-semibold">Departments</h3>
                     <p className="text-sm text-muted-foreground">Organize users into departments</p>
                   </div>
+                  <Badge variant="outline" className="ml-auto">
+                    {departmentsCount} departments
+                  </Badge>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-6 pb-6">

@@ -13,10 +13,11 @@ import { AddCommentDialog } from '@/components/ui/add-comment-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import TicketDetailPanel from '@/components/TicketDetailPanel';
 import { CommentService } from '@/lib/services/commentService';
+import { UserService, type User as UserType } from '@/lib/services/userService';
 import type { FileAttachment } from '@/components/ui/file-upload';
 import { apiClient, API_ENDPOINTS } from '@/lib/api';
 import { toast } from 'sonner';
-import { ArrowLeft, Calendar, Paperclip, User, MessageSquare, ChevronDown, ChevronRight, FileText, Settings, Clock, ChevronUp, ChevronLeft, CheckSquare } from 'lucide-react';
+import { ArrowLeft, Paperclip, MessageSquare, ChevronDown, ChevronRight, FileText, Settings, Clock, ChevronUp, CheckSquare, UserPlus, User } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,6 +25,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TicketStatusHistory } from '@/components/TicketStatusHistory';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ticketSystemService } from '@/lib/services/ticketSystemService';
+import { TaskStatusChangeDialog } from '@/components/TaskStatusChangeDialog';
+import { TaskCommentDialog } from '@/components/TaskCommentDialog';
+import { Breadcrumb } from '@/components/Breadcrumb';
 
 type LoadedTicket = any;
 
@@ -51,6 +55,19 @@ export const TicketDetailPage: React.FC = () => {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM');
+  const [newTaskAssignee, setNewTaskAssignee] = useState('');
+  const [showTaskStatusDialog, setShowTaskStatusDialog] = useState(false);
+  const [selectedTaskForStatusChange, setSelectedTaskForStatusChange] = useState<{ id: string; title: string; currentStatus: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED' } | null>(null);
+  const [showTaskCommentDialog, setShowTaskCommentDialog] = useState(false);
+  const [selectedTaskForComment, setSelectedTaskForComment] = useState<{ id: string; title: string } | null>(null);
+  
+  // Assignment dialog state
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<{ id: string; title: string; assignedTo?: string } | null>(null);
+  const [selectedAssignee, setSelectedAssignee] = useState('');
+  const [users, setUsers] = useState<UserType[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [showUserSuggestions, setShowUserSuggestions] = useState(false);
 
   // Persist selected tab via URL param (?tab=overview|status|timeline|tasks)
   const initialTab = (searchParams.get('tab') || 'overview') as 'overview' | 'status' | 'timeline' | 'tasks';
@@ -84,6 +101,7 @@ export const TicketDetailPage: React.FC = () => {
 
   useEffect(() => {
     fetchTicket();
+    loadUsers();
   }, [id]);
 
   useEffect(() => {
@@ -119,17 +137,41 @@ export const TicketDetailPage: React.FC = () => {
     if (!id) return;
     const title = newTaskTitle.trim();
     const description = newTaskDescription.trim();
+    const assignee = newTaskAssignee.trim();
     if (!title) { toast.error('Task title is required'); return; }
     try {
       const res = await apiClient.post(API_ENDPOINTS.TICKETS.TASKS_CREATE(id), {
         title,
         description,
-        priority: newTaskPriority
+        priority: newTaskPriority,
+        ...(assignee && { assignee })
       });
       if (!res.success) throw new Error(res.error || 'Failed to create task');
+      
+      // Automatically add a comment to the ticket timeline
+      try {
+        const assignedUser = assignee ? users.find(u => u.id === assignee) : null;
+        const assigneeText = assignedUser 
+          ? ` assigned to ${assignedUser.firstName} ${assignedUser.lastName}`
+          : '';
+        
+        const commentContent = `Task "${title}" created${assigneeText} with ${newTaskPriority.toLowerCase()} priority.`;
+        
+        await CommentService.createComment({
+          ticketId: id,
+          content: commentContent,
+          isInternal: false
+        });
+        
+        console.log('Task creation comment added successfully');
+      } catch (commentError) {
+        console.error('Failed to add task creation comment:', commentError);
+        // Don't fail the task creation if comment fails
+      }
+      
       toast.success('Task created');
       setShowAddTask(false);
-      setNewTaskTitle(''); setNewTaskDescription(''); setNewTaskPriority('MEDIUM');
+      setNewTaskTitle(''); setNewTaskDescription(''); setNewTaskPriority('MEDIUM'); setNewTaskAssignee('');
       await fetchTicket();
     } catch (e: any) {
       toast.error(e?.message || 'Failed to create task');
@@ -161,28 +203,132 @@ export const TicketDetailPage: React.FC = () => {
     }
   };
 
-  const addTaskComment = async (taskId: string) => {
-    const content = (taskCommentDraft[taskId] || '').trim();
-    if (!content) { toast.error('Please enter a comment'); return; }
+  const addTaskComment = async (taskId: string, content?: string) => {
+    const commentContent = content || (taskCommentDraft[taskId] || '').trim();
+    console.log('Adding task comment:', { taskId, content, commentContent });
+    if (!commentContent) { toast.error('Please enter a comment'); return; }
     try {
-      const res = await apiClient.post(`/api/tickets/${id}/tasks/${taskId}/comments`, { content, isInternal: false });
+      const res = await apiClient.post(`/api/tickets/${id}/tasks/${taskId}/comments`, { content: commentContent, isInternal: false });
+      console.log('Task comment API response:', res);
       if (!res.success) throw new Error(res.error || 'Failed to add comment');
       setTaskCommentDraft(prev => ({ ...prev, [taskId]: '' }));
       await loadTaskComments(taskId);
       toast.success('Comment added');
     } catch (e: any) {
+      console.error('Task comment error:', e);
       toast.error(e?.message || 'Failed to add comment');
+      throw e; // Re-throw to handle in calling function
     }
   };
 
-  const updateTaskStatus = async (taskId: string, toStatus: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED') => {
+  const updateTaskStatus = async (taskId: string, toStatus: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED', reason?: string) => {
     try {
-      const res = await apiClient.patch(`/api/tickets/${id}/tasks/${taskId}/status`, { toStatus });
+      const res = await apiClient.patch(`/api/tickets/${id}/tasks/${taskId}/status`, { 
+        toStatus,
+        ...(reason ? { reason } : {})
+      });
       if (!res.success) throw new Error(res.error || 'Failed to update task status');
       toast.success('Task status updated');
       await fetchTicket();
     } catch (e: any) {
       toast.error(e?.message || 'Failed to update task status');
+    }
+  };
+
+  const handleTaskStatusChange = (task: any) => {
+    const statusValue: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED' = ((): any => {
+      if (!task) return 'PENDING';
+      if (typeof task.status === 'string') return task.status as any;
+      if (task.status && typeof task.status.name === 'string') return (task.status.name as string).toUpperCase() as any;
+      if (typeof task.taskStatus === 'string') return (task.taskStatus as string).toUpperCase() as any;
+      if (task.taskStatus && typeof task.taskStatus.name === 'string') return (task.taskStatus.name as string).toUpperCase() as any;
+      return 'PENDING';
+    })();
+    
+    setSelectedTaskForStatusChange({
+      id: task.id,
+      title: task.title,
+      currentStatus: statusValue
+    });
+    setShowTaskStatusDialog(true);
+  };
+
+  const handleTaskStatusConfirm = async (newStatus: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED', reason: string) => {
+    if (!selectedTaskForStatusChange) return;
+    await updateTaskStatus(selectedTaskForStatusChange.id, newStatus, reason);
+    setSelectedTaskForStatusChange(null);
+  };
+
+  const handleTaskCommentConfirm = async (comment: string) => {
+    if (!selectedTaskForComment) return;
+    try {
+      // Pass the comment directly to addTaskComment
+      await addTaskComment(selectedTaskForComment.id, comment);
+      // Close the dialog after successful submission
+      setShowTaskCommentDialog(false);
+      setSelectedTaskForComment(null);
+    } catch (error) {
+      console.error('Error adding task comment:', error);
+      // Don't close dialog on error so user can retry
+    }
+  };
+
+  // Load users for assignment
+  const loadUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      const response = await UserService.getUsers({ isActive: true });
+      if (response.success && response.data) {
+        setUsers(response.data || []);
+      }
+    } catch (error) {
+      console.error('Failed to load users:', error);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleAssignTask = (task: any, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
+    setSelectedTaskForAssignment({
+      id: task.id,
+      title: task.title,
+      assignedTo: task.assignedTo
+    });
+    setSelectedAssignee(task.assignedTo || 'unassigned');
+    setShowAssignDialog(true);
+  };
+
+  const assignTask = async () => {
+    if (!selectedTaskForAssignment || !id) return;
+    try {
+      const assigneeValue = selectedAssignee === 'unassigned' ? null : selectedAssignee;
+      const res = await apiClient.patch(API_ENDPOINTS.TICKETS.TASK_ASSIGN(id, selectedTaskForAssignment.id), {
+        assignedTo: assigneeValue
+      });
+      if (!res.success) throw new Error(res.error || 'Failed to assign task');
+      
+      // Update the task in the ticket data
+      setTicket((prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          tasks: prev.tasks.map((task: any) => 
+            task.id === selectedTaskForAssignment.id 
+              ? { ...task, assignedTo: assigneeValue }
+              : task
+          )
+        };
+      });
+      
+      // Assignment history will be loaded when the task detail page is opened
+      
+      toast.success('Task assigned successfully');
+      setShowAssignDialog(false);
+      setSelectedTaskForAssignment(null);
+      setSelectedAssignee('');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to assign task');
     }
   };
 
@@ -315,6 +461,13 @@ export const TicketDetailPage: React.FC = () => {
 
   return (
     <div className="relative z-0 mx-auto w-full max-w-[1500px] px-4 sm:px-6 lg:px-8 py-6 lg:pl-[calc(var(--sidebar-width,14rem)+1.5rem)]">
+      <Breadcrumb 
+        items={[
+          { label: 'Tickets', href: '/tickets' },
+          { label: ticket?.title || (loading ? 'Loading…' : 'Ticket'), current: true }
+        ]} 
+        className="mb-4"
+      />
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <Button variant="outline" size="sm" onClick={handleBack} className="gap-2">
@@ -338,8 +491,18 @@ export const TicketDetailPage: React.FC = () => {
             <TabsList className="w-full grid grid-cols-4 sm:w-auto sm:inline-flex">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="status">Status & Actions</TabsTrigger>
-              <TabsTrigger value="timeline">Timeline</TabsTrigger>
-              <TabsTrigger value="tasks">Tasks</TabsTrigger>
+              <TabsTrigger value="timeline" className="flex items-center gap-1">
+                Timeline
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                  {comments.length}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="tasks" className="flex items-center gap-1">
+                Tasks
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                  {ticket?.tasks?.length || 0}
+                </Badge>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-4">
@@ -587,36 +750,101 @@ export const TicketDetailPage: React.FC = () => {
                     return String(raw).toLowerCase();
                   })();
                   return (
-                    <div key={task.id} className="border rounded-lg p-3">
+                    <div 
+                      key={task.id} 
+                      className="border rounded-lg p-3 cursor-pointer hover:shadow-md hover:border-blue-300 transition-all duration-200 hover:bg-blue-50/30"
+                      onClick={() => {
+                        const next = { ...expandedTasks, [task.id]: !expanded };
+                        setExpandedTasks(next);
+                        if (!expanded) { if (!taskComments[task.id]) void loadTaskComments(task.id); if (!taskStatusHistory[task.id]) void loadTaskStatusHistory(task.id);} 
+                      }}
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="font-medium text-sm truncate">{task.title}</div>
-                          <div className="text-xs text-muted-foreground truncate">{task.description || ''}</div>
+                          <div className="font-medium text-sm">{task.title}</div>
+                          <div className="text-xs text-muted-foreground">{task.description || ''}</div>
                           <div className="mt-1 flex items-center gap-2">
+                            <Badge 
+                              variant="outline" 
+                              className={`text-xxs px-2 py-1 rounded-full ${
+                                statusValue === 'PENDING' ? 'bg-gray-100 text-gray-700 border-gray-200' :
+                                statusValue === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                                statusValue === 'COMPLETED' ? 'bg-green-100 text-green-700 border-green-200' :
+                                statusValue === 'BLOCKED' ? 'bg-red-100 text-red-700 border-red-200' :
+                                'bg-gray-100 text-gray-700 border-gray-200'
+                              }`}
+                            >
+                              Current Status: {statusValue === 'PENDING' ? 'Pending' :
+                               statusValue === 'IN_PROGRESS' ? 'In Progress' :
+                               statusValue === 'COMPLETED' ? 'Completed' :
+                               statusValue === 'BLOCKED' ? 'Blocked' : statusValue}
+                            </Badge>
                             <Badge variant="outline" className={`text-xxs border ${getPriorityPillClasses(priorityLabel)}`}>Priority: {priorityLabel || 'unknown'}</Badge>
+                            <Badge variant="outline" className="text-xxs border bg-purple-100 text-purple-700 border-purple-200">
+                              Assigned: {task.assignedTo ? (() => {
+                                const user = users.find(u => u.id === task.assignedTo);
+                                return user ? `${user.firstName} ${user.lastName}` : task.assignedTo;
+                              })() : 'Unassigned'}
+                            </Badge>
                             {task.dueDate && <Badge variant="outline" className="text-xxs">Due: {new Date(task.dueDate).toLocaleDateString()}</Badge>}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <Select value={statusValue} onValueChange={(val) => updateTaskStatus(task.id, val as any)} disabled={!canWriteTasks}>
-                            <SelectTrigger className="h-8 w-[160px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="PENDING">Pending</SelectItem>
-                              <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                              <SelectItem value="COMPLETED">Completed</SelectItem>
-                              <SelectItem value="BLOCKED">Blocked</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Button variant="ghost" size="sm" onClick={() => {
-                            const next = { ...expandedTasks, [task.id]: !expanded };
-                            setExpandedTasks(next);
-                            if (!expanded) { if (!taskComments[task.id]) void loadTaskComments(task.id); if (!taskStatusHistory[task.id]) void loadTaskStatusHistory(task.id);} 
-                          }} aria-label={expanded ? 'Collapse' : 'Expand'}>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const next = { ...expandedTasks, [task.id]: !expanded };
+                              setExpandedTasks(next);
+                              if (!expanded) { if (!taskComments[task.id]) void loadTaskComments(task.id); if (!taskStatusHistory[task.id]) void loadTaskStatusHistory(task.id);} 
+                            }} 
+                            aria-label={expanded ? 'Collapse' : 'Expand'}
+                          >
                             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                           </Button>
                         </div>
+                      </div>
+
+                      {/* Action Buttons - Always visible at bottom */}
+                      <div className="flex justify-end gap-2 pt-3 mt-3 border-t">
+                        <Button 
+                          onClick={(e) => handleAssignTask(task, e)} 
+                          disabled={!canWriteTasks}
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                        >
+                          <UserPlus className="h-4 w-4" />
+                          {task.assignedTo ? 'Reassign' : 'Assign To'}
+                        </Button>
+                        {statusValue !== 'COMPLETED' && (
+                          <Button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedTaskForComment({ id: task.id, title: task.title });
+                              setShowTaskCommentDialog(true);
+                            }} 
+                            disabled={!canWriteTasks}
+                            className="gap-2"
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                            Post Comment
+                          </Button>
+                        )}
+                        {statusValue !== 'COMPLETED' && (
+                          <Button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTaskStatusChange(task);
+                            }} 
+                            disabled={!canWriteTasks}
+                            className="gap-2"
+                          >
+                            <Settings className="h-4 w-4" />
+                            Change Task Status
+                          </Button>
+                        )}
                       </div>
 
                       {expanded && (
@@ -637,28 +865,56 @@ export const TicketDetailPage: React.FC = () => {
                           <div className="space-y-2">
                             <div className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" />Status History</div>
                             {taskStatusHistoryLoading[task.id] && <div className="text-xs text-muted-foreground">Loading history…</div>}
-                            <div className="space-y-1">
-                              {(taskStatusHistory[task.id] || []).map((h: any) => (
-                                <div key={h.id} className="text-xs text-muted-foreground flex items-center gap-2">
-                                  <Badge variant="outline" className="text-xxs">{h.fromStatusName || h.fromStatusId}</Badge>
-                                  <ChevronRight className="h-3 w-3" />
-                                  <Badge variant="outline" className="text-xxs">{h.toStatusName || h.toStatusId}</Badge>
-                                  <span>• {new Date(h.changedAt).toLocaleString()}</span>
-                                </div>
-                              ))}
+                            <div className="space-y-2">
+                              {(taskStatusHistory[task.id] || []).map((h: any) => {
+                                const getStatusPillClasses = (status: string) => {
+                                  const statusKey = status.toUpperCase();
+                                  switch (statusKey) {
+                                    case 'PENDING':
+                                      return 'text-xxs px-2 py-1 rounded-full bg-gray-100 text-gray-700 border-gray-200';
+                                    case 'IN_PROGRESS':
+                                      return 'text-xxs px-2 py-1 rounded-full bg-blue-100 text-blue-700 border-blue-200';
+                                    case 'COMPLETED':
+                                      return 'text-xxs px-2 py-1 rounded-full bg-green-100 text-green-700 border-green-200';
+                                    case 'BLOCKED':
+                                      return 'text-xxs px-2 py-1 rounded-full bg-red-100 text-red-700 border-red-200';
+                                    default:
+                                      return 'text-xxs px-2 py-1 rounded-full bg-gray-100 text-gray-700 border-gray-200';
+                                  }
+                                };
+
+                                return (
+                                  <div key={h.id} className="text-xs text-muted-foreground">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <Badge 
+                                        variant="outline" 
+                                        className={getStatusPillClasses(h.fromStatusName || h.fromStatusId)}
+                                      >
+                                        {h.fromStatusName || h.fromStatusId}
+                                      </Badge>
+                                      <ChevronRight className="h-3 w-3" />
+                                      <Badge 
+                                        variant="outline" 
+                                        className={getStatusPillClasses(h.toStatusName || h.toStatusId)}
+                                      >
+                                        {h.toStatusName || h.toStatusId}
+                                      </Badge>
+                                      <span>• {new Date(h.changedAt).toLocaleString()}</span>
+                                    </div>
+                                    {h.reason && (
+                                      <div className="ml-2 text-xs text-muted-foreground italic bg-gray-50 p-2 rounded border-l-2 border-gray-200">
+                                        <span className="font-medium">Reason:</span> {h.reason}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                               {(taskStatusHistory[task.id] || []).length === 0 && !taskStatusHistoryLoading[task.id] && (
                                 <div className="text-xs text-muted-foreground">No history</div>
                               )}
                             </div>
                           </div>
 
-                          <div className="space-y-2">
-                            <Label htmlFor={`task-comment-${task.id}`}>Add Comment</Label>
-                            <Textarea id={`task-comment-${task.id}`} rows={2} value={taskCommentDraft[task.id] || ''} onChange={(e) => setTaskCommentDraft(prev => ({ ...prev, [task.id]: e.target.value }))} placeholder="Write a comment…" />
-                            <div className="flex justify-end">
-                              <Button size="sm" onClick={() => addTaskComment(task.id)} disabled={!canWriteTasks}>Post Comment</Button>
-                            </div>
-                          </div>
                         </div>
                       )}
                     </div>
@@ -704,19 +960,93 @@ export const TicketDetailPage: React.FC = () => {
               <Label htmlFor="task-desc">Description</Label>
               <Textarea id="task-desc" rows={3} value={newTaskDescription} onChange={(e) => setNewTaskDescription(e.target.value)} placeholder="Task description" />
             </div>
-            <div className="space-y-2">
-              <Label>Priority</Label>
-              <Select value={newTaskPriority} onValueChange={(v) => setNewTaskPriority(v as any)}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="LOW">Low</SelectItem>
-                  <SelectItem value="MEDIUM">Medium</SelectItem>
-                  <SelectItem value="HIGH">High</SelectItem>
-                  <SelectItem value="CRITICAL">Critical</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select value={newTaskPriority} onValueChange={(v) => setNewTaskPriority(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="LOW">Low</SelectItem>
+                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                    <SelectItem value="HIGH">High</SelectItem>
+                    <SelectItem value="CRITICAL">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="task-assignee" className="text-sm font-medium">
+                  Assigned To
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="task-assignee"
+                    placeholder="Type to search assignees..."
+                    value={newTaskAssignee === 'unassigned' ? 'Unassigned' : 
+                           newTaskAssignee ? (() => {
+                             const user = users.find(u => u.id === newTaskAssignee);
+                             if (user) {
+                               return `${user.firstName} ${user.lastName}`;
+                             }
+                             return '';
+                           })() : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value.toLowerCase() === 'unassigned') {
+                        setNewTaskAssignee('unassigned');
+                      } else {
+                        // Find matching user
+                        const matchingUser = users.find(user => 
+                          `${user.firstName} ${user.lastName}`.toLowerCase().includes(value.toLowerCase()) ||
+                          user.email.toLowerCase().includes(value.toLowerCase())
+                        );
+                        if (matchingUser) {
+                          setNewTaskAssignee(matchingUser.id);
+                        } else {
+                          setNewTaskAssignee('');
+                        }
+                      }
+                    }}
+                    onFocus={() => setShowUserSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowUserSuggestions(false), 200)}
+                  />
+                  {showUserSuggestions && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-32 overflow-auto">
+                      <div 
+                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => {
+                          setNewTaskAssignee('unassigned');
+                          setShowUserSuggestions(false);
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span>Unassigned</span>
+                        </div>
+                      </div>
+                      {users.map((user) => (
+                        <div 
+                          key={user.id}
+                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                          onClick={() => {
+                            setNewTaskAssignee(user.id);
+                            setShowUserSuggestions(false);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <div className="flex-1">
+                              <div className="font-medium">{user.firstName} {user.lastName}</div>
+                              <div className="text-xs text-muted-foreground">{user.email}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setShowAddTask(false)}>Cancel</Button>
@@ -738,10 +1068,161 @@ export const TicketDetailPage: React.FC = () => {
           placeholder="Add your comment to this ticket..."
         />
       )}
+
+      {/* Task Status Change Dialog */}
+      {selectedTaskForStatusChange && (
+        <TaskStatusChangeDialog
+          isOpen={showTaskStatusDialog}
+          onClose={() => {
+            setShowTaskStatusDialog(false);
+            setSelectedTaskForStatusChange(null);
+          }}
+          onConfirm={handleTaskStatusConfirm}
+          currentStatus={selectedTaskForStatusChange.currentStatus}
+          taskTitle={selectedTaskForStatusChange.title}
+        />
+      )}
+
+      {/* Task Comment Dialog */}
+      {selectedTaskForComment && (
+        <TaskCommentDialog
+          isOpen={showTaskCommentDialog}
+          onClose={() => {
+            setShowTaskCommentDialog(false);
+            setSelectedTaskForComment(null);
+          }}
+          onConfirm={handleTaskCommentConfirm}
+          taskTitle={selectedTaskForComment.title}
+        />
+      )}
+
+      {/* Assignment Dialog */}
+      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Assign Task
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Task Title */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Task</Label>
+              <div className="text-sm text-muted-foreground truncate" title={selectedTaskForAssignment?.title}>
+                {selectedTaskForAssignment?.title}
+              </div>
+            </div>
+
+            {/* Current Assignee */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Current Assignee</Label>
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">
+                  {selectedTaskForAssignment?.assignedTo ? (() => {
+                    const user = users.find(u => u.id === selectedTaskForAssignment.assignedTo);
+                    return user ? `${user.firstName} ${user.lastName}` : selectedTaskForAssignment.assignedTo;
+                  })() : 'Unassigned'}
+                </span>
+              </div>
+            </div>
+
+            {/* Assignee Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="assignee" className="text-sm font-medium">
+                Assign To
+              </Label>
+              <div className="relative">
+                <Input
+                  id="assignee"
+                  placeholder="Type to search assignees..."
+                  value={selectedAssignee === 'unassigned' ? 'Unassigned' : 
+                         selectedAssignee ? (() => {
+                           const user = users.find(u => u.id === selectedAssignee);
+                           if (user) {
+                             const roleText = (user.roles && user.roles.length > 0) ? ` (${user.roles[0].role.name})` : '';
+                             return `${user.firstName} ${user.lastName}${roleText}`;
+                           }
+                           return '';
+                         })() : ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value.toLowerCase() === 'unassigned') {
+                      setSelectedAssignee('unassigned');
+                      } else {
+                        // Find matching user
+                        const matchingUser = users.find(user => 
+                          `${user.firstName} ${user.lastName}`.toLowerCase().includes(value.toLowerCase()) ||
+                          user.email.toLowerCase().includes(value.toLowerCase()) ||
+                          (user.roles && user.roles.length > 0 && user.roles[0].role.name.toLowerCase().includes(value.toLowerCase()))
+                        );
+                        if (matchingUser) {
+                          setSelectedAssignee(matchingUser.id);
+                        } else {
+                          setSelectedAssignee('');
+                        }
+                      }
+                  }}
+                  onFocus={() => setShowUserSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowUserSuggestions(false), 200)}
+                />
+                {showUserSuggestions && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                    <div 
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                      onClick={() => {
+                        setSelectedAssignee('unassigned');
+                        setShowUserSuggestions(false);
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span>Unassigned</span>
+                      </div>
+                    </div>
+                    {users.map((user) => (
+                      <div 
+                        key={user.id}
+                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => {
+                          setSelectedAssignee(user.id);
+                          setShowUserSuggestions(false);
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <div className="flex-1">
+                            <div className="font-medium">{user.firstName} {user.lastName}</div>
+                            <div className="text-xs text-muted-foreground">{user.email}</div>
+                            {user.roles && user.roles.length > 0 && (
+                              <div className="text-xs text-blue-600 font-medium mt-1">
+                                {user.roles[0].role.name}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setShowAssignDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={assignTask}>
+              Assign Task
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 export default TicketDetailPage;
-
-

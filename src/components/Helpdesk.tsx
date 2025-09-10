@@ -272,10 +272,10 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
 
 
         {/* Summary Stats - Enhanced */}
-        <div className="flex items-center justify-between">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 flex-1 pr-3">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {/* Open + In Progress */}
-            <button type="button" className="space-y-1 p-4 rounded-lg bg-muted/30 border text-left hover:bg-muted/50 transition">
+            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border hover:bg-muted/50 transition-all duration-300 hover:scale-105 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <p className="text-2xl font-bold text-blue-700">
                 {statsLoading && !stats ? <Loader2 className="h-4 w-4 animate-spin" /> : (stats?.openInProgress ?? (openTickets.length))}
               </p>
@@ -283,9 +283,9 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
                 <Clock className="h-3.5 w-3.5" />
                 <p className="text-sm font-medium text-gray-700">Open + In Progress</p>
               </div>
-            </button>
+            </div>
             {/* New in Range */}
-            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border">
+            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border hover:bg-muted/50 transition-all duration-300 hover:scale-105 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
               <p className="text-2xl font-bold text-purple-700">
                 {statsLoading && !stats ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : (stats?.new ?? 0)}
               </p>
@@ -295,7 +295,7 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
               </div>
             </div>
             {/* Resolved in Range */}
-            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border">
+            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border hover:bg-muted/50 transition-all duration-300 hover:scale-105 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
               <p className="text-2xl font-bold text-green-700">
                 {statsLoading && !stats ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : (stats?.resolvedInRange ?? 0)}
               </p>
@@ -305,7 +305,7 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
               </div>
             </div>
             {/* Overdue */}
-            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border">
+            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border hover:bg-muted/50 transition-all duration-300 hover:scale-105 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
               <p className="text-2xl font-bold text-red-700">
                 {statsLoading && !stats ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : (stats?.overdue ?? 0)}
               </p>
@@ -315,7 +315,7 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
               </div>
             </div>
             {/* Unassigned */}
-            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border">
+            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border hover:bg-muted/50 transition-all duration-300 hover:scale-105 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-400">
               <p className="text-2xl font-bold text-orange-700">
                 {statsLoading && !stats ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : (stats?.unassigned ?? 0)}
               </p>
@@ -325,7 +325,7 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
               </div>
             </div>
             {/* SLA At Risk */}
-            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border">
+            <div className="space-y-1 p-4 rounded-lg bg-muted/30 border hover:bg-muted/50 transition-all duration-300 hover:scale-105 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-500">
               <p className="text-2xl font-bold text-pink-700">
                 {statsLoading && !stats ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : (stats?.slaAtRisk ?? 0)}
               </p>
@@ -345,11 +345,12 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
           </div>
 
           {recentTickets.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {recentTickets.map((ticket) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {recentTickets.map((ticket, index) => (
                 <div
                   key={ticket.id}
-                  className="rounded-lg border bg-card text-card-foreground p-3 flex flex-col justify-between h-[116px]"
+                  className="rounded-lg border bg-card text-card-foreground p-3 flex flex-col justify-between min-h-[120px] hover:shadow-md transition-all duration-300 hover:scale-[1.02] animate-in fade-in slide-in-from-bottom-4 duration-500"
+                  style={{ animationDelay: `${600 + (index * 450)}ms` }}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -361,14 +362,14 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
                     <TicketStatusBadge status={(ticket as any).status as any} size="sm" />
                   </div>
 
-                  <div className="flex items-center justify-between mt-2">
-                    <PriorityBadge priority={(ticket as any).priority as any} size="sm" className="hover:brightness-95" />
+                  <div className="flex items-center justify-between mt-3">
+                    <PriorityBadge priority={(ticket as any).priority as any} size="sm" className="hover:brightness-95 transition-all duration-200" />
                     {(() => {
                       const catObj = typeof (ticket as any).category === 'object' ? (ticket as any).category : (ticket as any).categoryInfo;
                       const catName = typeof (ticket as any).category === 'object' ? (ticket as any).category?.name : ((ticket as any).category || (ticket as any).categoryInfo?.name);
                       const color = (catObj?.color || 'gray').toLowerCase();
                       return (
-                        <Badge variant="outline" className={`${ticketSystemService.getCategoryColorClass(color)} text-xs rounded-full px-2.5 py-0.5 hover:brightness-95`}>
+                        <Badge variant="outline" className={`${ticketSystemService.getCategoryColorClass(color)} text-xs rounded-full px-2.5 py-0.5 hover:brightness-95 transition-all duration-200`}>
                           <span className="capitalize font-medium">{typeof catName === 'string' ? catName : 'Unknown'}</span>
                         </Badge>
                       );
@@ -378,7 +379,7 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
               ))}
             </div>
           ) : (
-            <div className="text-center py-4">
+            <div className="text-center py-6">
               <MessageSquare className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-xs text-muted-foreground">No support tickets</p>
             </div>
@@ -388,7 +389,7 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
         {/* Quick Actions */}
         <div className="pt-3 border-t">
           <Link to="/tickets?action=create" className="block">
-            <Button variant="outline" size="sm" className="w-full justify-center gap-2 h-8">
+            <Button variant="outline" size="sm" className="w-full justify-center gap-2 h-8 hover:scale-105 transition-all duration-300 hover:shadow-md">
               <Headphones className="h-3 w-3" />
               <span className="text-xs">Submit Ticket</span>
             </Button>

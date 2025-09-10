@@ -118,6 +118,37 @@ async function resetAndSeed() {
 
     console.log(`✅ Created ${users.length} users`);
 
+    // Assign roles to users
+    console.log('🔐 Assigning roles to users...');
+    const roles = await prisma.role.findMany();
+    const roleMap = new Map(roles.map(r => [r.name, r.id]));
+    
+    const roleAssignments = [
+      { userIndex: 0, roleName: 'admin' },    // John Admin
+      { userIndex: 1, roleName: 'manager' },  // Sarah Manager
+      { userIndex: 2, roleName: 'agent' },    // Mike Agent
+      { userIndex: 3, roleName: 'agent' },    // Emily Developer
+      { userIndex: 4, roleName: 'user' },     // David Customer
+      { userIndex: 5, roleName: 'user' }      // Lisa User
+    ];
+    
+    for (const assignment of roleAssignments) {
+      const user = users[assignment.userIndex];
+      const roleId = roleMap.get(assignment.roleName);
+      
+      if (user && roleId) {
+        await prisma.userRole.create({
+          data: {
+            userId: user.id,
+            roleId: roleId,
+            isPrimary: true
+          }
+        });
+      }
+    }
+    
+    console.log('✅ Roles assigned to users');
+
     // Create ticket categories
     console.log('📁 Creating ticket categories...');
     const categories = await Promise.all([

@@ -60,11 +60,11 @@ export const Projects: FC = () => {
           className={getItemClassName("grid grid-cols-2 gap-3")}
           style={getItemStyle(0)}
         >
-          <div className="space-y-1 p-4 rounded-lg bg-muted/30 border text-center">
+          <div className="space-y-1 p-4 rounded-lg bg-muted/30 border text-center min-h-[80px] flex flex-col justify-center hover:bg-muted/50 transition-all duration-300 hover:scale-105 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <p className="text-lg font-bold text-blue-600">{pendingTasks}</p>
             <p className="text-xs text-muted-foreground">Pending</p>
           </div>
-          <div className="space-y-1 p-4 rounded-lg bg-muted/30 border text-center">
+          <div className="space-y-1 p-4 rounded-lg bg-muted/30 border text-center min-h-[80px] flex flex-col justify-center hover:bg-muted/50 transition-all duration-300 hover:scale-105 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
             <p className="text-lg font-bold text-orange-600">{inProgressTasks}</p>
             <p className="text-xs text-muted-foreground">In Progress</p>
           </div>
@@ -85,7 +85,7 @@ export const Projects: FC = () => {
               {recentTasks.map((task, index) => (
                 <div 
                   key={task.id} 
-                  className={getItemClassName("p-2 rounded-lg bg-muted/30 space-y-2")}
+                  className={getItemClassName("p-3 rounded-lg bg-muted/30 space-y-2 hover:bg-muted/50 transition-all duration-300 hover:scale-[1.02]")}
                   style={getItemStyle(2 + index)}
                 >
                   <div className="flex items-start justify-between">
@@ -96,7 +96,7 @@ export const Projects: FC = () => {
                       </p>
                     </div>
                     <div className="flex items-center gap-1 ml-2">
-                      <Badge className={`${getStatusColor(task.status)} border text-xs px-1.5 py-0.5`}>
+                      <Badge className={`${getStatusColor(task.status)} border text-xs px-1.5 py-0.5 transition-all duration-200 hover:scale-105`}>
                         {task.status.replace('-', ' ')}
                       </Badge>
                     </div>
@@ -118,11 +118,12 @@ export const Projects: FC = () => {
             </div>
           ) : (
             <div 
-              className={getItemClassName("text-center py-4")}
+              className={getItemClassName("text-center py-6")}
               style={getItemStyle(2)}
             >
-              <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-xs text-muted-foreground">No tasks found</p>
+              <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground mb-1">No tasks found</p>
+              <p className="text-xs text-muted-foreground">Create your first task to get started</p>
             </div>
           )}
         </div>
@@ -133,7 +134,7 @@ export const Projects: FC = () => {
           style={getItemStyle(5)}
         >
           <Link to="/tasks" className="block">
-            <Button variant="outline" size="sm" className="w-full justify-center gap-2 h-8">
+            <Button variant="outline" size="sm" className="w-full justify-center gap-2 h-8 hover:scale-105 transition-all duration-300 hover:shadow-md">
               <FileText className="h-3 w-3" />
               <span className="text-xs">View All Tasks</span>
             </Button>

@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
+import { Breadcrumb } from '@/components/Breadcrumb';
 import { type FC, useEffect, useState } from 'react';
 import { type TicketTask } from '@/data/mockData';
 import { apiClient, API_ENDPOINTS } from '@/lib/api';
@@ -20,7 +21,8 @@ import {
   Clock,
   AlertCircle,
   FileText,
- 
+  UserPlus,
+  User
 } from 'lucide-react';
  
 import { Link, useNavigate } from 'react-router-dom';
@@ -85,13 +87,24 @@ export const TaskPage: FC = () => {
   const [newTaskPriority, setNewTaskPriority] = useState<any>('medium');
   const [newTaskTicketId, setNewTaskTicketId] = useState('');
   const [tickets, setTickets] = useState<any[]>([]);
+  
+  // Assignment dialog state
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<any>(null);
+  const [selectedAssignee, setSelectedAssignee] = useState('');
+  const [users, setUsers] = useState<any[]>([]);
+  const [showUserSuggestions, setShowUserSuggestions] = useState(false);
 
   useEffect(() => {
     const load = async () => {
-      const [ticketsRes] = await Promise.all([
-        apiClient.get(API_ENDPOINTS.TICKETS.LIST + '?limit=100')
+      const [ticketsRes, usersRes] = await Promise.all([
+        apiClient.get(API_ENDPOINTS.TICKETS.LIST + '?limit=100'),
+        apiClient.get(API_ENDPOINTS.USERS.LIST)
       ]);
       if (ticketsRes.success) setTickets((ticketsRes.data as any[]) || []);
+      if (usersRes.success) {
+        setUsers((usersRes.data as any[]) || []);
+      }
       // Flatten tasks: fetch tasks for each ticket (basic version)
       const allTasks: any[] = [];
       const ticketsData: any[] = ((ticketsRes.data as any[]) || []);
@@ -149,6 +162,38 @@ export const TaskPage: FC = () => {
     }
   };
 
+  const handleAssignTask = (task: any, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
+    setSelectedTaskForAssignment(task);
+    setSelectedAssignee(task.assignedTo || 'unassigned');
+    setIsAssignDialogOpen(true);
+  };
+
+  const assignTask = async () => {
+    if (!selectedTaskForAssignment) return;
+    try {
+      const assigneeValue = selectedAssignee === 'unassigned' ? null : selectedAssignee;
+      const res = await apiClient.patch(API_ENDPOINTS.TICKETS.TASK_ASSIGN(selectedTaskForAssignment.ticketId, selectedTaskForAssignment.id), {
+        assignedTo: assigneeValue
+      });
+      if (!res.success) throw new Error(res.error || 'Failed to assign task');
+      
+      // Update the task in the list
+      setTasksList(prev => prev.map(task => 
+        task.id === selectedTaskForAssignment.id 
+          ? { ...task, assignedTo: assigneeValue }
+          : task
+      ));
+      
+      toast.success('Task assigned successfully');
+      setIsAssignDialogOpen(false);
+      setSelectedTaskForAssignment(null);
+      setSelectedAssignee('');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to assign task');
+    }
+  };
+
   const formatDate = (date: any) => {
     if (!date) return '-';
     const d = new Date(date);
@@ -172,6 +217,12 @@ export const TaskPage: FC = () => {
         {/* Header Section */}
         <PageSection index={0}>
           <div className="mb-6">
+            <Breadcrumb 
+              items={[
+                { label: 'Tasks', current: true }
+              ]} 
+              className="mb-4"
+            />
             <div className="flex items-center gap-4 mb-4">
               <Link to="/">
                 <Button variant="ghost" size="sm" className="gap-2">
@@ -336,36 +387,25 @@ export const TaskPage: FC = () => {
                 onClick={() => navigate(`/tasks/${task.id}?ticketId=${task.ticketId}`)}
               >
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-200/20 to-transparent dark:from-white/5 dark:to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                <CardContent className="p-6">
-                  <div className="space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <h3 className="font-medium text-sm line-clamp-2 group-hover:text-primary transition-colors duration-300">{task.title}</h3>
-                        <p className="text-xs text-muted-foreground">#{task.id}</p>
+                <CardContent className="p-4 flex flex-col h-full">
+                  <div className="flex flex-col h-full">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="space-y-1 flex-1">
+                        <h3 className="font-semibold text-base line-clamp-2 group-hover:text-primary transition-colors duration-300">{task.title}</h3>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs font-mono">#{task.id}</Badge>
+                          {task.ticketNumber && (
+                            <Badge variant="secondary" className="text-xs font-mono">Ticket #{task.ticketNumber}</Badge>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg">
+                      <div className="flex items-center gap-1 group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg ml-2">
                         {getPriorityIcon(task.priority)}
                       </div>
                     </div>
                     
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {task.description}
-                    </p>
-                    
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Progress</span>
-                        <span className="text-xs font-medium">{task.progress}%</span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div 
-                          className="bg-primary h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${task.progress}%` }}
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
+                    {/* Status and Priority */}
+                    <div className="flex items-center gap-2 mb-3">
                       <Badge variant="outline" className={`${getStatusColor(typeof task.status === 'object' ? (task.status?.key || task.status?.name) : task.status)} border text-xs rounded-full px-2.5 py-0.5 group-hover:scale-105 transition-transform duration-300 shadow-sm hover:brightness-95`}> 
                         <div className="flex items-center gap-1">
                           {(() => {
@@ -381,16 +421,38 @@ export const TaskPage: FC = () => {
                       <Badge variant="outline" className={`${getPriorityColor(typeof task.priority === 'object' ? (task.priority?.key || task.priority?.name) : task.priority)} text-xs rounded-full px-2.5 py-0.5 group-hover:scale-105 transition-transform duration-300 shadow-sm font-medium`}>
                         {(String(typeof task.priority === 'object' ? (task.priority?.name || task.priority?.key) : task.priority || '') || 'unknown').toUpperCase()}
                       </Badge>
+                      <Badge variant="outline" className="text-xs rounded-full px-2.5 py-0.5 group-hover:scale-105 transition-transform duration-300 shadow-sm font-medium bg-purple-100 text-purple-700 border-purple-200">
+                        Assigned: {task.assignedTo ? (() => {
+                          const user = users.find(u => u.id === task.assignedTo);
+                          return user ? `${user.firstName} ${user.lastName}` : task.assignedTo;
+                        })() : 'Unassigned'}
+                      </Badge>
                     </div>
                     
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Ticket:</span>
-                        <span className="font-medium">{task.ticketId}</span>
+                    {/* Progress */}
+                    <div className="space-y-2 mb-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Progress</span>
+                        <span className="text-xs font-medium">{task.progress}%</span>
                       </div>
+                      <div className="w-full bg-muted rounded-full h-2">
+                        <div 
+                          className="bg-primary h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${task.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Details */}
+                    <div className="space-y-2 mb-3 flex-1">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-muted-foreground">Assigned:</span>
-                        <span className="font-medium">{task.assignedTo || 'Unassigned'}</span>
+                        <span className="font-medium">
+                          {task.assignedTo ? (() => {
+                            const user = users.find(u => u.id === task.assignedTo);
+                            return user ? `${user.firstName} ${user.lastName}` : task.assignedTo;
+                          })() : 'Unassigned'}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-muted-foreground">Started:</span>
@@ -404,10 +466,27 @@ export const TaskPage: FC = () => {
                       )}
                     </div>
                     
-                    <div className="pt-2 border-t">
+                    {/* Footer - Description and Ticket Info */}
+                    <div className="pt-2 border-t border-border/50 space-y-1">
+                      <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                        {task.description || 'No description provided'}
+                      </p>
                       <p className="text-xs text-muted-foreground line-clamp-1">
                         {getTicketTitle(task.ticketId)}
                       </p>
+                      
+                      {/* Assign To Button */}
+                      <div className="pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full gap-2"
+                          onClick={(e) => handleAssignTask(task, e)}
+                        >
+                          <UserPlus className="h-3 w-3" />
+                          {task.assignedTo ? 'Reassign' : 'Assign To'}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -429,6 +508,135 @@ export const TaskPage: FC = () => {
             </Card>
           </PageSection>
         )}
+
+        {/* Assignment Dialog */}
+        <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5" />
+                Assign Task
+              </DialogTitle>
+              <DialogDescription>
+                Assign this task to a team member
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              {/* Task Title */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Task</Label>
+                <div className="text-sm text-muted-foreground truncate" title={selectedTaskForAssignment?.title}>
+                  {selectedTaskForAssignment?.title}
+                </div>
+              </div>
+
+              {/* Current Assignee */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Current Assignee</Label>
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">
+                    {selectedTaskForAssignment?.assignedTo ? (() => {
+                      const user = users.find(u => u.id === selectedTaskForAssignment.assignedTo);
+                      return user ? `${user.firstName} ${user.lastName}` : selectedTaskForAssignment.assignedTo;
+                    })() : 'Unassigned'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Assignee Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="assignee" className="text-sm font-medium">
+                  Assign To
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="assignee"
+                    placeholder="Type to search assignees..."
+                    value={selectedAssignee === 'unassigned' ? 'Unassigned' : 
+                           selectedAssignee ? (() => {
+                             const user = users.find(u => u.id === selectedAssignee);
+                             if (user) {
+                               const roleText = (user.roles && user.roles.length > 0) ? ` (${user.roles[0].role.name})` : '';
+                               return `${user.firstName} ${user.lastName}${roleText}`;
+                             }
+                             return '';
+                           })() : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value.toLowerCase() === 'unassigned') {
+                        setSelectedAssignee('unassigned');
+                      } else {
+                        // Find matching user
+                        const matchingUser = users.find(user => 
+                          `${user.firstName} ${user.lastName}`.toLowerCase().includes(value.toLowerCase()) ||
+                          user.email.toLowerCase().includes(value.toLowerCase()) ||
+                          (user.roles && user.roles.length > 0 && user.roles[0].role.name.toLowerCase().includes(value.toLowerCase()))
+                        );
+                        if (matchingUser) {
+                          setSelectedAssignee(matchingUser.id);
+                        } else {
+                          setSelectedAssignee('');
+                        }
+                      }
+                    }}
+                    onFocus={() => setShowUserSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowUserSuggestions(false), 200)}
+                  />
+                  {showUserSuggestions && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                      <div 
+                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => {
+                          setSelectedAssignee('unassigned');
+                          setShowUserSuggestions(false);
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span>Unassigned</span>
+                        </div>
+                      </div>
+                      {users.map((user) => (
+                        <div 
+                          key={user.id}
+                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                          onClick={() => {
+                            setSelectedAssignee(user.id);
+                            setShowUserSuggestions(false);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <div className="flex-1">
+                              <div className="font-medium">{user.firstName} {user.lastName}</div>
+                              <div className="text-xs text-muted-foreground">{user.email}</div>
+                              {user.roles && user.roles.length > 0 && (
+                                <div className="text-xs text-blue-600 font-medium mt-1">
+                                  {user.roles[0].role.name}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={assignTask}>
+                Assign Task
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </PageWrapper>
     </div>
   );

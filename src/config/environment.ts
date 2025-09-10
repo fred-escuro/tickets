@@ -2,7 +2,7 @@
 export const config = {
   // API Configuration
   api: {
-    baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:3001',
+    baseUrl: import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : 'http://localhost:3001'),
     timeout: 30000, // 30 seconds
     retryAttempts: 3,
   },

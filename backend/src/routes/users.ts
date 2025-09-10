@@ -120,6 +120,13 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
         skills: true,
         createdAt: true,
         updatedAt: true,
+        departmentEntity: {
+          select: {
+            id: true,
+            name: true,
+            description: true
+          }
+        },
         roles: {
           select: {
             isPrimary: true,
