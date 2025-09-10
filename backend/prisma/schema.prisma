@@ -24,6 +24,11 @@ model User {
   location    String?
   isAgent     Boolean  @default(false)
   skills      Json?
+  // Auto-assignment fields
+  maxConcurrentTickets Int      @default(10)
+  assignmentPriority   Int      @default(1)
+  isAvailable          Boolean  @default(true)
+  lastAssignmentAt     DateTime?
   // Auth & recovery fields
   passwordResetToken   String?
   passwordResetExpires DateTime?
@@ -305,6 +310,10 @@ model Department {
   description String?
   managerId   String?
   parentId    String?
+  // Auto-assignment fields
+  autoAssignEnabled    Boolean @default(true)
+  assignmentStrategy   String  @default("round_robin") // round_robin, workload_balance, skill_based
+  maxTicketsPerAgent   Int     @default(10)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

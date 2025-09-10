@@ -566,6 +566,26 @@ export const TicketDetailPage: React.FC = () => {
                     </div>
                   )}
                 </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Submitter Department</div>
+                  {ticket && ticket.submitter?.departmentEntity ? (
+                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                      {ticket.submitter.departmentEntity.name}
+                    </Badge>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">No department</div>
+                  )}
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Assigned Department</div>
+                  {ticket && ticket.assignee?.departmentEntity ? (
+                    <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                      {ticket.assignee.departmentEntity.name}
+                    </Badge>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">No assignment</div>
+                  )}
+                </div>
               </div>
 
               <Separator />
@@ -1142,7 +1162,7 @@ export const TicketDetailPage: React.FC = () => {
                          selectedAssignee ? (() => {
                            const user = users.find(u => u.id === selectedAssignee);
                            if (user) {
-                             const roleText = (user.roles && user.roles.length > 0) ? ` (${user.roles[0].role.name})` : '';
+                             const roleText = user.role ? ` (${user.role})` : '';
                              return `${user.firstName} ${user.lastName}${roleText}`;
                            }
                            return '';
@@ -1156,7 +1176,7 @@ export const TicketDetailPage: React.FC = () => {
                         const matchingUser = users.find(user => 
                           `${user.firstName} ${user.lastName}`.toLowerCase().includes(value.toLowerCase()) ||
                           user.email.toLowerCase().includes(value.toLowerCase()) ||
-                          (user.roles && user.roles.length > 0 && user.roles[0].role.name.toLowerCase().includes(value.toLowerCase()))
+                          (user.role && user.role.toLowerCase().includes(value.toLowerCase()))
                         );
                         if (matchingUser) {
                           setSelectedAssignee(matchingUser.id);
@@ -1196,9 +1216,9 @@ export const TicketDetailPage: React.FC = () => {
                           <div className="flex-1">
                             <div className="font-medium">{user.firstName} {user.lastName}</div>
                             <div className="text-xs text-muted-foreground">{user.email}</div>
-                            {user.roles && user.roles.length > 0 && (
+                            {user.role && (
                               <div className="text-xs text-blue-600 font-medium mt-1">
-                                {user.roles[0].role.name}
+                                {user.role}
                               </div>
                             )}
                           </div>

@@ -21,6 +21,7 @@ import roleRoutes from './routes/roles';
 import permissionRoutes from './routes/permissions';
 import policyRoutes from './routes/policies';
 import menuRoutes from './routes/menu';
+import assignmentRulesRoutes from './routes/assignmentRules';
 // Legacy settings routes removed after migration to v2
 // import settingsRoutes from './routes/settings';
 import settingsV2Routes from './routes/settingsV2';
@@ -72,6 +73,7 @@ app.use('/api/roles', roleRoutes);
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/policies', policyRoutes);
 app.use('/api/menu', menuRoutes);
+app.use('/api/assignment-rules', assignmentRulesRoutes);
 // app.use('/api/settings', settingsRoutes);
 app.use('/api/settings/v2', settingsV2Routes);
 

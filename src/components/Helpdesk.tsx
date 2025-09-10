@@ -357,6 +357,9 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
                       <p className="text-xs font-medium line-clamp-2 leading-snug">{ticket.title}</p>
                       <p className="text-[11px] text-muted-foreground mt-1">
                         #{ticket.ticketNumber} • {formatDate(ticket.submittedAt)} • Created by {getSubmitterName(ticket as any)}
+                        {(ticket as any).assignee?.departmentEntity && (
+                          <span> • Assigned to {(ticket as any).assignee.departmentEntity.name}</span>
+                        )}
                       </p>
                     </div>
                     <TicketStatusBadge status={(ticket as any).status as any} size="sm" />

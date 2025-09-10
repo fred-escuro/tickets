@@ -120,6 +120,7 @@ export const TicketList = ({ showStatusChange = true }: TicketListProps) => {
                 <TableHead>Status</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead>Department</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead>Assignee</TableHead>
               </TableRow>
@@ -170,6 +171,15 @@ export const TicketList = ({ showStatusChange = true }: TicketListProps) => {
                         );
                       })()}
                     </TableCell>
+                    <TableCell>
+                      {ticket.assignee?.departmentEntity ? (
+                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                          {ticket.assignee.departmentEntity.name}
+                        </Badge>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">No department</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {new Date(ticket.submittedAt).toLocaleDateString()}
                     </TableCell>
@@ -179,9 +189,16 @@ export const TicketList = ({ showStatusChange = true }: TicketListProps) => {
                           <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs">
                             {ticket.assignee.firstName.charAt(0)}
                           </div>
-                          <span className="text-sm">
-                            {ticket.assignee.middleName ? `${ticket.assignee.firstName} ${ticket.assignee.middleName} ${ticket.assignee.lastName}` : `${ticket.assignee.firstName} ${ticket.assignee.lastName}`}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="text-sm">
+                              {ticket.assignee.middleName ? `${ticket.assignee.firstName} ${ticket.assignee.middleName} ${ticket.assignee.lastName}` : `${ticket.assignee.firstName} ${ticket.assignee.lastName}`}
+                            </span>
+                            {ticket.assignee.departmentEntity && (
+                              <span className="text-xs text-muted-foreground">
+                                {ticket.assignee.departmentEntity.name}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       ) : (
                         <span className="text-sm text-muted-foreground">Unassigned</span>
@@ -191,7 +208,7 @@ export const TicketList = ({ showStatusChange = true }: TicketListProps) => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={8} className="text-center py-8">
                     <p className="text-muted-foreground">No tickets found</p>
                   </TableCell>
                 </TableRow>

@@ -6,15 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { departmentService, type CreateDepartmentInput, type DepartmentDto, type UpdateDepartmentInput } from '@/lib/services/departmentService';
+import { DepartmentService } from '@/lib/services/departmentService';
+import type { Department } from '@/lib/services/departmentService';
 
 export function DepartmentSettings() {
-  const [departments, setDepartments] = useState<DepartmentDto[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
-  const [editing, setEditing] = useState<DepartmentDto | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<DepartmentDto | null>(null);
+  const [editing, setEditing] = useState<Department | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
 
   const [form, setForm] = useState<{ name: string; description: string; managerId: string | null; parentId: string | null }>({
     name: '',
@@ -30,8 +31,8 @@ export function DepartmentSettings() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await departmentService.list();
-      if (res.success && Array.isArray(res.data)) {
+      const res = await DepartmentService.getDepartments();
+      if (res.success && res.data) {
         setDepartments(res.data);
       } else {
         toast.error(res.error || 'Failed to load departments');
@@ -53,7 +54,7 @@ export function DepartmentSettings() {
     setDialogOpen(true);
   };
 
-  const openEdit = (dept: DepartmentDto) => {
+  const openEdit = (dept: Department) => {
     setEditing(dept);
     setForm({
       name: dept.name,
@@ -75,9 +76,9 @@ export function DepartmentSettings() {
     try {
       let res;
       if (editing) {
-        res = await departmentService.update(editing.id, payload as UpdateDepartmentInput);
+        res = await DepartmentService.updateDepartment(editing.id, payload);
       } else {
-        res = await departmentService.create(payload as CreateDepartmentInput);
+        res = await DepartmentService.createDepartment(payload);
       }
 
       if (res.success) {
@@ -93,7 +94,7 @@ export function DepartmentSettings() {
     }
   };
 
-  const confirmDelete = (dept: DepartmentDto) => {
+  const confirmDelete = (dept: Department) => {
     setDeleteTarget(dept);
     setDeleteDialogOpen(true);
   };
@@ -101,7 +102,7 @@ export function DepartmentSettings() {
   const doDelete = async () => {
     if (!deleteTarget) return;
     try {
-      const res = await departmentService.remove(deleteTarget.id);
+      const res = await DepartmentService.deleteDepartment(deleteTarget.id);
       if (res.success) {
         toast.success('Department deleted');
         setDeleteDialogOpen(false);

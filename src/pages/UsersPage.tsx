@@ -132,17 +132,17 @@ export const UsersPage: FC = () => {
   // Get unique departments for filter
   const departments = (departmentsApi.length > 0
     ? departmentsApi.map(d => d.name)
-    : Array.from(new Set(users.map(user => user.department).filter((dept): dept is string => !!dept))).sort());
+    : Array.from(new Set(users.map(user => user.departmentEntity?.name).filter((dept): dept is string => !!dept))).sort());
 
   // Filter users based on search and department
   const filteredUsers = users.filter((user) => {
     const fullName = user.middleName ? `${user.firstName} ${user.middleName} ${user.lastName}` : `${user.firstName} ${user.lastName}`;
     const matchesSearch = fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (user.department && user.department.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                         (user.departmentEntity?.name && user.departmentEntity.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
                          (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
                          (user.role && user.role.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    const matchesDepartment = filterDepartment === 'all' || (user.department && user.department === filterDepartment);
+    const matchesDepartment = filterDepartment === 'all' || (user.departmentEntity?.name && user.departmentEntity.name === filterDepartment);
     const matchesRole = filterRole === 'all' || 
                        (filterRole === 'agent' && user.isAgent) ||
                        (filterRole === 'customer' && !user.isAgent);
@@ -277,7 +277,7 @@ export const UsersPage: FC = () => {
       email: user.email,
       password: '',
       role: user.role,
-      department: user.department || '',
+      department: user.departmentEntity?.name || '',
       phone: user.phone || '',
       location: user.location || '',
       isAgent: user.isAgent,

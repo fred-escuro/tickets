@@ -137,7 +137,7 @@ export const ProfilePage: React.FC = () => {
         email: user.email,
         phone: user.phone || '',
         location: user.location || '',
-        department: user.department || '',
+        department: user.departmentEntity?.name || '',
                  avatar: user.avatar || ''
       });
     }
@@ -252,9 +252,9 @@ export const ProfilePage: React.FC = () => {
                     <Badge variant="secondary" className="text-sm">
                       {user.role === 'admin' ? 'System Administrator' : user.role}
                     </Badge>
-                    {user.department && (
+                    {user.departmentEntity?.name && (
                       <Badge variant="outline" className="text-sm">
-                        {user.department}
+                        {user.departmentEntity.name}
                       </Badge>
                     )}
                   </div>

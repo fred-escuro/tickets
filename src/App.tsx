@@ -21,6 +21,7 @@ import SettingsPage from './pages/SettingsPage';
 import { UsersPage } from './pages/UsersPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { TicketDetailPage } from './pages/TicketDetailPage';
+import { DepartmentOverviewPage } from './pages/DepartmentOverviewPage';
 
 const AppRoutes: FC = () => {
   return (
@@ -130,6 +131,14 @@ const AppRoutes: FC = () => {
         element={
           <ProtectedRoute pageTitle="Profile" pageDescription="Please log in to view and edit your profile.">
             <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/departments/:departmentId"
+        element={
+          <ProtectedRoute pageTitle="Department Overview" pageDescription="View department details and ticket statistics.">
+            <DepartmentOverviewPage />
           </ProtectedRoute>
         }
       />

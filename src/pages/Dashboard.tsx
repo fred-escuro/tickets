@@ -5,6 +5,7 @@ import { Projects } from '@/components/Projects';
 import { Analytics } from '@/components/Analytics';
 import { TeamCalendar } from '@/components/TeamCalendar';
 import { ApiTest } from '@/components/ApiTest';
+import { DepartmentDashboard } from '@/components/DepartmentDashboard';
 // TicketList removed from Dashboard
 import { type FC } from 'react';
 
@@ -44,8 +45,13 @@ export const Dashboard: FC = () => {
                 <Projects />
               </div>
               
-              {/* Support Team */}
+              {/* Department Overview */}
               <div className="animate-in fade-in slide-in-from-right-4 duration-700 delay-500">
+                <DepartmentDashboard />
+              </div>
+              
+              {/* Support Team */}
+              <div className="animate-in fade-in slide-in-from-right-4 duration-700 delay-600">
                 <EmployeeDirectory />
               </div>
               

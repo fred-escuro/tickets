@@ -22,9 +22,9 @@ export const searchAll = (query: string): SearchResult[] => {
   // Search users
   supportUsers.forEach(user => {
     const relevance = calculateRelevance(lowerQuery, [
-      user.name,
-      user.role,
-      user.department,
+      user.name || '',
+      user.role || '',
+      user.departmentEntity?.name || '',
       user.email || ''
     ]);
     
@@ -33,7 +33,7 @@ export const searchAll = (query: string): SearchResult[] => {
         id: user.id,
         type: 'user',
         title: user.name,
-        description: `${user.role} • ${user.department}`,
+        description: `${user.role} • ${user.departmentEntity?.name || 'No Department'}`,
         url: `/users`,
         relevance
       });
@@ -43,11 +43,11 @@ export const searchAll = (query: string): SearchResult[] => {
   // Search tickets
   helpdeskTickets.forEach(ticket => {
     const relevance = calculateRelevance(lowerQuery, [
-      ticket.title,
-      ticket.description,
-      ticket.category,
-      ticket.status,
-      ticket.priority
+      ticket.title || '',
+      ticket.description || '',
+      ticket.category || '',
+      ticket.status || '',
+      ticket.priority || ''
     ]);
     
     if (relevance > 0) {
@@ -65,9 +65,9 @@ export const searchAll = (query: string): SearchResult[] => {
   // Search knowledge base articles
   helpdeskKnowledgeBase.forEach(article => {
     const relevance = calculateRelevance(lowerQuery, [
-      article.title,
-      article.content,
-      article.category
+      article.title || '',
+      article.content || '',
+      article.category || ''
     ]);
     
     if (relevance > 0) {
@@ -134,6 +134,7 @@ const calculateRelevance = (query: string, searchableTexts: string[]): number =>
   let relevance = 0;
   
   searchableTexts.forEach(text => {
+    if (!text) return; // Skip undefined/null values
     const lowerText = text.toLowerCase();
     
     // Exact match gets highest score

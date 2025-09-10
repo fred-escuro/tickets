@@ -157,6 +157,158 @@ router.delete('/:id/users/:userId', authenticate, authorize('admin', 'manager'),
   }
 });
 
+// Get department statistics
+router.get('/:id/stats', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get department
+    const department = await prisma.department.findUnique({
+      where: { id },
+      include: {
+        users: {
+          where: { isAgent: true },
+          select: { id: true }
+        }
+      }
+    });
+
+    if (!department) {
+      return res.status(404).json({ success: false, error: 'Department not found' });
+    }
+
+    const agentIds = department.users.map(user => user.id);
+
+    // Get ticket statistics
+    const [
+      totalTickets,
+      openTickets,
+      inProgressTickets,
+      resolvedTickets,
+      closedTickets,
+      ticketsByPriority,
+      ticketsByCategory
+    ] = await Promise.all([
+      // Total tickets assigned to department agents
+      prisma.ticket.count({
+        where: {
+          assignedTo: { in: agentIds }
+        }
+      }),
+      // Open tickets
+      prisma.ticket.count({
+        where: {
+          assignedTo: { in: agentIds },
+          status: { name: 'OPEN' }
+        }
+      }),
+      // In progress tickets
+      prisma.ticket.count({
+        where: {
+          assignedTo: { in: agentIds },
+          status: { name: 'IN_PROGRESS' }
+        }
+      }),
+      // Resolved tickets
+      prisma.ticket.count({
+        where: {
+          assignedTo: { in: agentIds },
+          status: { name: 'RESOLVED' }
+        }
+      }),
+      // Closed tickets
+      prisma.ticket.count({
+        where: {
+          assignedTo: { in: agentIds },
+          status: { name: 'CLOSED' }
+        }
+      }),
+      // Tickets by priority
+      prisma.ticket.groupBy({
+        by: ['priorityId'],
+        where: {
+          assignedTo: { in: agentIds }
+        },
+        _count: true
+      }),
+      // Tickets by category
+      prisma.ticket.groupBy({
+        by: ['categoryId'],
+        where: {
+          assignedTo: { in: agentIds }
+        },
+        _count: true
+      })
+    ]);
+
+    // Get priority and category names
+    const priorityIds = ticketsByPriority.map(t => t.priorityId);
+    const categoryIds = ticketsByCategory.map(t => t.categoryId);
+
+    const [priorities, categories] = await Promise.all([
+      prisma.ticketPriority.findMany({
+        where: { id: { in: priorityIds } },
+        select: { id: true, name: true }
+      }),
+      prisma.ticketCategory.findMany({
+        where: { id: { in: categoryIds } },
+        select: { id: true, name: true }
+      })
+    ]);
+
+    const priorityMap = new Map(priorities.map(p => [p.id, p.name]));
+    const categoryMap = new Map(categories.map(c => [c.id, c.name]));
+
+    const ticketsByPriorityData = ticketsByPriority.reduce((acc, item) => {
+      const priorityName = priorityMap.get(item.priorityId) || 'Unknown';
+      acc[priorityName] = item._count;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const ticketsByCategoryData = ticketsByCategory.reduce((acc, item) => {
+      const categoryName = categoryMap.get(item.categoryId) || 'Unknown';
+      acc[categoryName] = item._count;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Calculate average resolution time (simplified)
+    const resolvedTicketsWithTimes = await prisma.ticket.findMany({
+      where: {
+        assignedTo: { in: agentIds },
+        status: { name: 'RESOLVED' },
+        resolvedAt: { not: null }
+      },
+      select: {
+        submittedAt: true,
+        resolvedAt: true
+      }
+    });
+
+    const averageResolutionTime = resolvedTicketsWithTimes.length > 0
+      ? resolvedTicketsWithTimes.reduce((sum, ticket) => {
+          const resolutionTime = ticket.resolvedAt!.getTime() - ticket.submittedAt.getTime();
+          return sum + resolutionTime;
+        }, 0) / resolvedTicketsWithTimes.length / (1000 * 60 * 60) // Convert to hours
+      : 0;
+
+    const stats = {
+      totalTickets,
+      openTickets,
+      inProgressTickets,
+      resolvedTickets,
+      closedTickets,
+      averageResolutionTime: Math.round(averageResolutionTime * 100) / 100,
+      ticketsByPriority: ticketsByPriorityData,
+      ticketsByCategory: ticketsByCategoryData
+    };
+
+    return res.json({ success: true, data: stats });
+  } catch (error) {
+    console.error('Get department stats error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to get department statistics' });
+  }
+});
+
 export default router;
 
 

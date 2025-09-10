@@ -8,7 +8,8 @@ const scripts = [
   { name: 'Basic Data (Users, Tickets, etc.)', file: 'src/scripts/resetAndSeed.ts' },
   { name: 'Task Metadata', file: 'src/scripts/seedTaskMeta.ts' },
   { name: 'Menu Items', file: 'src/scripts/seedMenu.ts' },
-  { name: 'Settings', file: 'src/scripts/seedSettings.ts' }
+  { name: 'Settings', file: 'src/scripts/seedSettings.ts' },
+  { name: 'Auto-Assignment', file: 'src/scripts/seedAutoAssignment.ts' }
 ];
 
 try {

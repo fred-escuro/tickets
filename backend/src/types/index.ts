@@ -257,6 +257,8 @@ export interface TicketFilters extends PaginationQuery {
   ticketNumber?: string;
   assignedTo?: string;
   submittedBy?: string;
+  department?: string;
+  assignedToDepartment?: string;
   dateFrom?: string;
   dateTo?: string;
 }

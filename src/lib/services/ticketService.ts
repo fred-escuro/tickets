@@ -48,6 +48,8 @@ export interface TicketFilter {
   category?: string;
   search?: string;
   ticketNumber?: number | string;
+  department?: string;
+  assignedToDepartment?: string;
   page?: number;
   limit?: number;
   sortBy?: string;

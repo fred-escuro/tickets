@@ -11,6 +11,11 @@ export interface User {
   role: string;
   avatar?: string;
   departmentId?: string;
+  departmentEntity?: {
+    id: string;
+    name: string;
+    description?: string;
+  };
   phone?: string;
   location?: string;
   isAgent: boolean;

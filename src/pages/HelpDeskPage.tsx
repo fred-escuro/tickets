@@ -14,6 +14,7 @@ import { RichTextDisplay } from '@/components/ui/rich-text-display';
 import { AttachmentDisplay } from '@/components/ui/attachment-display';
 import { AddCommentDialog } from '@/components/ui/add-comment-dialog';
 import { Breadcrumb } from '@/components/Breadcrumb';
+import { DepartmentFilter } from '@/components/DepartmentFilter';
 
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { TicketService, type Ticket } from '@/lib/services/ticketService';
@@ -1021,6 +1022,8 @@ export const HelpDeskPage: FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [categoryOptions, setCategoryOptions] = useState<TicketCategory[]>([]);
   const [loadingCategoryOptions, setLoadingCategoryOptions] = useState(false);
+  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [assignedToDepartmentFilter, setAssignedToDepartmentFilter] = useState<string>('all');
   const [totalTickets, setTotalTickets] = useState<number>(0);
   
   // User management for task assignment
@@ -1047,6 +1050,14 @@ export const HelpDeskPage: FC = () => {
       // Apply server-side category filter (by category name)
       if (categoryFilter && categoryFilter !== 'all') {
         params.category = categoryFilter;
+      }
+      // Apply server-side department filter (by submitter's department)
+      if (departmentFilter && departmentFilter !== 'all') {
+        params.department = departmentFilter;
+      }
+      // Apply server-side assigned to department filter
+      if (assignedToDepartmentFilter && assignedToDepartmentFilter !== 'all') {
+        params.assignedToDepartment = assignedToDepartmentFilter;
       }
       const res = await TicketService.getTickets(params);
       if (!res.success) {
@@ -1077,7 +1088,7 @@ export const HelpDeskPage: FC = () => {
   useEffect(() => {
     fetchTickets(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticketFilter, priorityFilter, categoryFilter]);
+  }, [ticketFilter, priorityFilter, categoryFilter, departmentFilter, assignedToDepartmentFilter]);
 
   // Debounced refetch when search changes
   useEffect(() => {
@@ -1296,6 +1307,16 @@ export const HelpDeskPage: FC = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                <DepartmentFilter
+                  value={departmentFilter}
+                  onChange={setDepartmentFilter}
+                  placeholder="Filter by submitter's department"
+                />
+                <DepartmentFilter
+                  value={assignedToDepartmentFilter}
+                  onChange={setAssignedToDepartmentFilter}
+                  placeholder="Filter by assigned department"
+                />
               </div>
             </div>
             

@@ -51,7 +51,8 @@ import { permissionService, type Permission } from '@/lib/services/permissionSer
 import { policyService, type AccessPolicy } from '@/lib/services/policyService';
 import { UserService, type User as AppUser } from '@/lib/services/userService';
 import { menuService } from '@/lib/services/menuService';
-import { departmentService } from '@/lib/services/departmentService';
+import { DepartmentService } from '@/lib/services/departmentService';
+import AssignmentRulesManager from '@/components/AssignmentRulesManager';
 
 export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -431,7 +432,7 @@ export default function SettingsPage() {
         permissionService.list().catch(() => []),
         policyService.list().catch(() => []),
         menuService.listItems().catch(() => ({ success: false, data: [] })),
-        departmentService.list().catch(() => ({ success: false, data: [] })),
+        DepartmentService.getDepartments().catch(() => ({ success: false, data: [] })),
       ]);
       setRoles(r);
       setPermissions(p);
@@ -1193,7 +1194,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
             General
@@ -1213,6 +1214,10 @@ export default function SettingsPage() {
           <TabsTrigger value="tasks" className="flex items-center gap-2">
             <Workflow className="h-4 w-4" />
             Tasks
+          </TabsTrigger>
+          <TabsTrigger value="assignment" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Assignment
           </TabsTrigger>
         </TabsList>
 
@@ -1543,6 +1548,11 @@ export default function SettingsPage() {
               </AccordionContent>
             </AccordionItem>
           </Accordion>
+        </TabsContent>
+
+        {/* Assignment Rules Settings */}
+        <TabsContent value="assignment" className="space-y-6">
+          <AssignmentRulesManager />
         </TabsContent>
 
         {/* Task Status Dialog */}

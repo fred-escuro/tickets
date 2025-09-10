@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, requireAgent, authorize, authorizePermission } from '../middleware/auth';
 import { CreateTicketRequest, UpdateTicketRequest, TicketFilters, ApiResponse, TicketSource } from '../types';
+import { AutoAssignmentService } from '../services/autoAssignmentService';
 
 const router = Router();
 
@@ -17,6 +18,8 @@ router.get('/', authenticate, authorizePermission('tickets:read'), async (req, r
       ticketNumber,
       assignedTo,
       submittedBy,
+      department,
+      assignedToDepartment,
       dateFrom,
       dateTo,
       search,
@@ -87,6 +90,31 @@ router.get('/', authenticate, authorizePermission('tickets:read'), async (req, r
     if (assignedTo) where.assignedTo = assignedTo;
     if (submittedBy) where.submittedBy = submittedBy;
 
+    // Department filtering
+    if (department) {
+      // Filter by submitter's department
+      where.submitter = {
+        departmentEntity: {
+          name: {
+            equals: department as string,
+            mode: 'insensitive'
+          }
+        }
+      };
+    }
+    
+    if (assignedToDepartment) {
+      // Filter by assignee's department
+      where.assignee = {
+        departmentEntity: {
+          name: {
+            equals: assignedToDepartment as string,
+            mode: 'insensitive'
+          }
+        }
+      };
+    }
+
     // Ticket number filter - support exact or prefix (e.g., '1' matches 1, 10, 100...)
     if (ticketNumber) {
       const raw = (ticketNumber as string).toString();
@@ -137,7 +165,14 @@ router.get('/', authenticate, authorizePermission('tickets:read'), async (req, r
             lastName: true,
             middleName: true,
             email: true,
-            avatar: true
+            avatar: true,
+            departmentEntity: {
+              select: {
+                id: true,
+                name: true,
+                description: true
+              }
+            }
           }
         },
         assignee: {
@@ -147,7 +182,14 @@ router.get('/', authenticate, authorizePermission('tickets:read'), async (req, r
             lastName: true,
             middleName: true,
             email: true,
-            avatar: true
+            avatar: true,
+            departmentEntity: {
+              select: {
+                id: true,
+                name: true,
+                description: true
+              }
+            }
           }
         },
         status: {
@@ -232,7 +274,14 @@ router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req
             middleName: true,
             email: true,
             avatar: true,
-            departmentId: true
+            departmentId: true,
+            departmentEntity: {
+              select: {
+                id: true,
+                name: true,
+                description: true
+              }
+            }
           }
         },
         assignee: {
@@ -243,7 +292,14 @@ router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req
             middleName: true,
             email: true,
             avatar: true,
-            departmentId: true
+            departmentId: true,
+            departmentEntity: {
+              select: {
+                id: true,
+                name: true,
+                description: true
+              }
+            }
           }
         },
         status: {
@@ -380,14 +436,73 @@ router.post('/', authenticate, authorizePermission('tickets:write'), async (req,
             email: true,
             avatar: true
           }
-        }
+        },
+        category: true,
+        priority: true,
+        status: true
       }
     });
+
+    // Attempt auto-assignment
+    let assignmentResult = null;
+    try {
+      assignmentResult = await AutoAssignmentService.assignTicket(ticket.id);
+      
+      if (assignmentResult.success) {
+        // Update agent's last assignment time
+        await AutoAssignmentService.updateAgentAssignmentTime(assignmentResult.assignedTo!);
+        
+        // Fetch updated ticket with assignee information
+        const updatedTicket = await prisma.ticket.findUnique({
+          where: { id: ticket.id },
+          include: {
+            submitter: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                email: true,
+                avatar: true
+              }
+            },
+            assignee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                email: true,
+                avatar: true
+              }
+            },
+            category: true,
+            priority: true,
+            status: true
+          }
+        });
+
+        return res.status(201).json({
+          success: true,
+          data: updatedTicket,
+          message: `Ticket created and auto-assigned successfully via ${assignmentResult.method}`,
+          assignment: {
+            success: true,
+            method: assignmentResult.method,
+            assignedTo: assignmentResult.assignedTo
+          }
+        });
+      }
+    } catch (assignmentError) {
+      console.error('Auto-assignment failed:', assignmentError);
+      // Continue with ticket creation even if auto-assignment fails
+    }
 
     return res.status(201).json({
       success: true,
       data: ticket,
-      message: 'Ticket created successfully'
+      message: 'Ticket created successfully' + (assignmentResult ? ` (Auto-assignment: ${assignmentResult.reason || assignmentResult.error})` : ''),
+      assignment: assignmentResult || { success: false, reason: 'Auto-assignment not attempted' }
     });
   } catch (error) {
     console.error('Create ticket error:', error);
