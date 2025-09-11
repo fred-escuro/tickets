@@ -79,7 +79,8 @@ export async function seedMenu() {
     await createMenu('Calendar', 1, { parentId: tools.id, path: '/calendar', icon: 'Calendar', permissionKeys: ['tickets:read'] });
     await createMenu('Reports', 2, { parentId: tools.id, path: '/reports', icon: 'BarChart3', permissionKeys: ['reports:read'] });
     await createMenu('Knowledge Base', 3, { parentId: tools.id, path: '/knowledge-base', icon: 'Headphones', permissionKeys: ['knowledge:read'] });
-    await createMenu('User Management', 4, { parentId: tools.id, path: '/admin/users', icon: 'Shield', permissionKeys: ['users:write'] });
+    await createMenu('Email Logs', 4, { parentId: tools.id, path: '/email-logs', icon: 'Mail', permissionKeys: ['tickets:read'] });
+    await createMenu('User Management', 5, { parentId: tools.id, path: '/admin/users', icon: 'Shield', permissionKeys: ['users:write'] });
 
     // Settings items (grouped under Settings section)
     await createMenu('General', 1, { parentId: settings.id, path: '/settings', icon: 'Building2', permissionKeys: ['settings:write'] });

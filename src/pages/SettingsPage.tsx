@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Eye, EyeOff } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -16,13 +17,14 @@ import {
   Building2,
   Mail,
   Bell,
+  RefreshCw,
   Users,
   Ticket,
   Globe,
   Save,
-  RefreshCw,
   AlertCircle,
   CheckCircle,
+  XCircle,
   Download,
   Plus,
   Edit,
@@ -62,9 +64,108 @@ export default function SettingsPage() {
   const [branding, setBranding] = useState<{ appName: string; logoUrl?: string | null }>({ appName: 'TicketHub', logoUrl: null });
   const [companyNs, setCompanyNs] = useState<{ name: string; email: string; phone: string; address: string; timezone: string; language: string; currency: string; businessHours: { start: string; end: string; timezone?: string }; logoUrl?: string | null }>({ name: '', email: '', phone: '', address: '', timezone: 'UTC', language: 'en', currency: 'USD', businessHours: { start: '09:00', end: '17:00', timezone: 'UTC' }, logoUrl: null });
   const [smtp, setSmtp] = useState<{ host: string; port: number; secure: boolean; fromAddress: string; user: string; password: string }>({ host: '', port: 587, secure: false, fromAddress: '', user: '', password: '' });
-  const [inbound, setInbound] = useState<{ imapHost: string; imapPort: number; imapSecure: boolean; imapUser: string; imapPassword: string; folder: string; moveOnSuccessFolder: string; moveOnErrorFolder: string }>(
-    { imapHost: '', imapPort: 993, imapSecure: true, imapUser: '', imapPassword: '', folder: 'INBOX', moveOnSuccessFolder: 'Processed', moveOnErrorFolder: 'Errors' }
-  );
+  const [inbound, setInbound] = useState<{ 
+    imapHost: string; 
+    imapPort: number; 
+    imapSecure: boolean; 
+    imapUser: string; 
+    imapPassword: string; 
+    folder: string; 
+    moveOnSuccessFolder: string; 
+    moveOnErrorFolder: string;
+    // Email restrictions
+    domainRestrictionMode: 'allow_all' | 'disallow_all' | 'whitelist' | 'blacklist';
+    allowedDomains: string[];
+    blockedDomains: string[];
+    maxEmailsPerHour: number;
+    maxEmailsPerDay: number;
+    maxEmailsPerSender: number;
+    enableFloodingProtection: boolean;
+    enableSpamFilter: boolean;
+    requireValidFrom: boolean;
+    blockEmptySubjects: boolean;
+    blockAutoReplies: boolean;
+    enableRateLimiting: boolean;
+    rateLimitWindow: number; // in minutes
+    maxAttachments: number;
+    maxAttachmentSize: number; // in MB
+  }>({
+    imapHost: '', 
+    imapPort: 993, 
+    imapSecure: true, 
+    imapUser: '', 
+    imapPassword: '', 
+    folder: 'INBOX', 
+    moveOnSuccessFolder: 'Processed', 
+    moveOnErrorFolder: 'Errors',
+    // Default restrictions
+    domainRestrictionMode: 'allow_all',
+    allowedDomains: [],
+    blockedDomains: [],
+    maxEmailsPerHour: 100,
+    maxEmailsPerDay: 1000,
+    maxEmailsPerSender: 10,
+    enableFloodingProtection: true,
+    enableSpamFilter: true,
+    requireValidFrom: true,
+    blockEmptySubjects: false,
+    blockAutoReplies: true,
+    enableRateLimiting: true,
+    rateLimitWindow: 60,
+    maxAttachments: 10,
+    maxAttachmentSize: 25
+  });
+  
+  // Track password states separately to prevent clearing
+  const [smtpPasswordSet, setSmtpPasswordSet] = useState(false);
+  const [imapPasswordSet, setImapPasswordSet] = useState(false);
+  
+  // Password visibility states
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  const [showImapPassword, setShowImapPassword] = useState(false);
+  
+  // Email restrictions UI state
+  const [newAllowedDomain, setNewAllowedDomain] = useState('');
+  const [newBlockedDomain, setNewBlockedDomain] = useState('');
+  const [showRestrictionsHelp, setShowRestrictionsHelp] = useState(false);
+
+  // Helper functions for domain management
+  const addAllowedDomain = () => {
+    if (newAllowedDomain.trim() && !inbound.allowedDomains.includes(newAllowedDomain.trim())) {
+      setInbound(prev => ({
+        ...prev,
+        allowedDomains: [...prev.allowedDomains, newAllowedDomain.trim()]
+      }));
+      setNewAllowedDomain('');
+    }
+  };
+
+  const removeAllowedDomain = (domain: string) => {
+    setInbound(prev => ({
+      ...prev,
+      allowedDomains: prev.allowedDomains.filter(d => d !== domain)
+    }));
+  };
+
+  const addBlockedDomain = () => {
+    if (newBlockedDomain.trim() && !inbound.blockedDomains.includes(newBlockedDomain.trim())) {
+      setInbound(prev => ({
+        ...prev,
+        blockedDomains: [...prev.blockedDomains, newBlockedDomain.trim()]
+      }));
+      setNewBlockedDomain('');
+    }
+  };
+
+  const removeBlockedDomain = (domain: string) => {
+    setInbound(prev => ({
+      ...prev,
+      blockedDomains: prev.blockedDomains.filter(d => d !== domain)
+    }));
+  };
+  
+  // Folder status tracking
+  const [folderStatus, setFolderStatus] = useState<Record<string, { exists: boolean; messages?: number; error?: string }>>({});
   const [taskStatuses, setTaskStatuses] = useState<Array<{ id?: string; key: string; name: string; color?: string; sortOrder?: number }>>([]);
   const [taskPriorities, setTaskPriorities] = useState<Array<{ id?: string; key: string; name: string; color?: string; level?: number; sortOrder?: number }>>([]);
   const [taskMetaLoading, setTaskMetaLoading] = useState(false);
@@ -303,14 +404,37 @@ export default function SettingsPage() {
         });
         const s = res.data['email.smtp'] || {};
         setSmtp({ host: s.host || '', port: Number(s.port ?? 587), secure: !!s.secure, fromAddress: s.fromAddress || '', user: s.user || '', password: s.password || '' });
+        setSmtpPasswordSet(!!s.password);
         const n = res.data['notifications'] || {};
         setNotifyNs({ emailEnabled: !!n.emailEnabled, inAppEnabled: !!n.inAppEnabled, pushEnabled: !!n.pushEnabled, frequency: n.frequency || 'immediate' });
         const ib = res.data['email.inbound'] || {};
         setInbound({
-          imapHost: ib.imapHost || '', imapPort: Number(ib.imapPort ?? 993), imapSecure: !!ib.imapSecure,
-          imapUser: ib.imapUser || '', imapPassword: ib.imapPassword || '', folder: ib.folder || 'INBOX',
-          moveOnSuccessFolder: ib.moveOnSuccessFolder || 'Processed', moveOnErrorFolder: ib.moveOnErrorFolder || 'Errors'
+          imapHost: ib.imapHost || '', 
+          imapPort: Number(ib.imapPort ?? 993), 
+          imapSecure: !!ib.imapSecure,
+          imapUser: ib.imapUser || '', 
+          imapPassword: ib.imapPassword || '', 
+          folder: ib.folder || 'INBOX',
+          moveOnSuccessFolder: ib.moveOnSuccessFolder || 'Processed', 
+          moveOnErrorFolder: ib.moveOnErrorFolder || 'Errors',
+          // Load restriction settings
+          domainRestrictionMode: ib.domainRestrictionMode || 'allow_all',
+          allowedDomains: Array.isArray(ib.allowedDomains) ? ib.allowedDomains : [],
+          blockedDomains: Array.isArray(ib.blockedDomains) ? ib.blockedDomains : [],
+          maxEmailsPerHour: Number(ib.maxEmailsPerHour ?? 100),
+          maxEmailsPerDay: Number(ib.maxEmailsPerDay ?? 1000),
+          maxEmailsPerSender: Number(ib.maxEmailsPerSender ?? 10),
+          enableFloodingProtection: !!ib.enableFloodingProtection,
+          enableSpamFilter: !!ib.enableSpamFilter,
+          requireValidFrom: !!ib.requireValidFrom,
+          blockEmptySubjects: !!ib.blockEmptySubjects,
+          blockAutoReplies: !!ib.blockAutoReplies,
+          enableRateLimiting: !!ib.enableRateLimiting,
+          rateLimitWindow: Number(ib.rateLimitWindow ?? 60),
+          maxAttachments: Number(ib.maxAttachments ?? 10),
+          maxAttachmentSize: Number(ib.maxAttachmentSize ?? 25)
         });
+        setImapPasswordSet(!!ib.imapPassword);
         const ts = res.data['tasks'] || {};
         setSettings(prev => ({ ...(prev as any), tasks: ts } as any));
 
@@ -325,8 +449,6 @@ export default function SettingsPage() {
     
     // Log current user info for debugging
     const currentUser = AuthService.getCurrentUser();
-    console.log('Current user:', currentUser);
-    console.log('User role:', currentUser?.role);
   }, []);
 
   // Reset accordion state when switching tabs
@@ -402,16 +524,12 @@ export default function SettingsPage() {
   const loadTicketSystemData = async () => {
     try {
       setLoading(true);
-      console.log('Loading ticket system data...');
       const [categoriesData, prioritiesData, statusesData, templatesData] = await Promise.all([
         ticketSystemService.getCategories(),
         ticketSystemService.getPriorities(),
         ticketSystemService.getStatuses(),
         ticketSystemService.getTemplates()
       ]);
-      console.log('Categories loaded:', categoriesData);
-      console.log('Priorities loaded:', prioritiesData);
-      console.log('Statuses loaded:', statusesData);
       setCategories(categoriesData);
       setPriorities(prioritiesData);
       setStatuses(statusesData);
@@ -576,6 +694,10 @@ export default function SettingsPage() {
     try {
       const res = await settingsApi.updateNamespace('email.smtp', smtp as any);
       if (!res.success) throw new Error(res.error || 'Failed to save SMTP');
+      
+      // Update password state based on what was saved
+      setSmtpPasswordSet(!!smtp.password);
+      
       toast.success('SMTP settings saved');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to save SMTP');
@@ -586,6 +708,10 @@ export default function SettingsPage() {
     try {
       const res = await settingsApi.updateNamespace('email.inbound', inbound as any);
       if (!res.success) throw new Error(res.error || 'Failed to save inbound');
+      
+      // Update password state based on what was saved
+      setImapPasswordSet(!!inbound.imapPassword);
+      
       toast.success('Inbound settings saved');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to save inbound');
@@ -599,6 +725,65 @@ export default function SettingsPage() {
       toast.success('Notification settings saved');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to save notifications');
+    }
+  };
+
+  const reloadSettings = async () => {
+    try {
+      // Clear cache and reload settings
+      settingsApi.clearCache();
+      
+      // Reload all settings
+      const res = await settingsApi.getNamespaces(['branding','company','email.smtp','email.inbound','notifications','auth.google']);
+      if (res.success && res.data) {
+        const b = res.data['branding'] || {};
+        setBranding({ appName: b.appName || b.name || 'TicketHub', logoUrl: b.logoUrl || null });
+        const c = res.data['company'] || {};
+        setCompanyNs({
+          name: c.name || '', email: c.email || '', phone: c.phone || '', address: c.address || '',
+          timezone: c.timezone || 'UTC', language: c.language || 'en', currency: c.currency || 'USD',
+          businessHours: c.businessHours || { start: '09:00', end: '17:00', timezone: c.timezone || 'UTC' },
+          logoUrl: c.logoUrl || null
+        });
+        const s = res.data['email.smtp'] || {};
+        setSmtp({ host: s.host || '', port: Number(s.port ?? 587), secure: !!s.secure, fromAddress: s.fromAddress || '', user: s.user || '', password: s.password || '' });
+        setSmtpPasswordSet(!!s.password);
+        const n = res.data['notifications'] || {};
+        setNotifyNs({ emailEnabled: !!n.emailEnabled, inAppEnabled: !!n.inAppEnabled, pushEnabled: !!n.pushEnabled, frequency: n.frequency || 'immediate' });
+        const ib = res.data['email.inbound'] || {};
+        setInbound({
+          imapHost: ib.imapHost || '', 
+          imapPort: Number(ib.imapPort ?? 993), 
+          imapSecure: !!ib.imapSecure,
+          imapUser: ib.imapUser || '', 
+          imapPassword: ib.imapPassword || '', 
+          folder: ib.folder || 'INBOX',
+          moveOnSuccessFolder: ib.moveOnSuccessFolder || 'Processed', 
+          moveOnErrorFolder: ib.moveOnErrorFolder || 'Errors',
+          // Load restriction settings
+          domainRestrictionMode: ib.domainRestrictionMode || 'allow_all',
+          allowedDomains: Array.isArray(ib.allowedDomains) ? ib.allowedDomains : [],
+          blockedDomains: Array.isArray(ib.blockedDomains) ? ib.blockedDomains : [],
+          maxEmailsPerHour: Number(ib.maxEmailsPerHour ?? 100),
+          maxEmailsPerDay: Number(ib.maxEmailsPerDay ?? 1000),
+          maxEmailsPerSender: Number(ib.maxEmailsPerSender ?? 10),
+          enableFloodingProtection: !!ib.enableFloodingProtection,
+          enableSpamFilter: !!ib.enableSpamFilter,
+          requireValidFrom: !!ib.requireValidFrom,
+          blockEmptySubjects: !!ib.blockEmptySubjects,
+          blockAutoReplies: !!ib.blockAutoReplies,
+          enableRateLimiting: !!ib.enableRateLimiting,
+          rateLimitWindow: Number(ib.rateLimitWindow ?? 60),
+          maxAttachments: Number(ib.maxAttachments ?? 10),
+          maxAttachmentSize: Number(ib.maxAttachmentSize ?? 25)
+        });
+        setImapPasswordSet(!!ib.imapPassword);
+        const g = res.data['auth.google'] || {};
+        setGoogleAuth({ enabled: !!g.enabled, redirectUri: g.redirectUri || '', clientId: g.clientId || '', clientSecret: g.clientSecret || '' });
+      }
+      toast.success('Settings reloaded successfully');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to reload settings');
     }
   };
 
@@ -1144,14 +1329,24 @@ export default function SettingsPage() {
             </h1>
             <p className="text-muted-foreground">Configure your ticketing system preferences</p>
           </div>
-          <Button 
-            onClick={handleSave} 
-            disabled={isSaving}
-            className="flex items-center gap-2"
-          >
-            {getStatusIcon()}
-            {getStatusText()}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline"
+              onClick={reloadSettings}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Reload Settings
+            </Button>
+            <Button 
+              onClick={handleSave} 
+              disabled={isSaving}
+              className="flex items-center gap-2"
+            >
+              {getStatusIcon()}
+              {getStatusText()}
+            </Button>
+          </div>
         </div>
         
         {/* Search Bar and Controls */}
@@ -2044,6 +2239,70 @@ export default function SettingsPage() {
                 </div>
               </AccordionContent>
             </AccordionItem>
+
+            {/* Auto-Response Templates */}
+            <AccordionItem value="auto-response" className="border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-green-100 text-green-600">
+                    <Mail className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">Auto-Response Templates</h3>
+                    <p className="text-sm text-muted-foreground">Manage automated email responses for new tickets</p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.location.href = '/settings/auto-response';
+                      }}
+                    >
+                      <Settings className="h-4 w-4 mr-2" />
+                      Manage Templates
+                    </Button>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="space-y-4">
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h4 className="font-medium text-blue-900 mb-2">Auto-Response System</h4>
+                    <p className="text-sm text-blue-800 mb-3">
+                      Automatically send professional responses to users when they create tickets via email.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        onClick={() => window.location.href = '/settings/auto-response'}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        <Mail className="h-4 w-4 mr-2" />
+                        Manage Auto-Response Templates
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 border rounded-lg">
+                      <h5 className="font-medium mb-2">Template Management</h5>
+                      <p className="text-sm text-muted-foreground">Create, edit, and manage response templates</p>
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                      <h5 className="font-medium mb-2">Variable Support</h5>
+                      <p className="text-sm text-muted-foreground">Use dynamic variables like {'{{ticketNumber}}'}, {'{{submitterName}}'}</p>
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                      <h5 className="font-medium mb-2">Department Rules</h5>
+                      <p className="text-sm text-muted-foreground">Associate templates with specific departments</p>
+                    </div>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
           </Accordion>
         </TabsContent>
 
@@ -2437,19 +2696,71 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>From Address</Label>
-                    <Input value={smtp.fromAddress} onChange={(e) => setSmtp(prev => ({ ...prev, fromAddress: e.target.value }))} />
+                    <Input value={smtp.fromAddress} onChange={(e) => setSmtp(prev => ({ ...prev, fromAddress: e.target.value }))} placeholder="TicketHub <noreply@yourcompany.com>" />
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        Format: <code className="bg-muted px-1 rounded">"Display Name" &lt;email@domain.com&gt;</code> or <code className="bg-muted px-1 rounded">email@domain.com</code>
+                      </p>
+                      <details className="text-xs text-muted-foreground">
+                        <summary className="cursor-pointer hover:text-foreground">Examples and tips</summary>
+                        <div className="mt-2 space-y-1 pl-2 border-l-2 border-muted">
+                          <p><strong>Valid formats:</strong></p>
+                          <ul className="list-disc list-inside space-y-1 ml-2">
+                            <li><code className="bg-muted px-1 rounded">"TicketHub" &lt;noreply@yourcompany.com&gt;</code></li>
+                            <li><code className="bg-muted px-1 rounded">"Support Team" &lt;support@yourcompany.com&gt;</code></li>
+                            <li><code className="bg-muted px-1 rounded">noreply@yourcompany.com</code></li>
+                          </ul>
+                          <p><strong>Invalid formats:</strong></p>
+                          <ul className="list-disc list-inside space-y-1 ml-2">
+                            <li><code className="bg-muted px-1 rounded">TicketHub (noreply@yourcompany.com)</code> ❌</li>
+                            <li><code className="bg-muted px-1 rounded">TicketHub noreply@yourcompany.com</code> ❌</li>
+                          </ul>
+                        </div>
+                      </details>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 mt-8">
                     <Switch id="smtp-secure" checked={smtp.secure} onCheckedChange={(c) => setSmtp(prev => ({ ...prev, secure: !!c }))} />
                     <Label htmlFor="smtp-secure">Use TLS/SSL</Label>
                   </div>
-                  <div className="space-y-2 col-span-2">
+                  <div className="space-y-2">
                     <Label>User</Label>
-                    <Input value={smtp.user} onChange={(e) => setSmtp(prev => ({ ...prev, user: e.target.value }))} />
+                    <Input 
+                      value={smtp.user} 
+                      onChange={(e) => setSmtp(prev => ({ ...prev, user: e.target.value }))} 
+                      placeholder="Enter SMTP username"
+                    />
                   </div>
-                  <div className="space-y-2 col-span-2">
+                  <div className="space-y-2">
                     <Label>Password</Label>
-                    <Input type="password" value={smtp.password} onChange={(e) => setSmtp(prev => ({ ...prev, password: e.target.value }))} />
+                    <div className="relative">
+                      <Input 
+                        type={showSmtpPassword ? "text" : "password"} 
+                        value={smtp.password} 
+                        onChange={(e) => {
+                          setSmtp(prev => ({ ...prev, password: e.target.value }));
+                          setSmtpPasswordSet(!!e.target.value);
+                        }} 
+                        placeholder={smtpPasswordSet ? "••••••••" : "Enter SMTP password"}
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowSmtpPassword(!showSmtpPassword)}
+                      >
+                        {showSmtpPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
+                    {smtpPasswordSet && (
+                      <p className="text-xs text-muted-foreground">Password is set</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
@@ -2501,35 +2812,558 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Folder</Label>
-                    <Input value={inbound.folder} onChange={(e) => setInbound(prev => ({ ...prev, folder: e.target.value }))} />
+                    <div className="relative">
+                      <Input value={inbound.folder} onChange={(e) => setInbound(prev => ({ ...prev, folder: e.target.value }))} />
+                      {folderStatus[inbound.folder] && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          {folderStatus[inbound.folder].exists ? (
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-600" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {folderStatus[inbound.folder] && !folderStatus[inbound.folder].exists && (
+                      <p className="text-xs text-red-600">Folder does not exist on server</p>
+                    )}
                   </div>
-                  <div className="space-y-2 col-span-2">
+                  <div className="space-y-2">
                     <Label>User</Label>
-                    <Input value={inbound.imapUser} onChange={(e) => setInbound(prev => ({ ...prev, imapUser: e.target.value }))} />
+                    <Input 
+                      value={inbound.imapUser} 
+                      onChange={(e) => setInbound(prev => ({ ...prev, imapUser: e.target.value }))} 
+                      placeholder="Enter IMAP username"
+                    />
                   </div>
-                  <div className="space-y-2 col-span-2">
+                  <div className="space-y-2">
                     <Label>Password</Label>
-                    <Input type="password" value={inbound.imapPassword} onChange={(e) => setInbound(prev => ({ ...prev, imapPassword: e.target.value }))} />
+                    <div className="relative">
+                      <Input 
+                        type={showImapPassword ? "text" : "password"} 
+                        value={inbound.imapPassword} 
+                        onChange={(e) => {
+                          setInbound(prev => ({ ...prev, imapPassword: e.target.value }));
+                          setImapPasswordSet(!!e.target.value);
+                        }} 
+                        placeholder={imapPasswordSet ? "••••••••" : "Enter IMAP password"}
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowImapPassword(!showImapPassword)}
+                      >
+                        {showImapPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
+                    {imapPasswordSet && (
+                      <p className="text-xs text-muted-foreground">Password is set</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Move to (Success)</Label>
-                    <Input value={inbound.moveOnSuccessFolder} onChange={(e) => setInbound(prev => ({ ...prev, moveOnSuccessFolder: e.target.value }))} />
+                    <div className="relative">
+                      <Input value={inbound.moveOnSuccessFolder} onChange={(e) => setInbound(prev => ({ ...prev, moveOnSuccessFolder: e.target.value }))} />
+                      {folderStatus[inbound.moveOnSuccessFolder] && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          {folderStatus[inbound.moveOnSuccessFolder].exists ? (
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-600" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {folderStatus[inbound.moveOnSuccessFolder] && !folderStatus[inbound.moveOnSuccessFolder].exists && (
+                      <p className="text-xs text-red-600">Folder does not exist on server</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Move to (Error)</Label>
-                    <Input value={inbound.moveOnErrorFolder} onChange={(e) => setInbound(prev => ({ ...prev, moveOnErrorFolder: e.target.value }))} />
+                    <div className="relative">
+                      <Input value={inbound.moveOnErrorFolder} onChange={(e) => setInbound(prev => ({ ...prev, moveOnErrorFolder: e.target.value }))} />
+                      {folderStatus[inbound.moveOnErrorFolder] && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          {folderStatus[inbound.moveOnErrorFolder].exists ? (
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-600" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {folderStatus[inbound.moveOnErrorFolder] && !folderStatus[inbound.moveOnErrorFolder].exists && (
+                      <p className="text-xs text-red-600">Folder does not exist on server</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-3 mt-4">
-                  <Button type="button" variant="secondary" onClick={async () => {
-                    try {
-                      const res = await settingsApi.runEmailIngest();
-                      if (!res.success) throw new Error(res.error || 'Failed');
-                      const d: any = res.data || {};
-                      toast.success(`Fetched ${d.fetched ?? 0}, created ${d.created ?? 0}, replies ${d.replies ?? 0}, skipped ${d.skipped ?? 0}, errors ${d.errors ?? 0}`);
-                    } catch (e: any) { toast.error(e?.message || 'Failed to ingest emails'); }
-                  }}>Fetch Emails Now</Button>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" onClick={async () => {
+                      try {
+                        // Get configured folders to check
+                        const checkFolders = [
+                          inbound.folder,
+                          inbound.moveOnSuccessFolder,
+                          inbound.moveOnErrorFolder
+                        ].filter(Boolean);
+                        
+                        const res = await settingsApi.testImapConnection(checkFolders);
+                        if (!res.success) throw new Error(res.error || 'Failed');
+                        const data: any = res.data || {};
+                        
+                        // Update folder status state
+                        setFolderStatus(data.folderStatus || {});
+                        
+                        // Check configured folders
+                        const configuredFolderChecks = checkFolders.map(folder => {
+                          const status = data.folderStatus?.[folder];
+                          if (status?.exists) {
+                            return `✅ ${folder} (${status.messages || 0} messages)`;
+                          } else {
+                            return `❌ ${folder} (${status?.error || 'not found'})`;
+                          }
+                        }).join('\n');
+                        
+                        // Show folder list
+                        const folderList = data.folders?.slice(0, 10).map((f: any) => f.name).join(', ') || 'None';
+                        
+                        toast.success(
+                          `IMAP connection successful!\n\nConfigured folders:\n${configuredFolderChecks}\n\nFound ${data.totalFolders} total folders:\n${folderList}`,
+                          { duration: 10000 }
+                        );
+                      } catch (e: any) { 
+                        toast.error(e?.message || 'Failed to test IMAP connection'); 
+                      }
+                    }}>Test IMAP</Button>
+                    <Button type="button" variant="secondary" onClick={async () => {
+                      try {
+                        const res = await settingsApi.runEmailIngest();
+                        if (!res.success) throw new Error(res.error || 'Failed');
+                        const d: any = res.data || {};
+                        toast.success(`Fetched ${d.fetched ?? 0}, created ${d.created ?? 0}, replies ${d.replies ?? 0}, skipped ${d.skipped ?? 0}, errors ${d.errors ?? 0}`);
+                      } catch (e: any) { toast.error(e?.message || 'Failed to ingest emails'); }
+                    }}>Fetch Emails Now</Button>
+                  </div>
                   <Button type="button" onClick={saveInbound}>Save Inbound</Button>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Email Restrictions & Security */}
+            <AccordionItem value="email-restrictions" className="border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-red-100 text-red-600">
+                    <AlertCircle className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">Email Security Settings</h3>
+                    <p className="text-sm text-muted-foreground">Control which domains can send emails to your system</p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowRestrictionsHelp(!showRestrictionsHelp);
+                      }}
+                    >
+                      <AlertCircle className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                {showRestrictionsHelp && (
+                  <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h4 className="font-medium text-blue-900 mb-2">Email Restrictions Help</h4>
+                    <div className="text-sm text-blue-800 space-y-1">
+                      <p><strong>Domain Restrictions:</strong> Control which domains can send emails to your system</p>
+                      <p><strong>Rate Limiting:</strong> Prevent email flooding and spam attacks</p>
+                      <p><strong>Content Filtering:</strong> Block emails based on content patterns</p>
+                      <p><strong>Attachment Limits:</strong> Control file uploads and sizes</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-8">
+                  {/* Domain Restrictions */}
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-lg font-medium mb-2">Email Domain Security</h4>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Choose how your system should handle incoming emails from different domains.
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <Label className="text-base font-medium">How should we handle incoming emails?</Label>
+                      <div className="space-y-3">
+                        <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                          <input
+                            type="radio"
+                            id="allow_all"
+                            name="domainMode"
+                            value="allow_all"
+                            checked={inbound.domainRestrictionMode === 'allow_all'}
+                            onChange={(e) => setInbound(prev => ({ ...prev, domainRestrictionMode: e.target.value as any }))}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <Label htmlFor="allow_all" className="font-medium cursor-pointer">
+                              Accept emails from any domain
+                            </Label>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              All domains are allowed. No restrictions on incoming emails.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                          <input
+                            type="radio"
+                            id="blacklist"
+                            name="domainMode"
+                            value="blacklist"
+                            checked={inbound.domainRestrictionMode === 'blacklist'}
+                            onChange={(e) => setInbound(prev => ({ ...prev, domainRestrictionMode: e.target.value as any }))}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <Label htmlFor="blacklist" className="font-medium cursor-pointer">
+                              Accept emails from any domain, but block these:
+                            </Label>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Allow all domains by default, but block specific problematic domains.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                          <input
+                            type="radio"
+                            id="whitelist"
+                            name="domainMode"
+                            value="whitelist"
+                            checked={inbound.domainRestrictionMode === 'whitelist'}
+                            onChange={(e) => setInbound(prev => ({ ...prev, domainRestrictionMode: e.target.value as any }))}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <Label htmlFor="whitelist" className="font-medium cursor-pointer">
+                              Only accept emails from these domains:
+                            </Label>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              High security mode. Only emails from approved domains will be processed.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                          <input
+                            type="radio"
+                            id="disallow_all"
+                            name="domainMode"
+                            value="disallow_all"
+                            checked={inbound.domainRestrictionMode === 'disallow_all'}
+                            onChange={(e) => setInbound(prev => ({ ...prev, domainRestrictionMode: e.target.value as any }))}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <Label htmlFor="disallow_all" className="font-medium cursor-pointer">
+                              Block all emails (emergency mode)
+                            </Label>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Complete email lockdown. No emails will be processed from any domain.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Disallow All Domains */}
+                    {inbound.domainRestrictionMode === 'disallow_all' && (
+                      <div className="space-y-3">
+                        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="h-5 w-5 text-red-600" />
+                            <div>
+                              <h4 className="font-medium text-red-900">All Domains Blocked</h4>
+                              <p className="text-sm text-red-700">No emails will be processed from any domain. This is the most restrictive setting.</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Whitelist Domains */}
+                    {inbound.domainRestrictionMode === 'whitelist' && (
+                      <div className="space-y-3">
+                        <Label>Allowed Domains (Whitelist)</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            value={newAllowedDomain}
+                            onChange={(e) => setNewAllowedDomain(e.target.value)}
+                            placeholder="Enter domain (e.g., company.com)"
+                            onKeyPress={(e) => e.key === 'Enter' && addAllowedDomain()}
+                          />
+                          <Button onClick={addAllowedDomain} disabled={!newAllowedDomain.trim()}>
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        {inbound.allowedDomains.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-sm text-muted-foreground">Currently Allowed Domains ({inbound.allowedDomains.length}):</p>
+                            <div className="flex flex-wrap gap-2">
+                              {inbound.allowedDomains.map((domain) => (
+                                <Badge key={domain} variant="secondary" className="flex items-center gap-1 px-2 py-1">
+                                  {domain}
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-4 w-4 p-0 hover:bg-secondary/20 rounded-full"
+                                    onClick={() => removeAllowedDomain(domain)}
+                                    title={`Remove ${domain} from whitelist`}
+                                  >
+                                    <XCircle className="h-3 w-3" />
+                                  </Button>
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Blacklist Domains */}
+                    {inbound.domainRestrictionMode === 'blacklist' && (
+                      <div className="space-y-3">
+                        <Label>Blocked Domains (Blacklist)</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            value={newBlockedDomain}
+                            onChange={(e) => setNewBlockedDomain(e.target.value)}
+                            placeholder="Enter domain to block (e.g., spam.com)"
+                            onKeyPress={(e) => e.key === 'Enter' && addBlockedDomain()}
+                          />
+                          <Button onClick={addBlockedDomain} disabled={!newBlockedDomain.trim()}>
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        {inbound.blockedDomains.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-sm text-muted-foreground">Currently Blocked Domains ({inbound.blockedDomains.length}):</p>
+                            <div className="flex flex-wrap gap-2">
+                              {inbound.blockedDomains.map((domain) => (
+                                <Badge key={domain} variant="destructive" className="flex items-center gap-1 px-2 py-1 bg-red-500 text-white hover:bg-red-600">
+                                  <span className="text-white font-medium">{domain}</span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-4 w-4 p-0 hover:bg-red-400/30 rounded-full text-white hover:text-white"
+                                    onClick={() => removeBlockedDomain(domain)}
+                                    title={`Remove ${domain} from blacklist`}
+                                  >
+                                    <XCircle className="h-3 w-3" />
+                                  </Button>
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  {/* Rate Limiting & Flooding Protection */}
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-medium">Rate Limiting & Flooding Protection</h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="flooding-protection">Enable Flooding Protection</Label>
+                          <p className="text-sm text-muted-foreground">Prevent email flooding attacks</p>
+                        </div>
+                        <Switch
+                          id="flooding-protection"
+                          checked={inbound.enableFloodingProtection}
+                          onCheckedChange={(checked) => setInbound(prev => ({ ...prev, enableFloodingProtection: checked }))}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="rate-limiting">Enable Rate Limiting</Label>
+                          <p className="text-sm text-muted-foreground">Limit emails per time window</p>
+                        </div>
+                        <Switch
+                          id="rate-limiting"
+                          checked={inbound.enableRateLimiting}
+                          onCheckedChange={(checked) => setInbound(prev => ({ ...prev, enableRateLimiting: checked }))}
+                        />
+                      </div>
+                    </div>
+
+                    {inbound.enableFloodingProtection && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>Max Emails per Hour</Label>
+                          <Input
+                            type="number"
+                            value={inbound.maxEmailsPerHour}
+                            onChange={(e) => setInbound(prev => ({ ...prev, maxEmailsPerHour: Number(e.target.value) || 0 }))}
+                            min="1"
+                            max="10000"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Max Emails per Day</Label>
+                          <Input
+                            type="number"
+                            value={inbound.maxEmailsPerDay}
+                            onChange={(e) => setInbound(prev => ({ ...prev, maxEmailsPerDay: Number(e.target.value) || 0 }))}
+                            min="1"
+                            max="100000"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Max Emails per Sender</Label>
+                          <Input
+                            type="number"
+                            value={inbound.maxEmailsPerSender}
+                            onChange={(e) => setInbound(prev => ({ ...prev, maxEmailsPerSender: Number(e.target.value) || 0 }))}
+                            min="1"
+                            max="1000"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {inbound.enableRateLimiting && (
+                      <div className="space-y-2">
+                        <Label>Rate Limit Window (minutes)</Label>
+                        <Input
+                          type="number"
+                          value={inbound.rateLimitWindow}
+                          onChange={(e) => setInbound(prev => ({ ...prev, rateLimitWindow: Number(e.target.value) || 60 }))}
+                          min="1"
+                          max="1440"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  {/* Content Filtering */}
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-medium">Content Filtering</h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="spam-filter">Enable Spam Filter</Label>
+                          <p className="text-sm text-muted-foreground">Basic spam detection</p>
+                        </div>
+                        <Switch
+                          id="spam-filter"
+                          checked={inbound.enableSpamFilter}
+                          onCheckedChange={(checked) => setInbound(prev => ({ ...prev, enableSpamFilter: checked }))}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="valid-from">Require Valid From Address</Label>
+                          <p className="text-sm text-muted-foreground">Block emails without valid sender</p>
+                        </div>
+                        <Switch
+                          id="valid-from"
+                          checked={inbound.requireValidFrom}
+                          onCheckedChange={(checked) => setInbound(prev => ({ ...prev, requireValidFrom: checked }))}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="empty-subjects">Block Empty Subjects</Label>
+                          <p className="text-sm text-muted-foreground">Reject emails without subject</p>
+                        </div>
+                        <Switch
+                          id="empty-subjects"
+                          checked={inbound.blockEmptySubjects}
+                          onCheckedChange={(checked) => setInbound(prev => ({ ...prev, blockEmptySubjects: checked }))}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="auto-replies">Block Auto-Replies</Label>
+                          <p className="text-sm text-muted-foreground">Filter out automated responses</p>
+                        </div>
+                        <Switch
+                          id="auto-replies"
+                          checked={inbound.blockAutoReplies}
+                          onCheckedChange={(checked) => setInbound(prev => ({ ...prev, blockAutoReplies: checked }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Attachment Limits */}
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-medium">Attachment Limits</h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Max Attachments per Email</Label>
+                        <Input
+                          type="number"
+                          value={inbound.maxAttachments}
+                          onChange={(e) => setInbound(prev => ({ ...prev, maxAttachments: Number(e.target.value) || 0 }))}
+                          min="0"
+                          max="50"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Max Attachment Size (MB)</Label>
+                        <Input
+                          type="number"
+                          value={inbound.maxAttachmentSize}
+                          onChange={(e) => setInbound(prev => ({ ...prev, maxAttachmentSize: Number(e.target.value) || 0 }))}
+                          min="1"
+                          max="1000"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 mt-6">
+                  <div className="text-sm text-muted-foreground">
+                    {inbound.domainRestrictionMode === 'allow_all' && '✅ All domains are allowed'}
+                    {inbound.domainRestrictionMode === 'disallow_all' && '🚫 All domains are blocked (emergency mode)'}
+                    {inbound.domainRestrictionMode === 'whitelist' && `🔐 Only ${inbound.allowedDomains.length} approved domains allowed`}
+                    {inbound.domainRestrictionMode === 'blacklist' && `⚠️ All domains allowed, ${inbound.blockedDomains.length} domains blocked`}
+                  </div>
+                  <Button type="button" onClick={saveInbound}>Save Restrictions</Button>
                 </div>
               </AccordionContent>
             </AccordionItem>

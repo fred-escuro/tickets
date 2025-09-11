@@ -38,7 +38,6 @@ async function resetAndSeed() {
           lastName: 'Admin',
           email: 'admin@tickethub.com',
           password: hashedPassword,
-          departmentId: null,
           isAgent: true,
           skills: {
             technical: ['System Administration', 'Database Management', 'Security'],
@@ -53,7 +52,6 @@ async function resetAndSeed() {
           lastName: 'Manager',
           email: 'manager@tickethub.com',
           password: hashedPassword,
-          departmentId: null,
           isAgent: true,
           skills: {
             technical: ['Customer Support', 'Process Management', 'Analytics'],
@@ -68,7 +66,6 @@ async function resetAndSeed() {
           lastName: 'Agent',
           email: 'agent@tickethub.com',
           password: hashedPassword,
-          departmentId: null,
           isAgent: true,
           skills: {
             technical: ['Hardware Support', 'Software Troubleshooting', 'Network Issues'],
@@ -83,7 +80,6 @@ async function resetAndSeed() {
           lastName: 'Developer',
           email: 'developer@tickethub.com',
           password: hashedPassword,
-          departmentId: null,
           isAgent: true,
           skills: {
             technical: ['JavaScript', 'React', 'Node.js', 'Database Design'],
@@ -98,7 +94,6 @@ async function resetAndSeed() {
           lastName: 'Customer',
           email: 'customer@tickethub.com',
           password: hashedPassword,
-          departmentId: null,
           isAgent: false,
           avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face'
         }
@@ -109,7 +104,6 @@ async function resetAndSeed() {
           lastName: 'User',
           email: 'user@tickethub.com',
           password: hashedPassword,
-          departmentId: null,
           isAgent: false,
           avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face'
         }
@@ -148,6 +142,44 @@ async function resetAndSeed() {
     }
     
     console.log('✅ Roles assigned to users');
+
+    // Assign users to multiple departments
+    console.log('🏢 Assigning users to departments...');
+    const departments = await prisma.department.findMany();
+    const departmentMap = new Map(departments.map(d => [d.name, d.id]));
+    
+    // Define department assignments for each user
+    const departmentAssignments = [
+      { userIndex: 0, departments: ['IT Support', 'Management'], primary: 'IT Support' }, // John Admin
+      { userIndex: 1, departments: ['Customer Support', 'Management'], primary: 'Management' }, // Sarah Manager
+      { userIndex: 2, departments: ['IT Support', 'Customer Support'], primary: 'IT Support' }, // Mike Agent
+      { userIndex: 3, departments: ['IT Support', 'Development'], primary: 'Development' }, // Emily Developer
+      { userIndex: 4, departments: ['Customer Support'], primary: 'Customer Support' }, // David Customer
+      { userIndex: 5, departments: ['Customer Support'], primary: 'Customer Support' } // Lisa User
+    ];
+    
+    for (const assignment of departmentAssignments) {
+      const user = users[assignment.userIndex];
+      
+      for (const deptName of assignment.departments) {
+        const departmentId = departmentMap.get(deptName);
+        
+        if (user && departmentId) {
+          await prisma.userDepartment.create({
+            data: {
+              userId: user.id,
+              departmentId: departmentId,
+              isPrimary: deptName === assignment.primary,
+              role: assignment.userIndex === 0 ? 'admin' : 
+                    assignment.userIndex === 1 ? 'manager' : 
+                    assignment.userIndex === 2 || assignment.userIndex === 3 ? 'specialist' : 'member'
+            }
+          });
+        }
+      }
+    }
+    
+    console.log('✅ Users assigned to departments');
 
     // Create ticket categories
     console.log('📁 Creating ticket categories...');

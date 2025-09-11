@@ -36,7 +36,14 @@ export class AutoAssignmentService {
           category: true,
           priority: true,
           submitter: {
-            select: { departmentId: true }
+            select: { 
+              departments: {
+                select: {
+                  departmentId: true,
+                  isPrimary: true
+                }
+              }
+            }
           }
         }
       });
@@ -262,7 +269,7 @@ export class AutoAssignmentService {
    * Assigns ticket using round-robin strategy
    */
   private static async assignRoundRobin(ticket: any, rule: AssignmentRule): Promise<AssignmentResult> {
-    const departmentId = rule.targetDepartmentId || ticket.submitter?.departmentId;
+    const departmentId = rule.targetDepartmentId || ticket.submitter?.departments?.find((d: any) => d.isPrimary)?.departmentId;
     
     if (!departmentId) {
       return { success: false, error: 'No department context for round-robin assignment' };
@@ -288,7 +295,7 @@ export class AutoAssignmentService {
    * Assigns ticket based on workload balance
    */
   private static async assignByWorkload(ticket: any, rule: AssignmentRule): Promise<AssignmentResult> {
-    const departmentId = rule.targetDepartmentId || ticket.submitter?.departmentId;
+    const departmentId = rule.targetDepartmentId || ticket.submitter?.departments?.find((d: any) => d.isPrimary)?.departmentId;
     
     if (!departmentId) {
       return { success: false, error: 'No department context for workload assignment' };
@@ -316,7 +323,11 @@ export class AutoAssignmentService {
   private static async getAvailableAgents(departmentId: string) {
     return await prisma.user.findMany({
       where: {
-        departmentId,
+        departments: {
+          some: {
+            departmentId
+          }
+        },
         isAgent: true,
         isAvailable: true
       },

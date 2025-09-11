@@ -155,7 +155,18 @@ router.get('/', authenticate, async (req, res) => {
             middleName: true,
             email: true,
             // role column deprecated; include roles relation if needed
-            departmentId: true,
+            departments: {
+              select: {
+                isPrimary: true,
+                role: true,
+                department: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                }
+              }
+            },
             avatar: true,
             isAgent: true,
             createdAt: true

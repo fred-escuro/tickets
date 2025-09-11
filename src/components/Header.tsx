@@ -22,7 +22,8 @@ import {
   Bell,
   Wrench,
   Menu,
-  CheckSquare
+  CheckSquare,
+  Mail
 } from 'lucide-react';
 import { type FC, useState, useEffect, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -30,6 +31,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { Profile } from './Profile';
 import { GlobalSearch } from './GlobalSearch';
 import { NotificationDropdown } from './NotificationDropdown';
+import { LoginDialog } from './LoginDialog';
 import { menuService, type MenuItemDto } from '@/lib/services/menuService';
 import { settingsApi, type SystemSettingsDto } from '@/lib/services/settingsApi';
 import { buildApiUrl } from '@/lib/api';
@@ -39,6 +41,7 @@ export const Header: FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(AuthService.getCurrentUser());
   const [branding, setBranding] = useState<Pick<SystemSettingsDto, 'appName' | 'appLogoUrl'>>({ appName: 'TicketHub', appLogoUrl: null });
+  const [showLoginDialog, setShowLoginDialog] = useState(false);
   // Pinned/click state for collapsed sidebar
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -71,7 +74,7 @@ export const Header: FC = () => {
     let isMounted = true;
     const loadBranding = async () => {
       try {
-        const v2 = await settingsApi.getNamespaces(['branding']);
+        const v2 = await settingsApi.preloadBranding();
         if (isMounted && v2.success && v2.data) {
           const b = v2.data['branding'] || {};
           const appName = b.appName || b.name || 'TicketHub';
@@ -114,10 +117,18 @@ export const Header: FC = () => {
       checkAuth();
     };
     
+    // Listen for auth expired events specifically
+    const handleAuthExpired = () => {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setShowLoginDialog(true);
+    };
+    
     // Also check auth periodically to catch any missed events
     const interval = setInterval(checkAuth, 30000); // Check every 30 seconds instead of every second
     
     window.addEventListener('auth-change', handleAuthChange);
+    window.addEventListener('auth-expired', handleAuthExpired);
     
     // Also check on mount
     checkAuth();
@@ -125,6 +136,7 @@ export const Header: FC = () => {
     return () => {
       window.removeEventListener('storage', checkAuth);
       window.removeEventListener('auth-change', handleAuthChange);
+      window.removeEventListener('auth-expired', handleAuthExpired);
       clearInterval(interval);
     };
   }, []);
@@ -159,6 +171,7 @@ export const Header: FC = () => {
     Ticket,
     Bell,
     CheckSquare,
+    Mail,
   } as Record<string, any>), []);
 
   // Helpers to extract sections by label from hierarchical menu
@@ -470,6 +483,17 @@ export const Header: FC = () => {
           </p>
         </div>
       )} */}
+
+      {/* Login Dialog for expired authentication */}
+      <LoginDialog
+        isOpen={showLoginDialog}
+        onClose={() => setShowLoginDialog(false)}
+        onLoginSuccess={() => {
+          setShowLoginDialog(false);
+          setIsAuthenticated(true);
+          setCurrentUser(AuthService.getCurrentUser());
+        }}
+      />
     </>
   );
 };

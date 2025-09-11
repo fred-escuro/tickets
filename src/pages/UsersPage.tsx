@@ -10,12 +10,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 import { OrganizationChart } from '@/components/OrganizationChart';
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
-import { ArrowLeft, Search, Filter, Mail, Phone, MapPin, Users, Network, Shield, Wrench, Loader2, AlertCircle, Plus } from 'lucide-react';
+import { ArrowLeft, Search, Filter, Mail, Phone, MapPin, Users, Network, Shield, Wrench, Loader2, AlertCircle, Plus, Star, Building2 } from 'lucide-react';
 import { useState, useEffect, type FC } from 'react';
 import { Link } from 'react-router-dom';
 import { useApi } from '@/hooks/useApi';
-import { UserService, type SupportAgent, type User, type CreateUserData, type UpdateUserData, type DepartmentOption, USER_ROLES, USER_DEPARTMENTS } from '@/lib/services/userService';
+import { UserService, USER_ROLES, LEGACY_USER_DEPARTMENTS } from '@/lib/services/userService';
+import type { SupportAgent, User, CreateUserData, UpdateUserData, DepartmentOption, UserDepartment } from '@/lib/services/userService';
+import { MultipleDepartmentsSelector } from '@/components/MultipleDepartmentsSelector';
 import { roleService, type Role as RbacRole } from '@/lib/services/roleService';
+import { AuthService } from '@/lib/services/authService';
 
 const getDepartmentBadgeColor = (department: string) => {
   switch (department) {
@@ -54,7 +57,7 @@ export const UsersPage: FC = () => {
     email: '',
     password: '',
     role: 'user',
-    department: '',
+    departments: [] as UserDepartment[],
     phone: '',
     location: '',
     isAgent: false,
@@ -132,17 +135,17 @@ export const UsersPage: FC = () => {
   // Get unique departments for filter
   const departments = (departmentsApi.length > 0
     ? departmentsApi.map(d => d.name)
-    : Array.from(new Set(users.map(user => user.departmentEntity?.name).filter((dept): dept is string => !!dept))).sort());
+    : Array.from(new Set(users.flatMap(user => user.departments?.map(d => d.department.name) || []))).sort());
 
   // Filter users based on search and department
   const filteredUsers = users.filter((user) => {
     const fullName = user.middleName ? `${user.firstName} ${user.middleName} ${user.lastName}` : `${user.firstName} ${user.lastName}`;
     const matchesSearch = fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (user.departmentEntity?.name && user.departmentEntity.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                         (user.departments?.some(d => d.department.name.toLowerCase().includes(searchQuery.toLowerCase()))) ||
                          (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
                          (user.role && user.role.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    const matchesDepartment = filterDepartment === 'all' || (user.departmentEntity?.name && user.departmentEntity.name === filterDepartment);
+    const matchesDepartment = filterDepartment === 'all' || (user.departments?.some(d => d.department.name === filterDepartment));
     const matchesRole = filterRole === 'all' || 
                        (filterRole === 'agent' && user.isAgent) ||
                        (filterRole === 'customer' && !user.isAgent);
@@ -160,12 +163,15 @@ export const UsersPage: FC = () => {
         email: formData.email,
         password: formData.password,
         role: 'user',
-        department: formData.department || undefined,
-        // attempt to map by name to id if known
-        departmentId: (departmentsApi.find(d => d.name === formData.department)?.id) || undefined,
+        departments: formData.departments.map(dept => ({
+          departmentId: dept.department.id,
+          isPrimary: dept.isPrimary,
+          role: dept.role
+        })),
         phone: formData.phone || undefined,
         avatar: formData.avatar || undefined,
-        location: formData.location || undefined
+        location: formData.location || undefined,
+        isAgent: formData.isAgent
       };
 
       const response = await UserService.createUser(createData);
@@ -187,7 +193,7 @@ export const UsersPage: FC = () => {
           email: '',
           password: '',
           role: 'user',
-          department: '',
+          departments: [],
           phone: '',
           location: '',
           isAgent: false,
@@ -214,11 +220,15 @@ export const UsersPage: FC = () => {
         lastName: formData.lastName,
         middleName: formData.middleName || undefined,
         role: formData.role,
-        department: formData.department || undefined,
-        departmentId: (departmentsApi.find(d => d.name === formData.department)?.id) || undefined,
+        departments: formData.departments.map(dept => ({
+          departmentId: dept.department.id,
+          isPrimary: dept.isPrimary,
+          role: dept.role
+        })),
         phone: formData.phone || undefined,
         avatar: formData.avatar || undefined,
         location: formData.location || undefined,
+        isAgent: formData.isAgent,
         // include password only if provided
         ...(formData.password ? { password: formData.password } : {})
       };
@@ -251,7 +261,7 @@ export const UsersPage: FC = () => {
           email: '',
           password: '',
           role: 'user',
-          department: '',
+          departments: [],
           phone: '',
           location: '',
           isAgent: false,
@@ -277,7 +287,7 @@ export const UsersPage: FC = () => {
       email: user.email,
       password: '',
       role: user.role,
-      department: user.departmentEntity?.name || '',
+      departments: user.departments || [],
       phone: user.phone || '',
       location: user.location || '',
       isAgent: user.isAgent,
@@ -294,7 +304,7 @@ export const UsersPage: FC = () => {
       email: '',
       password: '',
       role: 'user',
-      department: '',
+      departments: [],
       phone: '',
       location: '',
       isAgent: false,
@@ -455,7 +465,7 @@ export const UsersPage: FC = () => {
                     >
                       {/* Hover background overlay */}
                       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                      <CardContent className="p-6 relative z-10">
+                      <CardContent className="p-4 relative z-10">
                         <div className="flex items-start space-x-4">
                           <div className="flex-shrink-0">
                             <div className="group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg">
@@ -469,36 +479,89 @@ export const UsersPage: FC = () => {
                             </div>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center justify-between mb-1">
                               <h3 className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors duration-300">
                                 {user.middleName ? `${user.firstName} ${user.middleName} ${user.lastName}` : `${user.firstName} ${user.lastName}`}
                               </h3>
-                              <div className="flex items-center gap-2">
-                                {/* RBAC primary role only */}
-                                {Array.isArray((user as any).roles) && (user as any).roles.length > 0 && (
-                                  <Badge className="border-indigo-600 bg-indigo-50 text-indigo-700 text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm">
-                                    {((user as any).roles.find((r: any) => r.isPrimary) || (user as any).roles[0]).role?.name || 'Role'}
-                                  </Badge>
-                                )}
-                              </div>
                             </div>
                             
-                            {user.departmentEntity && (
-                              <Badge className={`${getDepartmentBadgeColor(user.departmentEntity.name)} text-xs mb-3 group-hover:scale-105 transition-transform duration-300 shadow-sm`}>
-                                {user.departmentEntity.name}
-                              </Badge>
+                            {/* Email Section */}
+                            {user.email && (
+                              <div className="flex items-center text-xs text-muted-foreground group-hover:text-muted-foreground/80 transition-colors duration-300 mb-1">
+                                <Mail className="h-3 w-3 mr-2 group-hover:translate-x-1 transition-transform duration-300" />
+                                <span className="truncate">{user.email}</span>
+                              </div>
                             )}
                             
-
+                            {/* Phone Section */}
+                            {user.phone && (
+                              <div className="flex items-center text-xs text-muted-foreground group-hover:text-muted-foreground/80 transition-colors duration-300 mb-2">
+                                <Phone className="h-3 w-3 mr-2 group-hover:translate-x-1 transition-transform duration-300" />
+                                <span className="truncate">{user.phone}</span>
+                              </div>
+                            )}
                             
-                            <div className="space-y-1">
-                              {user.email && (
-                                <div className="flex items-center text-xs text-muted-foreground group-hover:text-muted-foreground/80 transition-colors duration-300">
-                                  <Mail className="h-3 w-3 mr-2 group-hover:translate-x-1 transition-transform duration-300" />
-                                  <span className="truncate">{user.email}</span>
+                            {/* Role and Status in 2 columns */}
+                            <div className="grid grid-cols-2 gap-3 mb-2">
+                              {/* RBAC Role Section */}
+                              {Array.isArray((user as any).roles) && (user as any).roles.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-1 mb-1">
+                                    <Shield className="h-3 w-3 text-muted-foreground" />
+                                    <span className="text-xs font-medium text-muted-foreground">Role</span>
+                                  </div>
+                                  <Badge className="border-indigo-600 bg-indigo-50 text-indigo-700 dark:border-indigo-300 dark:bg-indigo-100 dark:text-indigo-800 text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm">
+                                    {((user as any).roles.find((r: any) => r.isPrimary) || (user as any).roles[0]).role?.name || 'Role'}
+                                  </Badge>
+                                </div>
+                              )}
+                              
+                              {/* Support Agent Badge */}
+                              {user.isAgent && (
+                                <div>
+                                  <div className="flex items-center gap-1 mb-1">
+                                    <Users className="h-3 w-3 text-muted-foreground" />
+                                    <span className="text-xs font-medium text-muted-foreground">Status</span>
+                                  </div>
+                                  <Badge className="border-green-600 bg-green-50 text-green-700 dark:border-green-300 dark:bg-green-100 dark:text-green-800 text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm">
+                                    Support Agent
+                                  </Badge>
                                 </div>
                               )}
                             </div>
+                            
+                            {/* Departments Section */}
+                            {user.departments && user.departments.length > 0 && (
+                              <div className="mb-2">
+                                <div className="flex items-center gap-1 mb-2">
+                                  <Building2 className="h-3 w-3 text-muted-foreground" />
+                                  <span className="text-xs font-medium text-muted-foreground">Departments</span>
+                                  <span className="text-xs text-muted-foreground/60">({user.departments.length})</span>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {user.departments.map((userDept, index) => (
+                                    <div key={userDept.department.id} className="flex flex-col gap-1">
+                                      <Badge 
+                                        className={`${getDepartmentBadgeColor(userDept.department.name)} text-xs font-medium group-hover:scale-105 transition-all duration-200 shadow-sm hover:shadow-md ${userDept.isPrimary ? 'ring-2 ring-primary/30 bg-primary/10' : 'hover:bg-opacity-80'}`}
+                                      >
+                                        <div className="flex items-center space-x-1">
+                                          <span>{userDept.department.name}</span>
+                                          {userDept.isPrimary && (
+                                            <Star className="h-3 w-3" />
+                                          )}
+                                        </div>
+                                      </Badge>
+                                      {userDept.role && (
+                                        <div className="text-xs text-muted-foreground/70 text-center">
+                                          {userDept.role}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
                           </div>
                         </div>
                       </CardContent>
@@ -545,7 +608,7 @@ export const UsersPage: FC = () => {
         }
         setShowCreateForm(open);
       }}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create New User</DialogTitle>
           </DialogHeader>
@@ -594,16 +657,6 @@ export const UsersPage: FC = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="password">Password *</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
                 {/* RBAC Role (optional) */}
                 <Label>RBAC Role</Label>
                 <Select value={selectedRoleIdCreate} onValueChange={setSelectedRoleIdCreate}>
@@ -617,6 +670,24 @@ export const UsersPage: FC = () => {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password *</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <MultipleDepartmentsSelector
+                departments={departmentsApi}
+                selectedDepartments={formData.departments}
+                onDepartmentsChange={(departments) => setFormData({ ...formData, departments })}
+              />
             </div>
 
             <div className="space-y-2">
@@ -645,21 +716,6 @@ export const UsersPage: FC = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="department">Department</Label>
-                <Select value={formData.department} onValueChange={(value) => setFormData({ ...formData, department: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={departmentsLoading ? 'Loading departments…' : 'Select department'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept} value={dept}>
-                        {dept}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
                 <Input
@@ -706,7 +762,7 @@ export const UsersPage: FC = () => {
 
       {/* Edit User Dialog */}
       <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
           </DialogHeader>
@@ -750,35 +806,6 @@ export const UsersPage: FC = () => {
                    disabled
                    className="bg-gray-50"
                  />
-                 {/* Email verification action (admin/users:write only) */}
-                 {(() => {
-                   const currentUser = JSON.parse(localStorage.getItem('user') || 'null') as any;
-                   const perms: string[] = Array.isArray(currentUser?.permissions) ? currentUser.permissions : [];
-                   const roles: string[] = Array.isArray(currentUser?.roles) ? currentUser.roles.map((r: any) => r?.role?.name) : [];
-                   const canVerify = perms.includes('users:write') || roles.includes('admin');
-                   if (!canVerify) return null;
-                   return (
-                     <div className="flex items-center gap-2 pt-1">
-                       <Button type="button" variant="outline" size="sm"
-                         onClick={async () => {
-                           if (!selectedUser) return;
-                           try {
-                             const res = await UserService.requestVerificationForUser(selectedUser.id);
-                             if (res.success) {
-                               toast.success('Verification email sent (if the account is unverified)');
-                             } else {
-                               toast.error(res.error || 'Failed to request verification');
-                             }
-                           } catch (e) {
-                             toast.error('Failed to request verification');
-                           }
-                         }}
-                       >
-                         Send verification email
-                       </Button>
-                     </div>
-                   );
-                 })()}
                </div>
              </div>
 
@@ -795,22 +822,38 @@ export const UsersPage: FC = () => {
                      ))}
                    </SelectContent>
                  </Select>
-                 </div>
-               <div className="space-y-2">
-                 <Label htmlFor="editDepartment">Department</Label>
-                 <Select value={formData.department} onValueChange={(value) => setFormData({ ...formData, department: value })}>
-                   <SelectTrigger>
-                     <SelectValue placeholder={departmentsLoading ? 'Loading departments…' : 'Select department'} />
-                   </SelectTrigger>
-                   <SelectContent>
-                     {departments.map((dept) => (
-                       <SelectItem key={dept} value={dept}>
-                         {dept}
-                       </SelectItem>
-                     ))}
-                   </SelectContent>
-                 </Select>
                </div>
+               <div className="space-y-2">
+                 {(() => {
+                   const currentUser = AuthService.getCurrentUser();
+                   const perms = currentUser?.permissions || [];
+                   const roleNames: string[] = Array.isArray(currentUser?.roles)
+                     ? currentUser.roles.map((ur: any) => ur?.role?.name).filter((n: any) => typeof n === 'string')
+                     : (currentUser?.role ? [currentUser.role] : []);
+                   const canEditPassword = perms.includes('users:write') || roleNames.includes('admin') || roleNames.includes('manager');
+                   if (!canEditPassword) return null;
+                   return (
+                     <div className="space-y-2">
+                       <Label htmlFor="editPassword">Password</Label>
+                       <Input
+                         id="editPassword"
+                         type="password"
+                         placeholder="Leave blank to keep unchanged"
+                         value={formData.password}
+                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                       />
+                     </div>
+                   );
+                 })()}
+               </div>
+             </div>
+
+             <div className="space-y-2">
+               <MultipleDepartmentsSelector
+                 departments={departmentsApi}
+                 selectedDepartments={formData.departments}
+                 onDepartmentsChange={(departments) => setFormData({ ...formData, departments })}
+               />
              </div>
 
                            <div className="space-y-2">
@@ -839,31 +882,6 @@ export const UsersPage: FC = () => {
               </div>
 
             {/* Password (only for users with users:write or admin) */}
-            {(() => {
-              // Client-side permission check using stored permissions/roles
-              const currentUser = JSON.parse(localStorage.getItem('user') || 'null') as any;
-              const perms: string[] = Array.isArray(currentUser?.permissions) ? currentUser.permissions : [];
-              const roleNames: string[] = Array.isArray(currentUser?.roles)
-                ? currentUser.roles.map((ur: any) => ur?.role?.name).filter((n: any) => typeof n === 'string')
-                : (currentUser?.role ? [currentUser.role] : []);
-              const canEditPassword = perms.includes('users:write') || roleNames.includes('admin') || roleNames.includes('manager');
-              if (!canEditPassword) return null;
-              return (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="editPassword">Password</Label>
-                    <Input
-                      id="editPassword"
-                      type="password"
-                      placeholder="Leave blank to keep unchanged"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2" />
-                </div>
-              );
-            })()}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -899,11 +917,41 @@ export const UsersPage: FC = () => {
               <div className="text-red-500 text-sm">{error}</div>
             )}
 
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={() => { setShowEditForm(false); resetForm(); }}>
-                Cancel
-              </Button>
-              <Button type="submit">Update User</Button>
+            <div className="flex justify-between items-center">
+              {/* Email verification action (admin/users:write only) */}
+              {(() => {
+                const currentUser = JSON.parse(localStorage.getItem('user') || 'null') as any;
+                const perms: string[] = Array.isArray(currentUser?.permissions) ? currentUser.permissions : [];
+                const roles: string[] = Array.isArray(currentUser?.roles) ? currentUser.roles.map((r: any) => r?.role?.name) : [];
+                const canVerify = perms.includes('users:write') || roles.includes('admin');
+                if (!canVerify) return null;
+                return (
+                  <Button type="button" variant="outline"
+                    onClick={async () => {
+                      if (!selectedUser) return;
+                      try {
+                        const res = await UserService.requestVerificationForUser(selectedUser.id);
+                        if (res.success) {
+                          toast.success('Verification email sent (if the account is unverified)');
+                        } else {
+                          toast.error(res.error || 'Failed to request verification');
+                        }
+                      } catch (e) {
+                        toast.error('Failed to request verification');
+                      }
+                    }}
+                  >
+                    Send Verification Email
+                  </Button>
+                );
+              })()}
+              
+              <div className="flex space-x-2">
+                <Button type="button" variant="outline" onClick={() => { setShowEditForm(false); resetForm(); }}>
+                  Cancel
+                </Button>
+                <Button type="submit">Update User</Button>
+              </div>
             </div>
           </form>
         </DialogContent>

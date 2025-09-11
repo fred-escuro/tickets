@@ -55,12 +55,12 @@ async function main() {
   await upsert('features', 'fileUpload', true);
 
   // SMTP defaults
-  await upsert('email.smtp', 'host', 'smtp.example.com');
-  await upsert('email.smtp', 'port', 587);
-  await upsert('email.smtp', 'secure', false);
-  await upsert('email.smtp', 'fromAddress', 'no-reply@example.com');
-  await upsertSecret('email.smtp', 'user', 'no-reply@example.com');
-  await upsertSecret('email.smtp', 'password', 'change-me');
+  await upsert('email.smtp', 'host', 'mail.wesupportinc.com');
+  await upsert('email.smtp', 'port', 465);
+  await upsert('email.smtp', 'secure', true);
+  await upsert('email.smtp', 'fromAddress', 'TicketHub (hd@wesupportinc.com)');
+  await upsertSecret('email.smtp', 'user', 'hd@wesupportinc.com');
+  await upsertSecret('email.smtp', 'password', 'wsi@WeSupportinc');
 
   // Notification defaults
   await upsert('notifications', 'emailEnabled', true);
@@ -69,15 +69,33 @@ async function main() {
   await upsert('notifications', 'frequency', 'immediate');
 
   // Inbound email (IMAP) defaults
-  await upsert('email.inbound', 'imapHost', 'imap.example.com');
+  await upsert('email.inbound', 'imapHost', 'mail.wesupportinc.com');
   await upsert('email.inbound', 'imapPort', 993);
   await upsert('email.inbound', 'imapSecure', true);
-  await upsertSecret('email.inbound', 'imapUser', 'support@example.com');
-  await upsertSecret('email.inbound', 'imapPassword', 'change-me');
+  await upsertSecret('email.inbound', 'imapUser', 'hd@wesupportinc.com');
+  await upsertSecret('email.inbound', 'imapPassword', 'wsi@WeSupportinc');
   await upsert('email.inbound', 'folder', 'INBOX');
   await upsert('email.inbound', 'moveOnSuccessFolder', 'Processed');
   await upsert('email.inbound', 'moveOnErrorFolder', 'Errors');
-  await upsert('email.inbound', 'allowedSenderDomains', ['company.com']);
+  
+  // Domain restriction settings (new comprehensive system)
+  await upsert('email.inbound', 'domainRestrictionMode', 'allow_all');
+  await upsert('email.inbound', 'allowedDomains', []);
+  await upsert('email.inbound', 'blockedDomains', []);
+  await upsert('email.inbound', 'maxEmailsPerHour', 100);
+  await upsert('email.inbound', 'maxEmailsPerDay', 1000);
+  await upsert('email.inbound', 'maxEmailsPerSender', 10);
+  await upsert('email.inbound', 'enableFloodingProtection', true);
+  await upsert('email.inbound', 'enableSpamFilter', true);
+  await upsert('email.inbound', 'requireValidFrom', true);
+  await upsert('email.inbound', 'blockEmptySubjects', false);
+  await upsert('email.inbound', 'blockAutoReplies', true);
+  await upsert('email.inbound', 'enableRateLimiting', true);
+  await upsert('email.inbound', 'rateLimitWindow', 60);
+  await upsert('email.inbound', 'maxAttachments', 10);
+  await upsert('email.inbound', 'maxAttachmentSize', 25);
+  
+  // Legacy settings (for backward compatibility)
   await upsert('email.inbound', 'defaultCategoryId', null);
   await upsert('email.inbound', 'defaultPriorityId', null);
   await upsert('email.inbound', 'autoreplyEnabled', false);
@@ -100,7 +118,7 @@ async function main() {
   await upsertSecret('auth.google', 'clientId', '');
   await upsertSecret('auth.google', 'clientSecret', '');
 
-  console.log('✅ Seeded settings: branding, company, features, SMTP, notifications, auth.google');
+  console.log('✅ Seeded settings: branding, company, features, SMTP, notifications, email.inbound, auth.google');
 }
 
 export async function seedSettings() {

@@ -13,15 +13,12 @@ export const useAppTitle = (pageTitle: string) => {
         const settings = settingsService.getSettings();
         const company = settings?.general?.companyName || '';
         setCompanyName(company);
-        console.log('Loaded company name:', company);
 
         // Load app name from API
-        const res = await settingsApi.getNamespaces(['branding']);
-        console.log('Branding API response:', res);
+        const res = await settingsApi.preloadBranding();
         if (res.success && res.data) {
           const branding = res.data['branding'] || {};
           const app = branding.appName || branding.name || 'TicketHub';
-          console.log('Loaded app name:', app);
           setAppName(app);
         }
       } catch (error) {
@@ -35,7 +32,6 @@ export const useAppTitle = (pageTitle: string) => {
     // Listen for branding updates
     const handleBrandingUpdate = (event: CustomEvent) => {
       const { appName: newAppName } = event.detail || {};
-      console.log('Branding update event received:', newAppName);
       if (newAppName) {
         setAppName(newAppName);
       }
@@ -63,7 +59,6 @@ export const useAppTitle = (pageTitle: string) => {
       title = `${title} - ${companyName}`;
     }
     
-    console.log('Setting document title:', title, { pageTitle, appName, companyName });
     document.title = title;
   }, [pageTitle, appName, companyName]);
 

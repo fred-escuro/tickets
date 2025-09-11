@@ -11,7 +11,6 @@ export interface User extends BaseEntity {
   lastName: string;
   middleName?: string;
   email: string;
-  departmentId?: string;
   avatar?: string;
   phone?: string;
   location?: string;
@@ -25,12 +24,16 @@ export interface CreateUserRequest {
   middleName?: string;
   email: string;
   password: string;
-  departmentId?: string;
   avatar?: string;
   phone?: string;
   location?: string;
   isAgent?: boolean;
   skills?: string[];
+  departments?: Array<{
+    departmentId: string;
+    isPrimary: boolean;
+    role?: string;
+  }>;
 }
 
 export interface UpdateUserRequest {
@@ -38,7 +41,6 @@ export interface UpdateUserRequest {
   lastName?: string;
   middleName?: string;
   email?: string;
-  departmentId?: string;
   avatar?: string;
   phone?: string;
   location?: string;
@@ -46,6 +48,11 @@ export interface UpdateUserRequest {
   skills?: string[];
   // Allow privileged updates to password
   password?: string;
+  departments?: Array<{
+    departmentId: string;
+    isPrimary: boolean;
+    role?: string;
+  }>;
 }
 
 export interface LoginRequest {

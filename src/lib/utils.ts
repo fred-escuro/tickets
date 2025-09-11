@@ -115,3 +115,31 @@ export const storage = {
 export const generateId = (): string => {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 };
+
+// Cache management utilities
+export const cacheUtils = {
+  // Clear a Map-based cache
+  clearMapCache: <T>(setCache: React.Dispatch<React.SetStateAction<Map<string, T>>>) => {
+    setCache(new Map());
+  },
+  
+  // Clear a Map-based cache with success toast
+  clearMapCacheWithToast: <T>(
+    setCache: React.Dispatch<React.SetStateAction<Map<string, T>>>, 
+    message: string = 'Cache cleared'
+  ) => {
+    setCache(new Map());
+    // Note: toast should be imported and used in the component
+    console.log(message);
+  },
+  
+  // Generate cache key from filters/params
+  generateCacheKey: (filters: Record<string, any>): string => {
+    return JSON.stringify(filters);
+  },
+  
+  // Check if cache entry is expired
+  isCacheExpired: (timestamp: number, duration: number): boolean => {
+    return Date.now() - timestamp >= duration;
+  }
+};

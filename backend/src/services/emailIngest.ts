@@ -4,6 +4,9 @@ import { ImapFlow, type FetchMessageObject } from 'imapflow';
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
+import { emailTrackingService } from './emailTrackingService';
+import { autoResponseGenerator } from './autoResponseGenerator';
+import { EmailMessageType } from '@prisma/client';
 
 export interface InboundEmailSettings {
 	imapHost: string;
@@ -14,7 +17,25 @@ export interface InboundEmailSettings {
 	folder?: string;
 	moveOnSuccessFolder?: string;
 	moveOnErrorFolder?: string;
+	// Legacy domain restriction (for backward compatibility)
 	allowedSenderDomains?: string[];
+	// New comprehensive restrictions
+	domainRestrictionMode?: 'allow_all' | 'disallow_all' | 'whitelist' | 'blacklist';
+	allowedDomains?: string[];
+	blockedDomains?: string[];
+	maxEmailsPerHour?: number;
+	maxEmailsPerDay?: number;
+	maxEmailsPerSender?: number;
+	enableFloodingProtection?: boolean;
+	enableSpamFilter?: boolean;
+	requireValidFrom?: boolean;
+	blockEmptySubjects?: boolean;
+	blockAutoReplies?: boolean;
+	enableRateLimiting?: boolean;
+	rateLimitWindow?: number;
+	maxAttachments?: number;
+	maxAttachmentSize?: number;
+	// Legacy settings
 	defaultCategoryId?: string | null;
 	defaultPriorityId?: string | null;
 	autoreplyEnabled?: boolean;
@@ -58,6 +79,43 @@ function headersToObject(headers: any): any {
 	} catch { return {}; }
 }
 
+function isAutoReply(parsed: ParsedMail): boolean {
+	const subject = (parsed.subject || '').toLowerCase();
+	const headers = headersToObject(parsed.headers);
+	
+	// Check for common auto-reply indicators
+	const autoReplyIndicators = [
+		'auto-reply', 'automatic reply', 'out of office', 'vacation', 'away message',
+		'autoresponder', 'auto response', 'delivery status', 'mail delivery',
+		'undeliverable', 'bounce', 'returned mail', 'mailer-daemon'
+	];
+	
+	// Check subject for auto-reply patterns
+	if (autoReplyIndicators.some(indicator => subject.includes(indicator))) {
+		return true;
+	}
+	
+	// Check headers for auto-reply indicators
+	const autoReplyHeaders = [
+		'X-Autoreply', 'X-Autorespond', 'X-Autoresponse', 'X-Autoreply-From',
+		'X-Vacation', 'X-Away', 'X-Out-Of-Office', 'Precedence', 'X-Precedence'
+	];
+	
+	for (const header of autoReplyHeaders) {
+		if (headers[header]) {
+			return true;
+		}
+	}
+	
+	// Check for precedence: bulk or auto-reply
+	const precedence = headers['Precedence'] || headers['X-Precedence'];
+	if (precedence && (precedence.toLowerCase().includes('bulk') || precedence.toLowerCase().includes('auto'))) {
+		return true;
+	}
+	
+	return false;
+}
+
 async function loadInboundSettings(): Promise<InboundEmailSettings> {
 	const rows = await (prisma as any).appSetting.findMany({ where: { namespace: 'email.inbound' } });
 	const map: Record<string, any> = {};
@@ -71,7 +129,25 @@ async function loadInboundSettings(): Promise<InboundEmailSettings> {
 		folder: map.folder || 'INBOX',
 		moveOnSuccessFolder: map.moveOnSuccessFolder || 'Processed',
 		moveOnErrorFolder: map.moveOnErrorFolder || 'Errors',
+		// Legacy domain restriction (for backward compatibility)
 		allowedSenderDomains: Array.isArray(map.allowedSenderDomains) ? map.allowedSenderDomains : undefined,
+		// New comprehensive restrictions
+		domainRestrictionMode: map.domainRestrictionMode || 'allow_all',
+		allowedDomains: Array.isArray(map.allowedDomains) ? map.allowedDomains : [],
+		blockedDomains: Array.isArray(map.blockedDomains) ? map.blockedDomains : [],
+		maxEmailsPerHour: Number(map.maxEmailsPerHour ?? 100),
+		maxEmailsPerDay: Number(map.maxEmailsPerDay ?? 1000),
+		maxEmailsPerSender: Number(map.maxEmailsPerSender ?? 10),
+		enableFloodingProtection: !!map.enableFloodingProtection,
+		enableSpamFilter: !!map.enableSpamFilter,
+		requireValidFrom: !!map.requireValidFrom,
+		blockEmptySubjects: !!map.blockEmptySubjects,
+		blockAutoReplies: !!map.blockAutoReplies,
+		enableRateLimiting: !!map.enableRateLimiting,
+		rateLimitWindow: Number(map.rateLimitWindow ?? 60),
+		maxAttachments: Number(map.maxAttachments ?? 10),
+		maxAttachmentSize: Number(map.maxAttachmentSize ?? 25),
+		// Legacy settings
 		defaultCategoryId: map.defaultCategoryId || null,
 		defaultPriorityId: map.defaultPriorityId || null,
 		autoreplyEnabled: !!map.autoreplyEnabled,
@@ -153,23 +229,174 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 				const parsed = await simpleParser((msg as any).source);
 				const messageId = (parsed.messageId || '').trim();
 				if (!messageId) { result.skipped++; await markProcessed(client, msg.uid, settings.moveOnErrorFolder); continue; }
-				const existingMsg = await prisma.emailMessage.findUnique({ where: { messageId } }).catch(() => null);
-				if (existingMsg) { result.skipped++; await markProcessed(client, msg.uid, settings.moveOnSuccessFolder); continue; }
+				const existingEmail = await prisma.emailLog.findUnique({ where: { messageId } }).catch(() => null);
+				if (existingEmail) { result.skipped++; await markProcessed(client, msg.uid, settings.moveOnSuccessFolder); continue; }
 
 				const fromObj = (parsed as any).from?.value?.[0];
 				const fromEmail = (fromObj?.address || '').toLowerCase();
 				const fromName = (fromObj?.name || '').trim();
 				if (!fromEmail) {
 					result.skipped++;
-					await prisma.emailMessage.create({ data: { messageId, type: 'NEW', from: '', to: getAddressesText((parsed as any).to), subject: parsed.subject || '', error: 'No from email', rawMeta: { headers: headersToObject((parsed as any).headers) } as any } as any });
+					await prisma.emailLog.create({ 
+						data: { 
+							messageId, 
+							direction: 'INBOUND' as any,
+							type: 'NEW' as any, 
+							from: '', 
+							to: getAddressesText((parsed as any).to), 
+							subject: parsed.subject || '', 
+							status: 'ERROR' as any,
+							error: 'No from email', 
+							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
+						} 
+					});
 					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
 					continue;
 				}
-				if (Array.isArray(settings.allowedSenderDomains) && settings.allowedSenderDomains.length > 0) {
-					const domain = fromEmail.split('@')[1];
-					if (!settings.allowedSenderDomains.includes(domain)) {
+				// Apply comprehensive domain restrictions
+				const domain = fromEmail.split('@')[1];
+				let domainAllowed = true;
+				let domainError = '';
+
+				if (settings.domainRestrictionMode === 'disallow_all') {
+					// Disallow all mode: no domains are permitted
+					domainAllowed = false;
+					domainError = 'All domains are blocked';
+				} else if (settings.domainRestrictionMode === 'whitelist') {
+					// Whitelist mode: only allowed domains are permitted
+					if (settings.allowedDomains && settings.allowedDomains.length > 0) {
+						domainAllowed = settings.allowedDomains.includes(domain);
+						domainError = 'Sender domain not in whitelist';
+					}
+				} else if (settings.domainRestrictionMode === 'blacklist') {
+					// Blacklist mode: blocked domains are rejected
+					if (settings.blockedDomains && settings.blockedDomains.length > 0) {
+						domainAllowed = !settings.blockedDomains.includes(domain);
+						domainError = 'Sender domain is blacklisted';
+					}
+				}
+				// Legacy support: if new system not configured, fall back to old allowedSenderDomains
+				else if (Array.isArray(settings.allowedSenderDomains) && settings.allowedSenderDomains.length > 0) {
+					domainAllowed = settings.allowedSenderDomains.includes(domain);
+					domainError = 'Sender domain not allowed';
+				}
+
+				if (!domainAllowed) {
+					result.skipped++;
+					await prisma.emailLog.create({ 
+						data: { 
+							messageId, 
+							direction: 'INBOUND' as any,
+							type: 'NEW' as any, 
+							from: fromEmail, 
+							to: getAddressesText((parsed as any).to), 
+							subject: parsed.subject || '', 
+							status: 'ERROR' as any,
+							error: domainError, 
+							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
+						} 
+					});
+					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+					continue;
+				}
+
+				// Apply content filtering restrictions
+				if (settings.requireValidFrom && !fromEmail) {
+					result.skipped++;
+					await prisma.emailLog.create({ 
+						data: { 
+							messageId, 
+							direction: 'INBOUND' as any,
+							type: 'NEW' as any, 
+							from: fromEmail, 
+							to: getAddressesText((parsed as any).to), 
+							subject: parsed.subject || '', 
+							status: 'ERROR' as any,
+							error: 'Invalid or missing from address', 
+							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
+						} 
+					});
+					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+					continue;
+				}
+
+				if (settings.blockEmptySubjects && (!parsed.subject || parsed.subject.trim() === '')) {
+					result.skipped++;
+					await prisma.emailLog.create({ 
+						data: { 
+							messageId, 
+							direction: 'INBOUND' as any,
+							type: 'NEW' as any, 
+							from: fromEmail, 
+							to: getAddressesText((parsed as any).to), 
+							subject: parsed.subject || '', 
+							status: 'ERROR' as any,
+							error: 'Empty subject not allowed', 
+							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
+						} 
+					});
+					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+					continue;
+				}
+
+				if (settings.blockAutoReplies && isAutoReply(parsed)) {
+					result.skipped++;
+					await prisma.emailLog.create({ 
+						data: { 
+							messageId, 
+							direction: 'INBOUND' as any,
+							type: 'NEW' as any, 
+							from: fromEmail, 
+							to: getAddressesText((parsed as any).to), 
+							subject: parsed.subject || '', 
+							status: 'ERROR' as any,
+							error: 'Auto-reply detected and blocked', 
+							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
+						} 
+					});
+					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+					continue;
+				}
+
+				// Apply attachment restrictions
+				const attachments = parsed.attachments || [];
+				if (settings.maxAttachments && attachments.length > settings.maxAttachments) {
+					result.skipped++;
+					await prisma.emailLog.create({ 
+						data: { 
+							messageId, 
+							direction: 'INBOUND' as any,
+							type: 'NEW' as any, 
+							from: fromEmail, 
+							to: getAddressesText((parsed as any).to), 
+							subject: parsed.subject || '', 
+							status: 'ERROR' as any,
+							error: `Too many attachments (${attachments.length}/${settings.maxAttachments})`, 
+							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
+						} 
+					});
+					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+					continue;
+				}
+
+				if (settings.maxAttachmentSize) {
+					const maxSizeBytes = settings.maxAttachmentSize * 1024 * 1024; // Convert MB to bytes
+					const oversizedAttachments = attachments.filter((att: any) => (att.size || 0) > maxSizeBytes);
+					if (oversizedAttachments.length > 0) {
 						result.skipped++;
-						await prisma.emailMessage.create({ data: { messageId, type: 'NEW', from: fromEmail, to: getAddressesText((parsed as any).to), subject: parsed.subject || '', error: 'Sender domain not allowed', rawMeta: { headers: headersToObject((parsed as any).headers) } as any } as any });
+						await prisma.emailLog.create({ 
+							data: { 
+								messageId, 
+								direction: 'INBOUND' as any,
+								type: 'NEW' as any, 
+								from: fromEmail, 
+								to: getAddressesText((parsed as any).to), 
+								subject: parsed.subject || '', 
+								status: 'ERROR' as any,
+								error: `Attachment too large (max ${settings.maxAttachmentSize}MB)`, 
+								rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
+							} 
+						});
 						await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
 						continue;
 					}
@@ -188,11 +415,42 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 				const userId = await findOrCreateUserByEmail(fromEmail, fromName);
 				const textContent = (parsed.text && parsed.text.trim()) || parsed.html || '(no content)';
 
+				// Track the inbound email
+				const emailLogId = await emailTrackingService.trackInboundEmail({
+					messageId,
+					from: fromEmail,
+					to: getAddressesText((parsed as any).to),
+					subject: parsed.subject || '',
+					text: parsed.text,
+					html: typeof parsed.html === 'string' ? parsed.html : undefined,
+					receivedAt: new Date(),
+					rawMeta: { headers: headersToObject((parsed as any).headers) },
+					attachments: parsed.attachments?.map(att => ({
+						filename: att.filename,
+						contentType: att.contentType,
+						size: att.size,
+					})),
+					options: {
+						ticketId: targetTicketId || undefined,
+						userId,
+						type: targetTicketId ? EmailMessageType.REPLY : EmailMessageType.NEW,
+					},
+				});
+
 				if (targetTicketId) {
 					// Add as public comment
 					const c = await prisma.comment.create({ data: { ticketId: targetTicketId, authorId: userId, content: textContent, isInternal: false } });
 					await saveAttachments(parsed, userId, undefined, c.id);
-					await prisma.emailMessage.create({ data: { messageId, ticketId: targetTicketId, type: 'REPLY', from: fromEmail, to: getAddressesText((parsed as any).to), subject: parsed.subject || '', rawMeta: { headers: headersToObject((parsed as any).headers) } as any } as any });
+					
+					// Update email log with ticket association
+					await prisma.emailLog.update({
+						where: { id: emailLogId },
+						data: { 
+							ticketId: targetTicketId,
+							status: 'PROCESSED' as any,
+						},
+					});
+					
 					result.replies++;
 					await markProcessed(client, msg.uid, settings.moveOnSuccessFolder);
 					continue;
@@ -208,7 +466,19 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 				const status = await prisma.ticketStatus.findFirst({ where: { name: 'Open' } }) || await prisma.ticketStatus.findFirst();
 				if (!category || !priority || !status) {
 					result.errors++;
-					await prisma.emailMessage.create({ data: { messageId, from: fromEmail, to: getAddressesText((parsed as any).to), subject: parsed.subject || '', error: 'Missing category/priority/status', rawMeta: { headers: headersToObject((parsed as any).headers) } as any } as any });
+					await prisma.emailLog.create({ 
+						data: { 
+							messageId, 
+							direction: 'INBOUND' as any,
+							type: 'NEW' as any,
+							from: fromEmail, 
+							to: getAddressesText((parsed as any).to), 
+							subject: parsed.subject || '', 
+							status: 'ERROR' as any,
+							error: 'Missing category/priority/status', 
+							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
+						} 
+					});
 					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
 					continue;
 				}
@@ -228,15 +498,64 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 					select: { id: true }
 				});
 				await saveAttachments(parsed, userId, created.id, undefined);
-				await prisma.emailMessage.create({ data: { messageId, ticketId: created.id, type: 'NEW', from: fromEmail, to: getAddressesText((parsed as any).to), subject: title, rawMeta: { headers: headersToObject((parsed as any).headers) } as any } as any });
+				
+				// Update email log with ticket association
+				await prisma.emailLog.update({
+					where: { id: emailLogId },
+					data: { 
+						ticketId: created.id,
+						status: 'PROCESSED' as any,
+					},
+				});
+				
+				// Process auto-response for new ticket
+				try {
+					const ticket = await prisma.ticket.findUnique({
+						where: { id: created.id },
+						include: {
+							submitter: true,
+							assignee: true,
+							assignedToDepartment: true,
+							category: true,
+							priority: true,
+							status: true,
+						},
+					});
+					
+					if (ticket) {
+						await autoResponseGenerator.processTicketForAutoResponse(ticket, {
+							from: fromEmail,
+							subject: parsed.subject || '',
+							body: textContent,
+							messageId: messageId,
+						});
+					}
+				} catch (autoResponseError) {
+					console.error('Error processing auto-response for new ticket:', autoResponseError);
+					// Don't fail the entire email processing if auto-response fails
+				}
+				
 				result.created++;
 				await markProcessed(client, msg.uid, settings.moveOnSuccessFolder);
 			} catch (e: any) {
 				result.errors++;
 				try {
-					// Try to record failure
-					await prisma.emailMessage.create({ data: { messageId: 'unknown', type: 'NEW', from: '', to: '', subject: '', error: String(e?.message || e) } as any });
-				} catch {}
+					// Track error in modern email_logs system
+					await prisma.emailLog.create({ 
+						data: { 
+							messageId: 'unknown', 
+							direction: 'INBOUND' as any,
+							type: 'NEW' as any, 
+							from: '', 
+							to: '', 
+							subject: '', 
+							status: 'ERROR' as any,
+							error: String(e?.message || e) 
+						} 
+					});
+				} catch (logError) {
+					console.error('Failed to log email processing error:', logError);
+				}
 				await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
 			}
 		}
@@ -259,8 +578,32 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
 async function markProcessed(client: ImapFlow, uid: number, dest?: string) {
 	try {
 		if (dest) {
-			await client.messageMove(uid, dest).catch(async () => { /* ignore move errors */ });
+			try {
+				await client.messageMove(uid, dest);
+				console.log(`✅ Moved message ${uid} to folder: ${dest}`);
+			} catch (moveError: any) {
+				console.error(`❌ Failed to move message ${uid} to folder ${dest}:`, moveError.message);
+				// Try to create the folder if it doesn't exist
+				try {
+					await client.mailboxCreate(dest);
+					console.log(`📁 Created folder: ${dest}`);
+					// Retry the move after creating the folder
+					await client.messageMove(uid, dest);
+					console.log(`✅ Successfully moved message ${uid} to newly created folder: ${dest}`);
+				} catch (createError: any) {
+					console.error(`❌ Failed to create folder ${dest}:`, createError.message);
+				}
+			}
 		}
-		await client.messageFlagsAdd(uid, ['\\Seen']).catch(() => {});
-	} catch {}
+		
+		// Mark as seen regardless of move success
+		try {
+			await client.messageFlagsAdd(uid, ['\\Seen']);
+			console.log(`👁️ Marked message ${uid} as seen`);
+		} catch (flagError: any) {
+			console.error(`❌ Failed to mark message ${uid} as seen:`, flagError.message);
+		}
+	} catch (error: any) {
+		console.error(`❌ Error in markProcessed for message ${uid}:`, error.message);
+	}
 }

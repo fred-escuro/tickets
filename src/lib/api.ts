@@ -49,6 +49,7 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/api/tickets/${id}`,
     DELETE: (id: string) => `/api/tickets/${id}`,
     ASSIGN: (id: string) => `/api/tickets/${id}/assign`,
+    ASSIGNMENT_HISTORY: (id: string) => `/api/tickets/${id}/assignment-history`,
     STATUS: (id: string) => `/api/tickets/${id}/status`,
     STATUS_HISTORY: (id: string) => `/api/tickets/${id}/status-history`,
     STATS_OVERVIEW: '/api/tickets/stats/overview',
@@ -193,8 +194,25 @@ export class ApiClient {
           throw new Error('Authentication expired. Please log in again.');
         }
         
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.message || errorData.error || `HTTP error! status: ${response.status}`;
+        // Try to parse JSON error response, fallback to text if it fails
+        let errorData = {};
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            errorData = await response.json();
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } else {
+            // If not JSON, try to get text content
+            const textContent = await response.text();
+            console.warn('Non-JSON error response:', textContent.substring(0, 200));
+            errorMessage = `Server error: ${response.status} ${response.statusText}`;
+          }
+        } catch (parseError) {
+          console.warn('Failed to parse error response:', parseError);
+          errorMessage = `Server error: ${response.status} ${response.statusText}`;
+        }
         
         // Log more details for 500 errors
         if (response.status === 500) {
@@ -211,13 +229,23 @@ export class ApiClient {
         throw new Error(errorMessage);
       }
 
-      const data = await response.json();
-      return data;
+      try {
+        const data = await response.json();
+        return data;
+      } catch (jsonError) {
+        console.error('Failed to parse JSON response:', jsonError);
+        return {
+          success: false,
+          error: 'Invalid response format from server',
+          data: null
+        };
+      }
     } catch (error) {
       console.error('API request failed:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred',
+        data: null
       };
     }
   }

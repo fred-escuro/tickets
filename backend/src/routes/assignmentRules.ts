@@ -160,13 +160,22 @@ router.get('/departments', authenticate, authorizePermission('tickets:read'), as
         assignmentStrategy: true,
         maxTicketsPerAgent: true,
         users: {
-          where: { isAgent: true },
+          where: { 
+            user: { isAgent: true }
+          },
           select: {
             id: true,
-            firstName: true,
-            lastName: true,
-            isAvailable: true,
-            maxConcurrentTickets: true
+            isPrimary: true,
+            role: true,
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                isAvailable: true,
+                maxConcurrentTickets: true
+              }
+            }
           }
         }
       },
@@ -206,18 +215,24 @@ router.get('/agents', authenticate, authorizePermission('tickets:read'), async (
         firstName: true,
         lastName: true,
         email: true,
-        departmentId: true,
+        departments: {
+          select: {
+            id: true,
+            isPrimary: true,
+            role: true,
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        },
         isAvailable: true,
         maxConcurrentTickets: true,
         assignmentPriority: true,
         lastAssignmentAt: true,
         skills: true,
-        departmentEntity: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
         assignedTickets: {
           where: {
             status: {

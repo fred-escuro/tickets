@@ -25,10 +25,28 @@ export default function AssignmentRulesManager({ onClose }: AssignmentRulesManag
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Validate all rules when categories change
+  useEffect(() => {
+    const errors: Record<string, string[]> = {};
+    categories.forEach(category => {
+      // Ensure rules is an array before iterating
+      const rules = Array.isArray(category.rules) ? category.rules : [];
+      rules.forEach((rule, index) => {
+        const ruleKey = `${category.categoryId}-${index}`;
+        const error = validateRule(rule);
+        if (error) {
+          errors[ruleKey] = [error];
+        }
+      });
+    });
+    setValidationErrors(errors);
+  }, [categories]);
 
   const loadData = async () => {
     setLoading(true);
@@ -54,7 +72,11 @@ export default function AssignmentRulesManager({ onClose }: AssignmentRulesManag
   };
 
   const getCurrentCategory = () => {
-    return categories.find(cat => cat.categoryId === selectedCategory);
+    const category = categories.find(cat => cat.categoryId === selectedCategory);
+    if (category && !Array.isArray(category.rules)) {
+      category.rules = [];
+    }
+    return category;
   };
 
   const addRule = () => {
@@ -80,13 +102,29 @@ export default function AssignmentRulesManager({ onClose }: AssignmentRulesManag
       cat.categoryId === selectedCategory 
         ? {
             ...cat,
-            rules: cat.rules.map((rule, index) => 
+            rules: (Array.isArray(cat.rules) ? cat.rules : []).map((rule, index) => 
               index === ruleIndex ? { ...rule, [field]: value } : rule
             )
           }
         : cat
     );
     setCategories(updatedCategories);
+
+    // Validate the updated rule and update validation errors
+    const category = updatedCategories.find(cat => cat.categoryId === selectedCategory);
+    if (category) {
+      const rules = Array.isArray(category.rules) ? category.rules : [];
+      const updatedRule = rules[ruleIndex];
+      if (updatedRule) {
+        const error = validateRule(updatedRule);
+        const ruleKey = `${selectedCategory}-${ruleIndex}`;
+        
+        setValidationErrors(prev => ({
+          ...prev,
+          [ruleKey]: error ? [error] : []
+        }));
+      }
+    }
   };
 
   const removeRule = (ruleIndex: number) => {
@@ -94,7 +132,7 @@ export default function AssignmentRulesManager({ onClose }: AssignmentRulesManag
       cat.categoryId === selectedCategory 
         ? {
             ...cat,
-            rules: cat.rules.filter((_, index) => index !== ruleIndex)
+            rules: (Array.isArray(cat.rules) ? cat.rules : []).filter((_, index) => index !== ruleIndex)
           }
         : cat
     );
@@ -103,9 +141,59 @@ export default function AssignmentRulesManager({ onClose }: AssignmentRulesManag
     toast.success('Rule removed successfully');
   };
 
+  const validateRule = (rule: AssignmentRule): string | null => {
+    if (rule.assignmentType === 'department' && !rule.targetDepartmentId) {
+      return 'Department assignment requires selecting a target department';
+    }
+    if (rule.assignmentType === 'agent' && !rule.targetAgentId) {
+      return 'Agent assignment requires selecting a target agent';
+    }
+    
+    // Check if department has support agents
+    if (rule.assignmentType === 'department' && rule.targetDepartmentId) {
+      const departmentAgents = agents.filter(agent => agent.departmentId === rule.targetDepartmentId);
+      if (departmentAgents.length === 0) {
+        const departmentName = departments.find(d => d.id === rule.targetDepartmentId)?.name || 'Unknown Department';
+        return `No support agents available in ${departmentName} department`;
+      }
+    }
+    
+    // Check if specific agent is available
+    if (rule.assignmentType === 'agent' && rule.targetAgentId) {
+      const agent = agents.find(a => a.id === rule.targetAgentId);
+      if (!agent) {
+        return 'Selected agent is not available or does not exist';
+      }
+      if (!agent.isAvailable) {
+        return 'Selected agent is currently not available';
+      }
+    }
+    
+    return null;
+  };
+
+  const validateAllRules = (rules: AssignmentRule[]): string[] => {
+    const errors: string[] = [];
+    rules.forEach((rule, index) => {
+      const error = validateRule(rule);
+      if (error) {
+        errors.push(`Rule ${index + 1}: ${error}`);
+      }
+    });
+    return errors;
+  };
+
   const saveRules = async () => {
     const category = getCurrentCategory();
     if (!category) return;
+
+    // Validate all rules before saving
+    const rules = Array.isArray(category.rules) ? category.rules : [];
+    const validationErrors = validateAllRules(rules);
+    if (validationErrors.length > 0) {
+      toast.error(`Validation failed: ${validationErrors.join(', ')}`);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -137,6 +225,14 @@ export default function AssignmentRulesManager({ onClose }: AssignmentRulesManag
     const category = getCurrentCategory();
     if (!category) return;
 
+    // Validate rules before testing
+    const rules = Array.isArray(category.rules) ? category.rules : [];
+    const validationErrors = validateAllRules(rules);
+    if (validationErrors.length > 0) {
+      toast.error(`Cannot test rules with validation errors: ${validationErrors.join(', ')}`);
+      return;
+    }
+
     setTesting(true);
     try {
       const result = await AssignmentRulesService.testAssignmentRules({
@@ -166,6 +262,10 @@ export default function AssignmentRulesManager({ onClose }: AssignmentRulesManag
   const getAgentName = (agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
     return agent ? `${agent.firstName} ${agent.lastName}` : 'Unknown Agent';
+  };
+
+  const getDepartmentAgentCount = (departmentId: string) => {
+    return agents.filter(agent => agent.departmentId === departmentId).length;
   };
 
   const getAssignmentTypeLabel = (type: string) => {
@@ -257,25 +357,32 @@ export default function AssignmentRulesManager({ onClose }: AssignmentRulesManag
                 </div>
               </CardHeader>
               <CardContent>
-                {currentCategory.rules.length === 0 ? (
+                {(Array.isArray(currentCategory.rules) ? currentCategory.rules : []).length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     <p>No assignment rules configured for this category.</p>
                     <p className="text-sm">Click "Add Rule" to create your first rule.</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {currentCategory.rules.map((rule, index) => (
-                      <Card key={`rule-${selectedCategory}-${index}`} className="border-l-4 border-l-blue-500">
-                        <CardContent className="pt-4">
+                    {(Array.isArray(currentCategory.rules) ? currentCategory.rules : []).map((rule, index) => {
+                      const ruleKey = `${selectedCategory}-${index}`;
+                      const ruleErrors = validationErrors[ruleKey] || [];
+                      const hasErrors = ruleErrors.length > 0;
+                      
+                      return (
+                        <Card key={`rule-${selectedCategory}-${index}`} className={`border-l-4 ${hasErrors ? 'border-l-red-500' : 'border-l-blue-500'}`}>
+                          <CardContent className="pt-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div>
                               <Label>Assignment Type</Label>
                               <Select
                                 value={rule.assignmentType}
-                                onValueChange={(value) => updateRule(index, 'assignmentType', value)}
+                                onValueChange={(value) => {
+                                  updateRule(index, 'assignmentType', value);
+                                }}
                               >
                                 <SelectTrigger>
-                                  <SelectValue />
+                                  <SelectValue placeholder="Select assignment type" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="department">Department</SelectItem>
@@ -297,13 +404,30 @@ export default function AssignmentRulesManager({ onClose }: AssignmentRulesManag
                                     <SelectValue placeholder="Select department" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {departments.map((dept) => (
-                                      <SelectItem key={dept.id} value={dept.id}>
-                                        {dept.name}
-                                      </SelectItem>
-                                    ))}
+                                    {departments.map((dept) => {
+                                      const departmentAgents = agents.filter(agent => agent.departmentId === dept.id);
+                                      const hasAgents = departmentAgents.length > 0;
+                                      return (
+                                        <SelectItem 
+                                          key={dept.id} 
+                                          value={dept.id}
+                                          disabled={!hasAgents}
+                                          className={!hasAgents ? 'text-gray-400' : ''}
+                                        >
+                                          {dept.name} {!hasAgents ? '(No agents available)' : ''}
+                                        </SelectItem>
+                                      );
+                                    })}
                                   </SelectContent>
                                 </Select>
+                                {rule.targetDepartmentId && getDepartmentAgentCount(rule.targetDepartmentId) === 0 && (
+                                  <Alert className="mt-2 border-orange-200 bg-orange-50">
+                                    <AlertCircle className="h-4 w-4 text-orange-600" />
+                                    <AlertDescription className="text-orange-800">
+                                      Warning: This department has no support agents available. Tickets assigned to this department will not be automatically assigned.
+                                    </AlertDescription>
+                                  </Alert>
+                                )}
                               </div>
                             )}
 
@@ -388,9 +512,24 @@ export default function AssignmentRulesManager({ onClose }: AssignmentRulesManag
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
+
+                          {/* Validation Error Display */}
+                          {hasErrors && (
+                            <Alert className="mt-4 border-red-200 bg-red-50">
+                              <AlertCircle className="h-4 w-4 text-red-600" />
+                              <AlertDescription className="text-red-800">
+                                {ruleErrors.map((error, errorIndex) => (
+                                  <div key={errorIndex} className="text-sm">
+                                    {error}
+                                  </div>
+                                ))}
+                              </AlertDescription>
+                            </Alert>
+                          )}
                         </CardContent>
                       </Card>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

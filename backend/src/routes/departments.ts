@@ -56,7 +56,21 @@ router.get('/:id', authenticate, authorize('admin', 'manager'), async (req, res)
       include: {
         manager: { select: { id: true, firstName: true, lastName: true, email: true } },
         children: { select: { id: true, name: true } },
-        users: { select: { id: true, firstName: true, lastName: true, email: true } }
+        users: { 
+          select: { 
+            id: true, 
+            isPrimary: true,
+            role: true,
+            user: {
+              select: {
+                id: true, 
+                firstName: true, 
+                lastName: true, 
+                email: true 
+              }
+            }
+          } 
+        }
       }
     });
     if (!dept) return res.status(404).json({ success: false, error: 'Department not found' });
@@ -102,7 +116,7 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
     if (!existing) return res.status(404).json({ success: false, error: 'Department not found' });
 
     // Ensure no users are assigned before delete
-    const countUsers = await prisma.user.count({ where: { departmentId: id } });
+    const countUsers = await prisma.userDepartment.count({ where: { departmentId: id } });
     if (countUsers > 0) {
       return res.status(400).json({ success: false, error: 'Department has assigned users; reassign them first' });
     }
@@ -130,7 +144,15 @@ router.post('/:id/users/:userId', authenticate, authorize('admin', 'manager'), a
 
     const updated = await prisma.user.update({
       where: { id: userId },
-      data: { departmentId: id }
+      data: { 
+        departments: {
+          create: {
+            departmentId: id,
+            isPrimary: true,
+            role: 'member'
+          }
+        }
+      }
     });
 
     return res.json({ success: true, data: { id: updated.id, departmentId: id }, message: 'User assigned to department' });
@@ -147,9 +169,14 @@ router.delete('/:id/users/:userId', authenticate, authorize('admin', 'manager'),
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-    if (user.departmentId !== id) return res.status(400).json({ success: false, error: 'User is not in this department' });
+    // Check if user is in this department
+    const userDept = await prisma.userDepartment.findFirst({
+      where: { userId, departmentId: id }
+    });
+    
+    if (!userDept) return res.status(400).json({ success: false, error: 'User is not in this department' });
 
-    await prisma.user.update({ where: { id: userId }, data: { departmentId: null } });
+    await prisma.userDepartment.delete({ where: { id: userDept.id } });
     return res.json({ success: true, message: 'User removed from department' });
   } catch (error) {
     console.error('Remove user from department error:', error);
@@ -167,7 +194,9 @@ router.get('/:id/stats', authenticate, async (req, res) => {
       where: { id },
       include: {
         users: {
-          where: { isAgent: true },
+          where: { 
+            user: { isAgent: true }
+          },
           select: { id: true }
         }
       }
@@ -177,7 +206,7 @@ router.get('/:id/stats', authenticate, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Department not found' });
     }
 
-    const agentIds = department.users.map(user => user.id);
+    const agentIds = department.users.map(userDept => userDept.id);
 
     // Get ticket statistics
     const [

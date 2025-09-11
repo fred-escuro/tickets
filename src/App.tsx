@@ -22,6 +22,8 @@ import { UsersPage } from './pages/UsersPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { TicketDetailPage } from './pages/TicketDetailPage';
 import { DepartmentOverviewPage } from './pages/DepartmentOverviewPage';
+import EmailLogsPage from './pages/EmailLogsPage';
+import AutoResponsePage from './pages/AutoResponsePage';
 
 const AppRoutes: FC = () => {
   return (
@@ -127,6 +129,18 @@ const AppRoutes: FC = () => {
         }
       />
       <Route
+        path="/settings/auto-response"
+        element={
+          <ProtectedRoute
+            pageTitle="Auto-Response Templates"
+            pageDescription="Manage automated email responses for new tickets."
+            requireAnyRoleNames={["admin","manager"]}
+          >
+            <AutoResponsePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/profile"
         element={
           <ProtectedRoute pageTitle="Profile" pageDescription="Please log in to view and edit your profile.">
@@ -139,6 +153,18 @@ const AppRoutes: FC = () => {
         element={
           <ProtectedRoute pageTitle="Department Overview" pageDescription="View department details and ticket statistics.">
             <DepartmentOverviewPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/email-logs"
+        element={
+          <ProtectedRoute 
+            pageTitle="Email Logs" 
+            pageDescription="Track all inbound and outbound emails"
+            requireAnyPermissionKeys={["tickets:read"]}
+          >
+            <EmailLogsPage />
           </ProtectedRoute>
         }
       />

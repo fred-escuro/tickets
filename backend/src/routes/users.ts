@@ -34,7 +34,6 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
         middleName: createData.middleName || undefined,
         email: createData.email,
         password: hashedPassword,
-        departmentId: createData.departmentId || undefined,
         avatar: createData.avatar || undefined,
         phone: createData.phone || undefined,
         location: createData.location || undefined,
@@ -47,7 +46,65 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        departmentId: true,
+        departments: {
+          select: {
+            id: true,
+            isPrimary: true,
+            role: true,
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        },
+        avatar: true,
+        phone: true,
+        location: true,
+        isAgent: true,
+        skills: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    // Assign departments if provided
+    if (createData.departments && createData.departments.length > 0) {
+      for (const userDept of createData.departments) {
+        await prisma.userDepartment.create({
+          data: {
+            userId: newUser.id,
+            departmentId: userDept.departmentId,
+            isPrimary: userDept.isPrimary,
+            role: userDept.role
+          }
+        });
+      }
+    }
+
+    // Fetch the user with departments
+    const userWithDepartments = await prisma.user.findUnique({
+      where: { id: newUser.id },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        email: true,
+        departments: {
+          select: {
+            id: true,
+            isPrimary: true,
+            role: true,
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        },
         avatar: true,
         phone: true,
         location: true,
@@ -60,7 +117,7 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      data: newUser,
+      data: userWithDepartments,
       message: 'User created successfully'
     });
   } catch (error) {
@@ -98,7 +155,13 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
         }
       } as any;
     }
-    if (departmentId) where.departmentId = departmentId;
+    if (departmentId) {
+      where.departments = {
+        some: {
+          departmentId: departmentId
+        }
+      };
+    }
 
     // Get total count
     const total = await prisma.user.count({ where });
@@ -112,7 +175,6 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        departmentId: true,
         avatar: true,
         phone: true,
         location: true,
@@ -120,11 +182,19 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
         skills: true,
         createdAt: true,
         updatedAt: true,
-        departmentEntity: {
+        departments: {
           select: {
             id: true,
-            name: true,
-            description: true
+            isPrimary: true,
+            role: true,
+            joinedAt: true,
+            department: {
+              select: {
+                id: true,
+                name: true,
+                description: true
+              }
+            }
           }
         },
         roles: {
@@ -189,7 +259,21 @@ router.get('/:id', authenticate, async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        departmentId: true,
+        departments: {
+          select: {
+            id: true,
+            isPrimary: true,
+            role: true,
+            joinedAt: true,
+            department: {
+              select: {
+                id: true,
+                name: true,
+                description: true
+              }
+            }
+          }
+        },
         avatar: true,
         phone: true,
         location: true,
@@ -265,7 +349,7 @@ router.put('/:id', authenticate, async (req, res) => {
       middleName: updateData.middleName || undefined,
       email: updateData.email || undefined,
       // role updates are disabled; RBAC handles roles
-      departmentId: updateData.departmentId === null ? null : updateData.departmentId || undefined,
+      // department updates are handled via UserDepartment junction table
       avatar: updateData.avatar || undefined,
       phone: updateData.phone || undefined,
       location: updateData.location || undefined,
@@ -292,7 +376,19 @@ router.put('/:id', authenticate, async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        departmentId: true,
+        departments: {
+          select: {
+            id: true,
+            isPrimary: true,
+            role: true,
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        },
         avatar: true,
         phone: true,
         location: true,
@@ -302,6 +398,66 @@ router.put('/:id', authenticate, async (req, res) => {
         updatedAt: true
       }
     });
+
+    // Update departments if provided
+    if (updateData.departments !== undefined) {
+      // Remove all existing department assignments
+      await prisma.userDepartment.deleteMany({
+        where: { userId: id }
+      });
+
+      // Add new department assignments
+      if (updateData.departments.length > 0) {
+        for (const userDept of updateData.departments) {
+          await prisma.userDepartment.create({
+            data: {
+              userId: id,
+              departmentId: userDept.departmentId,
+              isPrimary: userDept.isPrimary,
+              role: userDept.role
+            }
+          });
+        }
+      }
+
+      // Fetch updated user with departments
+      const userWithUpdatedDepartments = await prisma.user.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          middleName: true,
+          email: true,
+          departments: {
+            select: {
+              id: true,
+              isPrimary: true,
+              role: true,
+              department: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            }
+          },
+          avatar: true,
+          phone: true,
+          location: true,
+          isAgent: true,
+          skills: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+
+      return res.json({
+        success: true,
+        data: userWithUpdatedDepartments,
+        message: 'User updated successfully'
+      });
+    }
 
     return res.json({
       success: true,
@@ -329,7 +485,19 @@ router.get('/agents/list', authenticate, async (req, res) => {
         middleName: true,
         email: true,
         avatar: true,
-        departmentId: true,
+        departments: {
+          select: {
+            id: true,
+            isPrimary: true,
+            role: true,
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        },
         skills: true
       },
       orderBy: { firstName: 'asc' }

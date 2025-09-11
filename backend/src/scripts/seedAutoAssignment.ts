@@ -232,21 +232,37 @@ export async function seedAutoAssignment() {
     const itSupportDept = departments.find(d => d.name === 'IT Support');
     const billingDept = departments.find(d => d.name === 'Billing');
 
+    // Assign users to departments using the new junction table
     for (const user of users) {
-      let departmentId = null;
+      const assignments = [];
       
       if (user.email === 'admin@tickethub.com' || user.email === 'manager@tickethub.com') {
-        departmentId = itSupportDept?.id;
+        if (itSupportDept) assignments.push({ dept: itSupportDept, isPrimary: true, role: 'admin' });
+        if (billingDept) assignments.push({ dept: billingDept, isPrimary: false, role: 'member' });
       } else if (user.email === 'agent@tickethub.com' || user.email === 'developer@tickethub.com') {
-        departmentId = itSupportDept?.id;
+        if (itSupportDept) assignments.push({ dept: itSupportDept, isPrimary: true, role: 'specialist' });
       }
 
-      if (departmentId) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { departmentId }
+      for (const assignment of assignments) {
+        await prisma.userDepartment.upsert({
+          where: {
+            userId_departmentId: {
+              userId: user.id,
+              departmentId: assignment.dept.id
+            }
+          },
+          update: {
+            isPrimary: assignment.isPrimary,
+            role: assignment.role
+          },
+          create: {
+            userId: user.id,
+            departmentId: assignment.dept.id,
+            isPrimary: assignment.isPrimary,
+            role: assignment.role
+          }
         });
-        console.log(`✅ Assigned ${user.email} to department`);
+        console.log(`✅ Assigned ${user.email} to ${assignment.dept.name} department`);
       }
     }
 

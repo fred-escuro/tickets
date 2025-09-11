@@ -203,13 +203,6 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
 
   const handleAddComment = async (commentData: { content: string; attachments: FileAttachment[]; isInternal: boolean }) => {
     try {
-      console.log('Creating comment with data:', {
-        ticketId: ticket.id,
-        content: commentData.content,
-        isInternal: commentData.isInternal,
-        attachmentsCount: commentData.attachments?.length || 0
-      });
-
       // Create the comment using the comment service
       const response = await CommentService.createComment({
         ticketId: ticket.id,
@@ -219,7 +212,6 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
       });
 
       if (response.success) {
-        console.log('Comment created successfully:', response.data);
         // Refresh the ticket details to show the new comment
         toast.success('Comment added successfully!');
         
@@ -447,7 +439,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
                   title: title.trim(),
                   description: description.trim(),
                   priority: priority.toUpperCase(),
-                  ...(assignee && { assignee })
+                  ...(assignee && { assignedTo: assignee })
                 });
                 
                 if (!res.success) throw new Error(res.error || 'Failed to create task');
@@ -467,7 +459,6 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
                     isInternal: false
                   });
                   
-                  console.log('Task creation comment added successfully');
                 } catch (commentError) {
                   console.error('Failed to add task creation comment:', commentError);
                   // Don't fail the task creation if comment fails
@@ -699,8 +690,6 @@ const NewTicketDialog: FC<{
 
   // Memoize the onFilesChange handler to prevent unnecessary re-renders
   const handleFilesChange = useCallback((newAttachments: FileAttachment[]) => {
-    console.log('NewTicketDialog: handleFilesChange called with:', newAttachments);
-    console.log('Previous attachments:', attachments);
     setAttachments(newAttachments);
   }, [attachments]);
 
@@ -1022,7 +1011,6 @@ export const HelpDeskPage: FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [categoryOptions, setCategoryOptions] = useState<TicketCategory[]>([]);
   const [loadingCategoryOptions, setLoadingCategoryOptions] = useState(false);
-  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [assignedToDepartmentFilter, setAssignedToDepartmentFilter] = useState<string>('all');
   const [totalTickets, setTotalTickets] = useState<number>(0);
   
@@ -1052,9 +1040,6 @@ export const HelpDeskPage: FC = () => {
         params.category = categoryFilter;
       }
       // Apply server-side department filter (by submitter's department)
-      if (departmentFilter && departmentFilter !== 'all') {
-        params.department = departmentFilter;
-      }
       // Apply server-side assigned to department filter
       if (assignedToDepartmentFilter && assignedToDepartmentFilter !== 'all') {
         params.assignedToDepartment = assignedToDepartmentFilter;
@@ -1088,7 +1073,7 @@ export const HelpDeskPage: FC = () => {
   useEffect(() => {
     fetchTickets(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticketFilter, priorityFilter, categoryFilter, departmentFilter, assignedToDepartmentFilter]);
+  }, [ticketFilter, priorityFilter, categoryFilter, assignedToDepartmentFilter]);
 
   // Debounced refetch when search changes
   useEffect(() => {
@@ -1307,11 +1292,6 @@ export const HelpDeskPage: FC = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <DepartmentFilter
-                  value={departmentFilter}
-                  onChange={setDepartmentFilter}
-                  placeholder="Filter by submitter's department"
-                />
                 <DepartmentFilter
                   value={assignedToDepartmentFilter}
                   onChange={setAssignedToDepartmentFilter}

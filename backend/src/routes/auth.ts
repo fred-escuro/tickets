@@ -11,7 +11,7 @@ const router = Router();
 // Register new user
 router.post('/register', async (req, res) => {
   try {
-    const { firstName, lastName, middleName, email, password, departmentId, avatar, phone, location, isAgent, skills }: CreateUserRequest = req.body;
+    const { firstName, lastName, middleName, email, password, avatar, phone, location, isAgent, skills }: CreateUserRequest = req.body;
 
     // Validate required fields
     if (!firstName || !lastName || !email || !password) {
@@ -45,7 +45,6 @@ router.post('/register', async (req, res) => {
         middleName,
         email,
         password: hashedPassword,
-        departmentId,
         avatar,
         phone,
         location,
@@ -60,7 +59,19 @@ router.post('/register', async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        departmentId: true,
+        departments: {
+          select: {
+            id: true,
+            isPrimary: true,
+            role: true,
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        },
         avatar: true,
         phone: true,
         location: true,
@@ -88,7 +99,6 @@ router.post('/register', async (req, res) => {
     const userResponse = {
       ...user,
       middleName: user.middleName || undefined,
-      departmentId: (user as any).departmentId || undefined,
       avatar: user.avatar || undefined,
       phone: user.phone || undefined,
       location: user.location || undefined,
@@ -221,7 +231,6 @@ router.post('/login', async (req, res) => {
     const userResponse: any = {
       ...userWithoutPassword,
       middleName: userWithoutPassword.middleName || undefined,
-      departmentId: userWithoutPassword.departmentId || undefined,
       avatar: userWithoutPassword.avatar || undefined,
       phone: userWithoutPassword.phone || undefined,
       location: userWithoutPassword.location || undefined,
@@ -443,7 +452,6 @@ router.post('/social-login', async (req, res) => {
     const userResponse: any = {
       ...userWithoutPassword,
       middleName: userWithoutPassword.middleName || undefined,
-      departmentId: userWithoutPassword.departmentId || undefined,
       avatar: userWithoutPassword.avatar || undefined,
       phone: userWithoutPassword.phone || undefined,
       location: userWithoutPassword.location || undefined,
@@ -485,7 +493,19 @@ router.post('/refresh', async (req, res) => {
         lastName: true,
         middleName: true,
         email: true,
-        departmentId: true,
+        departments: {
+          select: {
+            id: true,
+            isPrimary: true,
+            role: true,
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        },
         avatar: true,
         phone: true,
         location: true,
@@ -529,7 +549,6 @@ router.post('/refresh', async (req, res) => {
     const userResponse: any = {
       ...user,
       middleName: user.middleName || undefined,
-      departmentId: (user as any).departmentId || undefined,
       avatar: user.avatar || undefined,
       phone: user.phone || undefined,
       location: user.location || undefined,

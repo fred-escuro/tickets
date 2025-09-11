@@ -49,7 +49,7 @@ router.get('/', async (req, res) => {
     const grouped: Record<string, any> = {};
     for (const ns of namespaces) {
       const ofNs = rows.filter((r: any) => r.namespace === ns).map((r: any) => ({ key: r.key, value: r.value, isSecret: r.isSecret }));
-      grouped[ns] = nsToObject(ofNs, false);
+      grouped[ns] = nsToObject(ofNs, true);
     }
     return res.json({ success: true, data: grouped });
   } catch (e) {
@@ -99,7 +99,8 @@ router.put('/:namespace', authenticate, authorizePermission('settings:write'), a
     await prisma.$transaction(ops);
     // Return updated namespace
     const rows = await db.appSetting.findMany({ where: { namespace } });
-    return res.json({ success: true, data: nsToObject(rows, true), message: 'Settings updated' });
+    const data = nsToObject(rows, true);
+    return res.json({ success: true, data, message: 'Settings updated' });
   } catch (e) {
     console.error('settings v2 update namespace error', e);
     return res.status(500).json({ success: false, error: 'Failed to update settings' });
@@ -174,9 +175,25 @@ router.post('/email/smtp/test', authenticate, authorizePermission('settings:writ
     const pass = smtp.password || process.env.SMTP_PASSWORD;
     // Support both name and explicit from email; fallback to user/email
     const rawFrom = (smtp.fromAddress || process.env.SMTP_FROM || user || 'no-reply@example.com') as string;
-    const looksLikeEmail = /@/.test(rawFrom);
-    const fromEmail = (smtp.fromEmail || (looksLikeEmail ? rawFrom : undefined) || user || process.env.SMTP_FROM || 'no-reply@example.com') as string;
-    const fromName = (smtp.fromName || (!looksLikeEmail ? rawFrom : undefined)) as (string | undefined);
+    
+    // Parse "Name (email@domain.com)" format
+    const nameEmailMatch = rawFrom.match(/^(.+?)\s*\(([^)]+@[^)]+)\)$/);
+    let fromEmail: string;
+    let fromName: string | undefined;
+    
+    if (nameEmailMatch) {
+      // Format: "Name (email@domain.com)"
+      fromName = nameEmailMatch[1].trim();
+      fromEmail = nameEmailMatch[2].trim();
+    } else if (/@/.test(rawFrom)) {
+      // Pure email format
+      fromEmail = rawFrom;
+      fromName = undefined;
+    } else {
+      // Pure name format, use user as email
+      fromName = rawFrom;
+      fromEmail = user || process.env.SMTP_FROM || 'no-reply@example.com';
+    }
 
     if (!host || !user || !pass) {
       return res.status(400).json({ success: false, error: 'SMTP is not fully configured (host/user/password required)' });
@@ -246,11 +263,131 @@ If you received this message, outbound email is working.`;
   </body>
 </html>`;
 
-    const info = await transporter.sendMail({ from: fromName ? { name: fromName, address: fromEmail } : fromEmail, to, subject, text, html });
-    return res.json({ success: true, message: 'Test email sent', data: { messageId: info.messageId } });
-  } catch (e) {
+    // Use the new email tracking service instead of direct nodemailer
+    const { emailTrackingService } = await import('../services/emailTrackingService');
+    
+    const emailData = {
+      to,
+      subject,
+      text,
+      html,
+      options: {
+        type: 'NEW' as const,
+        userId: (req as any).user?.id,
+        replyTo: fromEmail,
+      },
+    };
+
+    const emailLogId = await emailTrackingService.sendEmail(emailData);
+    return res.json({ success: true, message: 'Test email sent', data: { emailLogId } });
+  } catch (e: any) {
     console.error('SMTP test send error:', e);
-    return res.status(500).json({ success: false, error: 'Failed to send test email' });
+    return res.status(500).json({ success: false, error: 'Failed to send test email: ' + (e.message || 'Unknown error') });
+  }
+});
+
+// Admin: test IMAP connection and list folders
+router.post('/email/imap/test', authenticate, authorizePermission('settings:write'), async (req, res) => {
+  try {
+    const { ImapFlow } = await import('imapflow');
+    
+    const db: any = prisma as any;
+    const rows = await db.appSetting.findMany({ where: { namespace: 'email.inbound' } });
+    const imap = nsToObject(rows, true) as any;
+    
+    const host = imap.imapHost || process.env.IMAP_HOST;
+    const port = Number(imap.imapPort ?? process.env.IMAP_PORT ?? 993);
+    const secure = Boolean(imap.imapSecure ?? (process.env.IMAP_SECURE === 'true'));
+    const user = imap.imapUser || process.env.IMAP_USER;
+    const password = imap.imapPassword || process.env.IMAP_PASSWORD;
+
+    if (!host || !user || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'IMAP is not fully configured (host/user/password required)' 
+      });
+    }
+
+    const client = new ImapFlow({
+      host,
+      port,
+      secure,
+      auth: { user, pass: password },
+      logger: false
+    });
+
+    try {
+      // Connect and authenticate
+      await client.connect();
+      
+      // List all folders
+      const folders: any[] = [];
+      const folderList = await client.list();
+      for (const folder of folderList) {
+        folders.push({
+          name: folder.name,
+          path: folder.path,
+          delimiter: folder.delimiter,
+          flags: folder.flags,
+          specialUse: folder.specialUse,
+          subscribed: folder.subscribed
+        });
+      }
+
+      // Get folder status for common folders and configured folders
+      const folderStatus: any = {};
+      const commonFolders = ['INBOX', 'Processed', 'Errors', 'Sent', 'Drafts', 'Trash'];
+      
+      // Add configured folders from the request
+      const { checkFolders } = req.body as { checkFolders?: string[] };
+      const foldersToCheck = [...commonFolders, ...(checkFolders || [])];
+      
+      for (const folderName of foldersToCheck) {
+        try {
+          const status = await client.status(folderName, { messages: true, unseen: true, recent: true });
+          folderStatus[folderName] = { ...status, exists: true };
+        } catch (e) {
+          // Folder doesn't exist or can't access
+          const errorMessage = e instanceof Error ? e.message : String(e);
+          folderStatus[folderName] = { exists: false, error: errorMessage };
+        }
+      }
+
+      await client.logout();
+      
+      return res.json({ 
+        success: true, 
+        message: 'IMAP connection successful', 
+        data: { 
+          folders: folders.slice(0, 20), // Limit to first 20 folders
+          totalFolders: folders.length,
+          folderStatus,
+          connection: {
+            host,
+            port,
+            secure,
+            user
+          }
+        } 
+      });
+    } catch (connectError: any) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'IMAP connection failed: ' + (connectError.message || 'Unknown error'),
+        details: {
+          host,
+          port,
+          secure,
+          user: user ? user.substring(0, 3) + '***' : 'not set'
+        }
+      });
+    }
+  } catch (e: any) {
+    console.error('IMAP test error:', e);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to test IMAP connection: ' + (e.message || 'Unknown error') 
+    });
   }
 });
 

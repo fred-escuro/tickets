@@ -10,12 +10,7 @@ export interface User {
   email: string;
   role: string;
   avatar?: string;
-  departmentId?: string;
-  departmentEntity?: {
-    id: string;
-    name: string;
-    description?: string;
-  };
+  departments?: UserDepartment[];
   phone?: string;
   location?: string;
   isAgent: boolean;
@@ -24,9 +19,23 @@ export interface User {
   updatedAt: string;
 }
 
+export interface UserDepartment {
+  id: string;
+  isPrimary: boolean;
+  role: string;
+  joinedAt: string;
+  leftAt?: string;
+  department: {
+    id: string;
+    name: string;
+    description?: string;
+  };
+}
+
 export interface DepartmentOption {
   id: string;
   name: string;
+  description?: string;
 }
 
 // Support Agent types for backend API
@@ -48,11 +57,12 @@ export interface CreateUserData {
   lastName: string;
   middleName?: string;
   role: string;
-  departmentId?: string;
+  departments?: UserDepartment[];
   position?: string;
   phone?: string;
   avatar?: string;
   location?: string;
+  isAgent?: boolean;
 }
 
 export interface UpdateUserData {
@@ -60,12 +70,13 @@ export interface UpdateUserData {
   lastName?: string;
   middleName?: string;
   role?: string;
-  departmentId?: string | null;
+  departments?: UserDepartment[];
   position?: string;
   phone?: string;
   avatar?: string;
   location?: string;
   isActive?: boolean;
+  isAgent?: boolean;
   // Optional new password when updating a user (admins or users:write only)
   password?: string;
 }
@@ -262,7 +273,8 @@ export const USER_ROLES = [
 export type UserRole = typeof USER_ROLES[number];
 
 // User departments
-export const USER_DEPARTMENTS = [
+// Legacy department constants - kept for backward compatibility
+export const LEGACY_USER_DEPARTMENTS = [
   'IT',
   'HR',
   'Finance',
@@ -275,7 +287,7 @@ export const USER_DEPARTMENTS = [
   'Other',
 ] as const;
 
-export type UserDepartment = typeof USER_DEPARTMENTS[number];
+export type LegacyUserDepartment = typeof LEGACY_USER_DEPARTMENTS[number];
 
 // Role permissions
 export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {

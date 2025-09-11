@@ -17,8 +17,7 @@ model User {
   middleName  String?
   email       String   @unique
   password    String
-  // Legacy string department removed; use relation below
-  departmentId String?
+  // Legacy single department removed; now using many-to-many relationship
   avatar      String?
   phone       String?
   location    String?
@@ -55,15 +54,24 @@ model User {
   taskAssignmentHistoryFrom TaskAssignmentHistory[] @relation("TaskAssignmentFrom")
   taskAssignmentHistoryTo TaskAssignmentHistory[] @relation("TaskAssignmentTo")
   taskAssignmentHistoryBy TaskAssignmentHistory[] @relation("TaskAssignmentBy")
+  ticketAssignmentHistoryFrom TicketAssignmentHistory[] @relation("AssignmentFromUser")
+  ticketAssignmentHistoryTo TicketAssignmentHistory[] @relation("AssignmentToUser")
+  ticketAssignmentHistoryBy TicketAssignmentHistory[] @relation("AssignmentAssignedBy")
 
-  // Department relation
-  departmentEntity Department? @relation("UserDepartment", fields: [departmentId], references: [id])
+  // Multiple departments relation
+  departments UserDepartment[]
 
   // RBAC relations
   roles UserRole[]
 
   // Departments managed by the user
   managesDepartments Department[] @relation("DepartmentManager")
+
+  // Email tracking relations
+  emailLogs EmailLog[]
+
+  // Auto-response relations
+  createdTemplates AutoResponseTemplate[] @relation("TemplateCreator")
 
   @@map("users")
 }
@@ -79,6 +87,7 @@ model Ticket {
   submittedBy   String
   submittedAt   DateTime  @default(now())
   assignedTo    String?
+  assignedToDepartmentId String?
   assignedAt    DateTime?
   dueDate       DateTime?
   resolvedAt    DateTime?
@@ -97,6 +106,7 @@ model Ticket {
   // Relations
   submitter     User      @relation("SubmittedBy", fields: [submittedBy], references: [id])
   assignee      User?     @relation("AssignedTo", fields: [assignedTo], references: [id])
+  assignedToDepartment Department? @relation("AssignedToDepartment", fields: [assignedToDepartmentId], references: [id])
   escalator     User?     @relation("EscalatedBy", fields: [escalatedBy], references: [id])
   category      TicketCategory @relation(fields: [categoryId], references: [id])
   priority      TicketPriority @relation(fields: [priorityId], references: [id])
@@ -106,29 +116,127 @@ model Ticket {
   tasks         TicketTask[]
   events        TicketEvent[]
   statusHistory TicketStatusHistory[]
-  emailMessages EmailMessage[]
+  assignmentHistory TicketAssignmentHistory[]
+  emailLogs     EmailLog[]
+
+  // Auto-response relations
+  autoResponses AutoResponse[]
+  emailFollowups EmailFollowup[]
 
   @@map("tickets")
 }
 
-/// Stores metadata about ingested email messages to ensure idempotency and traceability
-model EmailMessage {
+/// Comprehensive email tracking for both inbound and outbound emails
+model EmailLog {
   id          String   @id @default(cuid())
-  messageId   String   @unique
-  ticketId    String?
+  messageId   String?  @unique // Unique message ID from email headers
+  direction   EmailDirection
   type        EmailMessageType @default(NEW)
   from        String
   to          String
+  cc          String?
+  bcc         String?
   subject     String?
+  body        String?  // Email body content
+  htmlBody    String?  // HTML version if available
+  ticketId    String?  // Associated ticket if any
+  userId      String?  // User who sent/received the email
+  status      EmailStatus @default(SENT)
+  sentAt      DateTime? // When email was sent (for outbound)
+  receivedAt  DateTime? // When email was received (for inbound)
   processedAt DateTime @default(now())
-  error       String?
-  rawMeta     Json?
+  error       String?  // Error message if processing failed
+  retryCount  Int      @default(0)
+  rawMeta     Json?    // Raw email headers and metadata
+  attachments Json?    // Attachment metadata
+  deliveryStatus Json? // Delivery status for outbound emails
+  readAt      DateTime? // When email was read (if trackable)
+  replyTo     String?  // Reply-to address
+  inReplyTo   String?  // In-reply-to header for threading
+  references  String?  // References header for threading
 
   // Relations
   ticket      Ticket?  @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@map("email_messages")
+  @@index([direction])
+  @@index([status])
+  @@index([sentAt])
+  @@index([receivedAt])
+  @@index([ticketId])
+  @@index([userId])
+  @@map("email_logs")
 }
+
+// Auto-Response System Models
+
+model AutoResponseTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  subjectTemplate String
+  bodyTemplate    String
+  triggerConditions Json? // JSON conditions for when to use this template
+  departmentId String?
+  isActive    Boolean  @default(true)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  department Department? @relation(fields: [departmentId], references: [id])
+  creator    User?       @relation("TemplateCreator", fields: [createdBy], references: [id])
+  responses  AutoResponse[]
+
+  @@index([departmentId])
+  @@index([isActive])
+  @@map("auto_response_templates")
+}
+
+model AutoResponse {
+  id          String   @id @default(cuid())
+  ticketId    String
+  templateId  String
+  responseId  String   @unique // Unique identifier for tracking replies
+  toEmail     String
+  subject     String
+  body        String
+  threadId    String?  // Email thread identifier
+  sentAt      DateTime @default(now())
+  status      AutoResponseStatus @default(SENT)
+
+  // Relations
+  ticket      Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  template    AutoResponseTemplate @relation(fields: [templateId], references: [id])
+  followups   EmailFollowup[]
+
+  @@index([ticketId])
+  @@index([responseId])
+  @@index([threadId])
+  @@index([sentAt])
+  @@map("auto_responses")
+}
+
+model EmailFollowup {
+  id                String   @id @default(cuid())
+  autoResponseId    String
+  ticketId          String
+  originalEmailId   String?  // Reference to original email
+  followupEmailId   String?  // Reference to follow-up email
+  content           String
+  processedAt       DateTime @default(now())
+  status            FollowupStatus @default(PROCESSED)
+
+  // Relations
+  autoResponse      AutoResponse @relation(fields: [autoResponseId], references: [id], onDelete: Cascade)
+  ticket            Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([autoResponseId])
+  @@index([ticketId])
+  @@index([processedAt])
+  @@map("email_followups")
+}
+
 
 model Comment {
   id          String   @id @default(cuid())
@@ -321,9 +429,39 @@ model Department {
   manager   User?       @relation("DepartmentManager", fields: [managerId], references: [id])
   parent    Department? @relation("DepartmentHierarchy", fields: [parentId], references: [id])
   children  Department[] @relation("DepartmentHierarchy")
-  users     User[]      @relation("UserDepartment")
+  users     UserDepartment[]
+  assignedTickets Ticket[] @relation("AssignedToDepartment")
+  ticketAssignmentHistoryFrom TicketAssignmentHistory[] @relation("AssignmentFromDepartment")
+  ticketAssignmentHistoryTo TicketAssignmentHistory[] @relation("AssignmentToDepartment")
+
+  // Auto-response relations
+  autoResponseTemplates AutoResponseTemplate[]
 
   @@map("departments")
+}
+
+/// Junction table for many-to-many relationship between Users and Departments
+model UserDepartment {
+  id           String   @id @default(cuid())
+  userId       String
+  departmentId String
+  isPrimary    Boolean  @default(false) // Whether this is the user's primary department
+  joinedAt     DateTime @default(now())
+  leftAt       DateTime? // When the user left this department (for historical tracking)
+  role         String?  // User's role within this department (e.g., "member", "lead", "specialist")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  // Ensure unique user-department combinations
+  @@unique([userId, departmentId])
+  @@index([userId])
+  @@index([departmentId])
+  @@index([isPrimary])
+  @@map("user_departments")
 }
 
 model Role {
@@ -523,6 +661,28 @@ model TicketStatusHistory {
   @@map("ticket_status_history")
 }
 
+model TicketAssignmentHistory {
+  id                String    @id @default(cuid())
+  ticketId          String
+  fromUserId        String?
+  toUserId          String?
+  fromDepartmentId  String?
+  toDepartmentId    String?
+  assignedById      String
+  reason            String?
+  assignedAt        DateTime  @default(now())
+
+  // Relations
+  ticket            Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fromUser          User? @relation("AssignmentFromUser", fields: [fromUserId], references: [id])
+  toUser            User? @relation("AssignmentToUser", fields: [toUserId], references: [id])
+  fromDepartment    Department? @relation("AssignmentFromDepartment", fields: [fromDepartmentId], references: [id])
+  toDepartment      Department? @relation("AssignmentToDepartment", fields: [toDepartmentId], references: [id])
+  assignedBy        User @relation("AssignmentAssignedBy", fields: [assignedById], references: [id])
+
+  @@map("ticket_assignment_history")
+}
+
 model TicketTemplate {
   id          String   @id @default(cuid())
   name        String   @unique
@@ -654,4 +814,35 @@ enum TicketSource {
 enum EmailMessageType {
   NEW
   REPLY
+}
+
+enum EmailDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum EmailStatus {
+  SENT
+  DELIVERED
+  FAILED
+  BOUNCED
+  PROCESSING
+  PROCESSED
+  ERROR
+}
+
+enum AutoResponseStatus {
+  SENT
+  DELIVERED
+  FAILED
+  BOUNCED
+  PROCESSING
+  ERROR
+}
+
+enum FollowupStatus {
+  PROCESSED
+  FAILED
+  PENDING
+  IGNORED
 }

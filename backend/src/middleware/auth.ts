@@ -30,7 +30,19 @@ export const authenticate = async (
         lastName: true,
         middleName: true,
         email: true,
-        departmentId: true,
+        departments: {
+          select: {
+            id: true,
+            isPrimary: true,
+            role: true,
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        },
         avatar: true,
         phone: true,
         location: true,
@@ -38,7 +50,6 @@ export const authenticate = async (
         skills: true,
         createdAt: true,
         updatedAt: true,
-        departmentEntity: { select: { id: true, name: true } },
         roles: {
           select: {
             isPrimary: true,

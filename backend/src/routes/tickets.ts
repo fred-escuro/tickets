@@ -94,10 +94,14 @@ router.get('/', authenticate, authorizePermission('tickets:read'), async (req, r
     if (department) {
       // Filter by submitter's department
       where.submitter = {
-        departmentEntity: {
-          name: {
-            equals: department as string,
-            mode: 'insensitive'
+        departments: {
+          some: {
+            department: {
+              name: {
+                equals: department as string,
+                mode: 'insensitive'
+              }
+            }
           }
         }
       };
@@ -106,7 +110,7 @@ router.get('/', authenticate, authorizePermission('tickets:read'), async (req, r
     if (assignedToDepartment) {
       // Filter by assignee's department
       where.assignee = {
-        departmentEntity: {
+        departments: {
           name: {
             equals: assignedToDepartment as string,
             mode: 'insensitive'
@@ -166,11 +170,18 @@ router.get('/', authenticate, authorizePermission('tickets:read'), async (req, r
             middleName: true,
             email: true,
             avatar: true,
-            departmentEntity: {
+            departments: {
               select: {
                 id: true,
-                name: true,
-                description: true
+                isPrimary: true,
+                role: true,
+                department: {
+                  select: {
+                    id: true,
+                    name: true,
+                    description: true
+                  }
+                }
               }
             }
           }
@@ -183,11 +194,18 @@ router.get('/', authenticate, authorizePermission('tickets:read'), async (req, r
             middleName: true,
             email: true,
             avatar: true,
-            departmentEntity: {
+            departments: {
               select: {
                 id: true,
-                name: true,
-                description: true
+                isPrimary: true,
+                role: true,
+                department: {
+                  select: {
+                    id: true,
+                    name: true,
+                    description: true
+                  }
+                }
               }
             }
           }
@@ -274,12 +292,18 @@ router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req
             middleName: true,
             email: true,
             avatar: true,
-            departmentId: true,
-            departmentEntity: {
+            departments: {
               select: {
                 id: true,
-                name: true,
-                description: true
+                isPrimary: true,
+                role: true,
+                department: {
+                  select: {
+                    id: true,
+                    name: true,
+                    description: true
+                  }
+                }
               }
             }
           }
@@ -292,14 +316,27 @@ router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req
             middleName: true,
             email: true,
             avatar: true,
-            departmentId: true,
-            departmentEntity: {
+            departments: {
               select: {
                 id: true,
-                name: true,
-                description: true
+                isPrimary: true,
+                role: true,
+                department: {
+                  select: {
+                    id: true,
+                    name: true,
+                    description: true
+                  }
+                }
               }
             }
+          }
+        },
+        assignedToDepartment: {
+          select: {
+            id: true,
+            name: true,
+            description: true
           }
         },
         status: {
@@ -1281,6 +1318,167 @@ router.patch('/:ticketId/tasks/:taskId/status', authenticate, authorizePermissio
   } catch (e) {
     console.error('Update task status error:', e);
     return res.status(500).json({ success: false, error: 'Failed to update task status' });
+  }
+});
+
+// Ticket assignment update
+router.patch('/:id/assign', authenticate, authorizePermission('tickets:write'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { assignedTo, assignedToDepartment, reason } = req.body as { 
+      assignedTo?: string | null; 
+      assignedToDepartment?: string | null;
+      reason?: string;
+    };
+
+    const ticket = await prisma.ticket.findUnique({ where: { id } });
+    if (!ticket) return res.status(404).json({ success: false, error: 'Ticket not found' });
+
+    // Validate assignment - either assignedTo or assignedToDepartment, not both
+    if (assignedTo && assignedToDepartment) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Cannot assign to both user and department. Please choose one.' 
+      });
+    }
+
+    // If assignedTo is provided, verify the user exists
+    if (assignedTo) {
+      const user = await prisma.user.findUnique({ where: { id: assignedTo } });
+      if (!user) return res.status(400).json({ success: false, error: 'User not found' });
+    }
+
+    // If assignedToDepartment is provided, verify the department exists
+    if (assignedToDepartment) {
+      const department = await prisma.department.findUnique({ where: { id: assignedToDepartment } });
+      if (!department) return res.status(400).json({ success: false, error: 'Department not found' });
+    }
+
+    const updated = await prisma.$transaction(async (tx: any) => {
+      // Get current assignment before updating
+      const currentTicket = await tx.ticket.findUnique({ 
+        where: { id },
+        include: {
+          assignee: { select: { id: true, firstName: true, lastName: true } },
+          assignedToDepartment: { select: { id: true, name: true } }
+        }
+      });
+      
+      // Update the ticket assignment
+      const ticket = await tx.ticket.update({
+        where: { id },
+        data: { 
+          assignedTo: assignedTo || null,
+          assignedToDepartmentId: assignedToDepartment || null,
+          assignedAt: (assignedTo || assignedToDepartment) ? new Date() : null
+        },
+        include: {
+          assignee: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              departments: {
+                select: { name: true }
+              }
+            }
+          },
+          assignedToDepartment: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
+      });
+
+      // Create assignment history entry
+      await tx.ticketAssignmentHistory.create({
+        data: {
+          ticketId: id,
+          fromUserId: currentTicket?.assignedTo || null,
+          toUserId: assignedTo || null,
+          fromDepartmentId: currentTicket?.assignedToDepartment?.id || null,
+          toDepartmentId: assignedToDepartment || null,
+          assignedById: (req as any).user.id,
+          reason: reason || undefined,
+          assignedAt: new Date()
+        }
+      });
+
+      return ticket;
+    });
+
+    return res.json({ 
+      success: true, 
+      data: updated, 
+      message: 'Ticket assignment updated successfully' 
+    });
+  } catch (error) {
+    console.error('Failed to assign ticket:', error);
+    return res.status(500).json({ success: false, error: 'Failed to assign ticket' });
+  }
+});
+
+// Get ticket assignment history
+router.get('/:id/assignment-history', authenticate, authorizePermission('tickets:read'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const ticket = await prisma.ticket.findUnique({ where: { id } });
+    if (!ticket) return res.status(404).json({ success: false, error: 'Ticket not found' });
+
+    const history = await prisma.ticketAssignmentHistory.findMany({
+      where: { ticketId: id },
+      include: {
+        fromUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        toUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        fromDepartment: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        toDepartment: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        assignedBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { assignedAt: 'desc' }
+    });
+
+    return res.json({ 
+      success: true, 
+      data: history 
+    });
+  } catch (error) {
+    console.error('Failed to get assignment history:', error);
+    return res.status(500).json({ success: false, error: 'Failed to get assignment history' });
   }
 });
 

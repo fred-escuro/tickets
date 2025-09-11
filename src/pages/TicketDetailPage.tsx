@@ -14,10 +14,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import TicketDetailPanel from '@/components/TicketDetailPanel';
 import { CommentService } from '@/lib/services/commentService';
 import { UserService, type User as UserType } from '@/lib/services/userService';
+import { AuthService } from '@/lib/services/authService';
 import type { FileAttachment } from '@/components/ui/file-upload';
 import { apiClient, API_ENDPOINTS } from '@/lib/api';
 import { toast } from 'sonner';
-import { ArrowLeft, Paperclip, MessageSquare, ChevronDown, ChevronRight, FileText, Settings, Clock, ChevronUp, CheckSquare, UserPlus, User } from 'lucide-react';
+import { ArrowLeft, Paperclip, MessageSquare, ChevronDown, ChevronRight, FileText, Settings, Clock, ChevronUp, CheckSquare, UserPlus, User, Building } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -69,18 +70,31 @@ export const TicketDetailPage: React.FC = () => {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
 
-  // Persist selected tab via URL param (?tab=overview|status|timeline|tasks)
-  const initialTab = (searchParams.get('tab') || 'overview') as 'overview' | 'status' | 'timeline' | 'tasks';
-  const [activeTab, setActiveTab] = useState<'overview' | 'status' | 'timeline' | 'tasks'>(initialTab);
+  // Ticket assignment dialog state
+  const [showTicketAssignDialog, setShowTicketAssignDialog] = useState(false);
+  const [selectedTicketAssignee, setSelectedTicketAssignee] = useState('');
+  const [selectedTicketDepartment, setSelectedTicketDepartment] = useState('');
+  const [assignmentType, setAssignmentType] = useState<'user' | 'department'>('user');
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
+  const [assignmentReason, setAssignmentReason] = useState('');
+
+  // Assignment history state
+  const [assignmentHistory, setAssignmentHistory] = useState<any[]>([]);
+  const [loadingAssignmentHistory, setLoadingAssignmentHistory] = useState(false);
+
+  // Persist selected tab via URL param (?tab=overview|status|tasks)
+  const initialTab = (searchParams.get('tab') || 'overview') as 'overview' | 'status' | 'tasks';
+  const [activeTab, setActiveTab] = useState<'overview' | 'status' | 'tasks'>(initialTab);
 
   useEffect(() => {
-    const tab = (searchParams.get('tab') as any) as 'overview' | 'status' | 'timeline' | 'tasks' | null;
+    const tab = (searchParams.get('tab') as any) as 'overview' | 'status' | 'tasks' | null;
     if (tab && tab !== activeTab) setActiveTab(tab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const handleTabChange = (val: string) => {
-    const next = (val as any) as 'overview' | 'status' | 'timeline' | 'tasks';
+    const next = (val as any) as 'overview' | 'status' | 'tasks';
     setActiveTab(next);
     const p = new URLSearchParams(searchParams);
     p.set('tab', next);
@@ -102,10 +116,15 @@ export const TicketDetailPage: React.FC = () => {
   useEffect(() => {
     fetchTicket();
     loadUsers();
+    loadDepartments();
   }, [id]);
 
   useEffect(() => {
     if (id) void loadComments();
+  }, [id]);
+
+  useEffect(() => {
+    if (id) void loadAssignmentHistory();
   }, [id]);
 
   const statusName = useMemo(() => {
@@ -137,15 +156,16 @@ export const TicketDetailPage: React.FC = () => {
     if (!id) return;
     const title = newTaskTitle.trim();
     const description = newTaskDescription.trim();
-    const assignee = newTaskAssignee.trim();
+    const assignee = newTaskAssignee === 'unassigned' ? null : newTaskAssignee;
     if (!title) { toast.error('Task title is required'); return; }
     try {
-      const res = await apiClient.post(API_ENDPOINTS.TICKETS.TASKS_CREATE(id), {
+      const taskData = {
         title,
         description,
         priority: newTaskPriority,
-        ...(assignee && { assignee })
-      });
+        ...(assignee && { assignedTo: assignee })
+      };
+      const res = await apiClient.post(API_ENDPOINTS.TICKETS.TASKS_CREATE(id), taskData);
       if (!res.success) throw new Error(res.error || 'Failed to create task');
       
       // Automatically add a comment to the ticket timeline
@@ -163,7 +183,6 @@ export const TicketDetailPage: React.FC = () => {
           isInternal: false
         });
         
-        console.log('Task creation comment added successfully');
       } catch (commentError) {
         console.error('Failed to add task creation comment:', commentError);
         // Don't fail the task creation if comment fails
@@ -205,11 +224,9 @@ export const TicketDetailPage: React.FC = () => {
 
   const addTaskComment = async (taskId: string, content?: string) => {
     const commentContent = content || (taskCommentDraft[taskId] || '').trim();
-    console.log('Adding task comment:', { taskId, content, commentContent });
     if (!commentContent) { toast.error('Please enter a comment'); return; }
     try {
       const res = await apiClient.post(`/api/tickets/${id}/tasks/${taskId}/comments`, { content: commentContent, isInternal: false });
-      console.log('Task comment API response:', res);
       if (!res.success) throw new Error(res.error || 'Failed to add comment');
       setTaskCommentDraft(prev => ({ ...prev, [taskId]: '' }));
       await loadTaskComments(taskId);
@@ -288,6 +305,47 @@ export const TicketDetailPage: React.FC = () => {
     }
   };
 
+  const loadDepartments = async () => {
+    try {
+      setLoadingDepartments(true);
+      console.log('Loading departments...');
+      
+      // Debug current user
+      const currentUser = AuthService.getCurrentUser();
+      console.log('Current user:', currentUser);
+      console.log('User role:', currentUser?.role);
+      console.log('User isAgent:', currentUser?.isAgent);
+      
+      const res = await apiClient.get('/api/assignment-rules/departments');
+      console.log('Departments API response:', res);
+      if (res.success) {
+        console.log('Departments data:', res.data);
+        setDepartments((res.data as any) || []);
+      } else {
+        console.error('Departments API failed:', res.error);
+      }
+    } catch (error) {
+      console.error('Failed to load departments:', error);
+    } finally {
+      setLoadingDepartments(false);
+    }
+  };
+
+  const loadAssignmentHistory = async () => {
+    if (!id) return;
+    try {
+      setLoadingAssignmentHistory(true);
+      const res = await apiClient.get(API_ENDPOINTS.TICKETS.ASSIGNMENT_HISTORY(id));
+      if (res.success) {
+        setAssignmentHistory((res.data as any) || []);
+      }
+    } catch (error) {
+      console.error('Failed to load assignment history:', error);
+    } finally {
+      setLoadingAssignmentHistory(false);
+    }
+  };
+
   const handleAssignTask = (task: any, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card click
     setSelectedTaskForAssignment({
@@ -329,6 +387,61 @@ export const TicketDetailPage: React.FC = () => {
       setSelectedAssignee('');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to assign task');
+    }
+  };
+
+  const assignTicket = async () => {
+    if (!id) return;
+    try {
+      const assigneeValue = selectedTicketAssignee === 'unassigned' ? null : selectedTicketAssignee;
+      const departmentValue = selectedTicketDepartment === 'unassigned' ? null : selectedTicketDepartment;
+      
+      // Only assign to one - either user or department, not both
+      const assignmentData: any = {
+        reason: assignmentReason || undefined
+      };
+      
+      if (assignmentType === 'user' && assigneeValue) {
+        assignmentData.assignedTo = assigneeValue;
+        assignmentData.assignedToDepartment = null;
+      } else if (assignmentType === 'department' && departmentValue) {
+        assignmentData.assignedTo = null;
+        assignmentData.assignedToDepartment = departmentValue;
+      } else {
+        // Unassign from both
+        assignmentData.assignedTo = null;
+        assignmentData.assignedToDepartment = null;
+      }
+      
+      const res = await apiClient.patch(API_ENDPOINTS.TICKETS.ASSIGN(id), assignmentData);
+      
+      if (!res.success) throw new Error(res.error || 'Failed to assign ticket');
+      
+      // Update the ticket data with the response from the API
+      if (res.data) {
+        const updatedTicket = res.data as any;
+        setTicket((prev: any) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            assignedTo: updatedTicket.assignedTo,
+            assignedToDepartment: updatedTicket.assignedToDepartment,
+            assignee: updatedTicket.assignee
+          };
+        });
+      }
+      
+      toast.success('Ticket assigned successfully');
+      setShowTicketAssignDialog(false);
+      setSelectedTicketAssignee('');
+      setSelectedTicketDepartment('');
+      setAssignmentReason('');
+      
+      // Refresh assignment history
+      await loadAssignmentHistory();
+    } catch (error) {
+      console.error('Failed to assign ticket:', error);
+      toast.error('Failed to assign ticket. Please try again.');
     }
   };
 
@@ -426,7 +539,7 @@ export const TicketDetailPage: React.FC = () => {
   const groupedTimeline = useMemo(() => {
     const items: Array<{ type: 'issue' | 'comment'; timestamp: Date; data: any }> = [];
     if (ticket) {
-      items.push({ type: 'issue', timestamp: new Date(ticket.submittedAt), data: ticket });
+      items.push({ type: 'issue', timestamp: new Date(ticket?.submittedAt || new Date()), data: ticket });
     }
     for (const c of comments) {
       items.push({ type: 'comment', timestamp: new Date(c.createdAt), data: {
@@ -478,7 +591,7 @@ export const TicketDetailPage: React.FC = () => {
             {ticket?.title || (loading ? 'Loading…' : 'Ticket')}
           </h1>
           {ticket && (
-            <Badge variant="outline" className="ml-1">#{ticket.ticketNumber}</Badge>
+            <Badge variant="outline" className="ml-1">#{ticket?.ticketNumber}</Badge>
           )}
         </div>
         <div className="flex items-center gap-2"></div>
@@ -488,15 +601,9 @@ export const TicketDetailPage: React.FC = () => {
         {/* Main */}
         <div className="w-full">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
-            <TabsList className="w-full grid grid-cols-4 sm:w-auto sm:inline-flex">
+            <TabsList className="w-full grid grid-cols-3 sm:w-auto sm:inline-flex">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="status">Status & Actions</TabsTrigger>
-              <TabsTrigger value="timeline" className="flex items-center gap-1">
-                Timeline
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                  {comments.length}
-                </Badge>
-              </TabsTrigger>
               <TabsTrigger value="tasks" className="flex items-center gap-1">
                 Tasks
                 <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
@@ -521,15 +628,15 @@ export const TicketDetailPage: React.FC = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <div className="text-xs text-muted-foreground">Ticket Number</div>
-                  {ticket && <div className="text-sm font-medium">#{ticket.ticketNumber}</div>}
+                  {ticket && <div className="text-sm font-medium">#{ticket?.ticketNumber}</div>}
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Status</div>
-                  {ticket && <TicketStatusBadge status={ticket.status as any} size="sm" />}
+                  {ticket && <TicketStatusBadge status={ticket?.status as any} size="sm" />}
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Priority</div>
-                  {ticket && <PriorityBadge priority={ticket.priority as any} size="sm" />}
+                  {ticket && <PriorityBadge priority={ticket?.priority as any} size="sm" />}
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Category</div>
@@ -556,31 +663,31 @@ export const TicketDetailPage: React.FC = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <div className="text-xs text-muted-foreground">Date Created</div>
-                  {ticket && <div className="text-sm">{new Date(ticket.submittedAt).toLocaleString()}</div>}
+                  {ticket && <div className="text-sm">{new Date(ticket?.submittedAt || new Date()).toLocaleString()}</div>}
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Created By</div>
                   {ticket && (
                     <div className="text-sm">
-                      {ticket.submitter ? `${ticket.submitter.firstName} ${ticket.submitter.lastName}` : ticket.submittedBy}
+                      {ticket?.submitter ? `${ticket.submitter.firstName} ${ticket.submitter.lastName}` : ticket?.submittedBy}
                     </div>
                   )}
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground">Submitter Department</div>
-                  {ticket && ticket.submitter?.departmentEntity ? (
+                  <div className="text-xs text-muted-foreground">Assigned To User</div>
+                  {ticket && ticket?.assignee ? (
                     <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                      {ticket.submitter.departmentEntity.name}
+                      {ticket.assignee.firstName} {ticket.assignee.lastName}
                     </Badge>
                   ) : (
-                    <div className="text-sm text-muted-foreground">No department</div>
+                    <div className="text-sm text-muted-foreground">No assignment</div>
                   )}
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Assigned Department</div>
-                  {ticket && ticket.assignee?.departmentEntity ? (
+                  {ticket && ticket?.assignedToDepartment ? (
                     <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
-                      {ticket.assignee.departmentEntity.name}
+                      {ticket?.assignedToDepartment?.name}
                     </Badge>
                   ) : (
                     <div className="text-sm text-muted-foreground">No assignment</div>
@@ -594,7 +701,7 @@ export const TicketDetailPage: React.FC = () => {
                 {ticket ? (
                   <RichTextDisplay
                     content={ticket.description}
-                    className="prose max-w-none ticket-prose-compact prose-[9px]"
+                    className="prose max-w-none ticket-prose-compact prose-[7px]"
                   />
                 ) : (
                   <p className="text-sm text-muted-foreground">{loading ? 'Loading description…' : 'No description'}</p>
@@ -613,55 +720,6 @@ export const TicketDetailPage: React.FC = () => {
             )}
           </Card>
 
-            </TabsContent>
-
-            <TabsContent value="status" className="space-y-4">
-          {/* Status & Actions Tab */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <Settings className="h-4 w-4" />
-                <CardTitle className="text-base">Status & Actions</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="p-5 pt-0 space-y-3">
-              {ticket && (
-                <div className="flex items-center justify-between gap-2">
-                  <TicketStatusBadge status={ticket.status as any} size="sm" />
-                  <TicketStatusChange
-                    ticketId={ticket.id}
-                    currentStatus={statusName}
-                    currentStatusId={typeof ticket.status === 'object' ? ticket.status?.id : undefined}
-                    onStatusChange={async (newId, reason, addComment) => { await handleStatusChange(newId, reason, addComment); }}
-                    className="ml-1"
-                    triggerMode="button"
-                    triggerLabel="Change Status"
-                    disabled={!(() => {
-                      try {
-                        const u: any = JSON.parse(localStorage.getItem('user') || 'null');
-                        const roleNames: string[] = Array.isArray(u?.roles) ? u.roles.map((r: any) => r?.role?.name?.toLowerCase()).filter(Boolean) : (u?.role ? [String(u.role).toLowerCase()] : []);
-                        const perms: string[] = Array.isArray(u?.permissions) ? u.permissions : [];
-                        return roleNames.includes('admin') || perms.includes('ticket-status:change');
-                      } catch { return false; }
-                    })()}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {ticket && (
-            <TicketStatusHistory
-              ticketId={ticket.id}
-              defaultExpanded
-              maxItems={6}
-              refreshToken={historyRefreshToken}
-            />
-          )}
-
-            </TabsContent>
-
-            <TabsContent value="timeline" className="space-y-4">
           {/* Timeline */}
           <Card>
             <CardHeader className="pb-3 flex items-center justify-between">
@@ -738,6 +796,172 @@ export const TicketDetailPage: React.FC = () => {
 
             </TabsContent>
 
+            <TabsContent value="status" className="space-y-4">
+          {/* Status & Actions Tab */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                <CardTitle className="text-base">Status & Actions</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="p-5 pt-0 space-y-3">
+              {ticket && (
+                <div className="flex items-center justify-between gap-2">
+                  <TicketStatusBadge status={ticket.status as any} size="sm" />
+                  <TicketStatusChange
+                    ticketId={ticket.id}
+                    currentStatus={statusName}
+                    currentStatusId={typeof ticket.status === 'object' ? ticket.status?.id : undefined}
+                    onStatusChange={async (newId, reason, addComment) => { await handleStatusChange(newId, reason, addComment); }}
+                    className="ml-1"
+                    triggerMode="button"
+                    triggerLabel="Change Status"
+                    disabled={!(() => {
+                      try {
+                        const u: any = JSON.parse(localStorage.getItem('user') || 'null');
+                        const roleNames: string[] = Array.isArray(u?.roles) ? u.roles.map((r: any) => r?.role?.name?.toLowerCase()).filter(Boolean) : (u?.role ? [String(u.role).toLowerCase()] : []);
+                        const perms: string[] = Array.isArray(u?.permissions) ? u.permissions : [];
+                        return roleNames.includes('admin') || perms.includes('ticket-status:change');
+                      } catch { return false; }
+                    })()}
+                  />
+                </div>
+              )}
+              
+              {/* Assignment Section */}
+              <div className="pt-4 border-t">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Assignment</span>
+                  </div>
+                  <Button
+                    variant="default"
+                    onClick={() => {
+                      // Set assignment type based on current assignment
+                      if (ticket?.assignedTo) {
+                        setAssignmentType('user');
+                        setSelectedTicketAssignee(ticket.assignedTo);
+                        setSelectedTicketDepartment('');
+                      } else if (ticket?.assignedToDepartment) {
+                        setAssignmentType('department');
+                        setSelectedTicketAssignee('');
+                        setSelectedTicketDepartment(ticket.assignedToDepartment.id);
+                      } else {
+                        setAssignmentType('user');
+                        setSelectedTicketAssignee('');
+                        setSelectedTicketDepartment('');
+                      }
+                      setShowTicketAssignDialog(true);
+                    }}
+                    className="gap-2"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    {ticket?.assignedTo || ticket?.assignedToDepartment ? 'Reassign' : 'Assign'}
+                  </Button>
+                </div>
+                
+                {/* Current Assignment Display */}
+                <div className="mt-2 text-sm text-muted-foreground">
+                  {ticket?.assignedTo ? (
+                    <div className="flex items-center gap-2">
+                      <User className="h-3 w-3" />
+                      <span>
+                        Assigned to: {ticket.assignee ? `${ticket.assignee.firstName} ${ticket.assignee.lastName}` : 'Unknown User'}
+                      </span>
+                    </div>
+                  ) : ticket?.assignedToDepartment ? (
+                    <div className="flex items-center gap-2">
+                      <Building className="h-3 w-3" />
+                      <span>
+                        Assigned to: {ticket.assignedToDepartment?.name || 'Unknown Department'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <User className="h-3 w-3" />
+                      <span>Unassigned</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {ticket && (
+            <TicketStatusHistory
+              ticketId={ticket.id}
+              defaultExpanded
+              maxItems={6}
+              refreshToken={historyRefreshToken}
+            />
+          )}
+
+          {/* Assignment History */}
+          {ticket && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  <CardTitle className="text-base">Assignment History</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="p-5 pt-0">
+                {loadingAssignmentHistory ? (
+                  <div className="text-center py-4 text-muted-foreground">
+                    Loading assignment history...
+                  </div>
+                ) : assignmentHistory.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground">
+                    No assignment history available
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {assignmentHistory.map((assignment) => (
+                      <div key={assignment.id} className="flex items-start gap-3 p-3 border rounded-lg">
+                        <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <User className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="font-medium">
+                              {assignment.fromUser ? 
+                                `${assignment.fromUser.firstName} ${assignment.fromUser.lastName}` :
+                                assignment.fromDepartment ? 
+                                  assignment.fromDepartment.name :
+                                  'Unassigned'
+                              }
+                            </span>
+                            <span className="text-muted-foreground">→</span>
+                            <span className="font-medium">
+                              {assignment.toUser ? 
+                                `${assignment.toUser.firstName} ${assignment.toUser.lastName}` :
+                                assignment.toDepartment ? 
+                                  assignment.toDepartment.name :
+                                  'Unassigned'
+                              }
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Assigned by {assignment.assignedBy.firstName} {assignment.assignedBy.lastName}
+                            {assignment.reason && ` • ${assignment.reason}`}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(assignment.assignedAt).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+            </TabsContent>
+
+
             <TabsContent value="tasks" className="space-y-4">
           {/* Tasks */}
           {ticket && (
@@ -801,10 +1025,13 @@ export const TicketDetailPage: React.FC = () => {
                             </Badge>
                             <Badge variant="outline" className={`text-xxs border ${getPriorityPillClasses(priorityLabel)}`}>Priority: {priorityLabel || 'unknown'}</Badge>
                             <Badge variant="outline" className="text-xxs border bg-purple-100 text-purple-700 border-purple-200">
-                              Assigned: {task.assignedTo ? (() => {
-                                const user = users.find(u => u.id === task.assignedTo);
-                                return user ? `${user.firstName} ${user.lastName}` : task.assignedTo;
-                              })() : 'Unassigned'}
+                              Assigned: {(() => {
+                                if (task.assignedTo) {
+                                  const user = users.find(u => u.id === task.assignedTo);
+                                  return user ? `${user.firstName} ${user.lastName}` : task.assignedTo;
+                                }
+                                return 'Unassigned';
+                              })()}
                             </Badge>
                             {task.dueDate && <Badge variant="outline" className="text-xxs">Due: {new Date(task.dueDate).toLocaleDateString()}</Badge>}
                           </div>
@@ -831,8 +1058,6 @@ export const TicketDetailPage: React.FC = () => {
                         <Button 
                           onClick={(e) => handleAssignTask(task, e)} 
                           disabled={!canWriteTasks}
-                          variant="outline"
-                          size="sm"
                           className="gap-2"
                         >
                           <UserPlus className="h-4 w-4" />
@@ -1007,7 +1232,10 @@ export const TicketDetailPage: React.FC = () => {
                            newTaskAssignee ? (() => {
                              const user = users.find(u => u.id === newTaskAssignee);
                              if (user) {
-                               return `${user.firstName} ${user.lastName}`;
+                               const roleText = user.role ? ` (${user.role})` : '';
+                               const deptText = user.departmentEntity?.name ? ` - ${user.departmentEntity.name}` : '';
+                               const agentText = user.isAgent ? ' [Support Agent]' : '';
+                               return `${user.firstName} ${user.lastName}${roleText}${deptText}${agentText}`;
                              }
                              return '';
                            })() : ''}
@@ -1015,11 +1243,16 @@ export const TicketDetailPage: React.FC = () => {
                       const value = e.target.value;
                       if (value.toLowerCase() === 'unassigned') {
                         setNewTaskAssignee('unassigned');
+                      } else if (value === '') {
+                        setNewTaskAssignee('');
                       } else {
                         // Find matching user
                         const matchingUser = users.find(user => 
                           `${user.firstName} ${user.lastName}`.toLowerCase().includes(value.toLowerCase()) ||
-                          user.email.toLowerCase().includes(value.toLowerCase())
+                          user.email.toLowerCase().includes(value.toLowerCase()) ||
+                          (user.role && user.role.toLowerCase().includes(value.toLowerCase())) ||
+                          (user.departmentEntity?.name && user.departmentEntity.name.toLowerCase().includes(value.toLowerCase())) ||
+                          (user.isAgent && 'support agent'.includes(value.toLowerCase()))
                         );
                         if (matchingUser) {
                           setNewTaskAssignee(matchingUser.id);
@@ -1030,9 +1263,10 @@ export const TicketDetailPage: React.FC = () => {
                     }}
                     onFocus={() => setShowUserSuggestions(true)}
                     onBlur={() => setTimeout(() => setShowUserSuggestions(false), 200)}
+                    onClick={() => setShowUserSuggestions(true)}
                   />
                   {showUserSuggestions && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-32 overflow-auto">
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto min-w-[400px]">
                       <div 
                         className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
                         onClick={() => {
@@ -1059,6 +1293,23 @@ export const TicketDetailPage: React.FC = () => {
                             <div className="flex-1">
                               <div className="font-medium">{user.firstName} {user.lastName}</div>
                               <div className="text-xs text-muted-foreground">{user.email}</div>
+                              <div className="flex items-center gap-2 mt-1">
+                                {user.role && (
+                                  <span className="text-xs text-blue-600 font-medium">
+                                    {user.role}
+                                  </span>
+                                )}
+                                {user.departmentEntity?.name && (
+                                  <span className="text-xs text-green-600 font-medium">
+                                    {user.departmentEntity.name}
+                                  </span>
+                                )}
+                                {user.isAgent && (
+                                  <span className="text-xs text-purple-600 font-medium">
+                                    Support Agent
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1143,7 +1394,13 @@ export const TicketDetailPage: React.FC = () => {
                 <span className="text-sm">
                   {selectedTaskForAssignment?.assignedTo ? (() => {
                     const user = users.find(u => u.id === selectedTaskForAssignment.assignedTo);
-                    return user ? `${user.firstName} ${user.lastName}` : selectedTaskForAssignment.assignedTo;
+                    if (user) {
+                      const roleText = user.role ? ` (${user.role})` : '';
+                      const deptText = user.departmentEntity?.name ? ` - ${user.departmentEntity.name}` : '';
+                      const agentText = user.isAgent ? ' [Support Agent]' : '';
+                      return `${user.firstName} ${user.lastName}${roleText}${deptText}${agentText}`;
+                    }
+                    return selectedTaskForAssignment.assignedTo;
                   })() : 'Unassigned'}
                 </span>
               </div>
@@ -1163,7 +1420,9 @@ export const TicketDetailPage: React.FC = () => {
                            const user = users.find(u => u.id === selectedAssignee);
                            if (user) {
                              const roleText = user.role ? ` (${user.role})` : '';
-                             return `${user.firstName} ${user.lastName}${roleText}`;
+                             const deptText = user.departmentEntity?.name ? ` - ${user.departmentEntity.name}` : '';
+                             const agentText = user.isAgent ? ' [Support Agent]' : '';
+                             return `${user.firstName} ${user.lastName}${roleText}${deptText}${agentText}`;
                            }
                            return '';
                          })() : ''}
@@ -1176,7 +1435,9 @@ export const TicketDetailPage: React.FC = () => {
                         const matchingUser = users.find(user => 
                           `${user.firstName} ${user.lastName}`.toLowerCase().includes(value.toLowerCase()) ||
                           user.email.toLowerCase().includes(value.toLowerCase()) ||
-                          (user.role && user.role.toLowerCase().includes(value.toLowerCase()))
+                          (user.role && user.role.toLowerCase().includes(value.toLowerCase())) ||
+                          (user.departmentEntity?.name && user.departmentEntity.name.toLowerCase().includes(value.toLowerCase())) ||
+                          (user.isAgent && 'support agent'.includes(value.toLowerCase()))
                         );
                         if (matchingUser) {
                           setSelectedAssignee(matchingUser.id);
@@ -1189,7 +1450,7 @@ export const TicketDetailPage: React.FC = () => {
                   onBlur={() => setTimeout(() => setShowUserSuggestions(false), 200)}
                 />
                 {showUserSuggestions && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto min-w-[400px]">
                     <div 
                       className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
                       onClick={() => {
@@ -1216,11 +1477,23 @@ export const TicketDetailPage: React.FC = () => {
                           <div className="flex-1">
                             <div className="font-medium">{user.firstName} {user.lastName}</div>
                             <div className="text-xs text-muted-foreground">{user.email}</div>
-                            {user.role && (
-                              <div className="text-xs text-blue-600 font-medium mt-1">
-                                {user.role}
-                              </div>
-                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              {user.role && (
+                                <span className="text-xs text-blue-600 font-medium">
+                                  {user.role}
+                                </span>
+                              )}
+                              {user.departmentEntity?.name && (
+                                <span className="text-xs text-green-600 font-medium">
+                                  {user.departmentEntity.name}
+                                </span>
+                              )}
+                              {user.isAgent && (
+                                <span className="text-xs text-purple-600 font-medium">
+                                  Support Agent
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1237,6 +1510,209 @@ export const TicketDetailPage: React.FC = () => {
             </Button>
             <Button onClick={assignTask}>
               Assign Task
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ticket Assignment Dialog */}
+      <Dialog open={showTicketAssignDialog} onOpenChange={setShowTicketAssignDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Assign Ticket
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Assignment Type Selection */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Assignment Type</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant={assignmentType === 'user' ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setAssignmentType('user');
+                    setSelectedTicketAssignee('');
+                    setSelectedTicketDepartment('');
+                  }}
+                  className="flex-1"
+                >
+                  <User className="h-4 w-4 mr-2" />
+                  Assign to User
+                </Button>
+                <Button
+                  variant={assignmentType === 'department' ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setAssignmentType('department');
+                    setSelectedTicketAssignee('');
+                    setSelectedTicketDepartment('');
+                  }}
+                  className="flex-1"
+                >
+                  <Building className="h-4 w-4 mr-2" />
+                  Assign to Department
+                </Button>
+              </div>
+            </div>
+
+            {/* User Assignment */}
+            {assignmentType === 'user' && (
+              <div className="space-y-2">
+                <Label htmlFor="ticket-assignee" className="text-sm font-medium">
+                  Assign to User
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="ticket-assignee"
+                    placeholder="Type to search users..."
+                    value={selectedTicketAssignee === 'unassigned' ? 'Unassigned' : 
+                           selectedTicketAssignee ? (() => {
+                             const user = users.find(u => u.id === selectedTicketAssignee);
+                             if (user) {
+                               const roleText = user.role ? ` (${user.role})` : '';
+                               const deptText = user.departmentEntity?.name ? ` - ${user.departmentEntity.name}` : '';
+                               const agentText = user.isAgent ? ' [Support Agent]' : '';
+                               return `${user.firstName} ${user.lastName}${roleText}${deptText}${agentText}`;
+                             }
+                             return '';
+                           })() : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value.toLowerCase() === 'unassigned') {
+                        setSelectedTicketAssignee('unassigned');
+                      } else if (value === '') {
+                        setSelectedTicketAssignee('');
+                      } else {
+                        const matchingUser = users.find(user => 
+                          `${user.firstName} ${user.lastName}`.toLowerCase().includes(value.toLowerCase()) ||
+                          user.email.toLowerCase().includes(value.toLowerCase()) ||
+                          (user.role && user.role.toLowerCase().includes(value.toLowerCase())) ||
+                          (user.departmentEntity?.name && user.departmentEntity.name.toLowerCase().includes(value.toLowerCase())) ||
+                          (user.isAgent && 'support agent'.includes(value.toLowerCase()))
+                        );
+                        if (matchingUser) {
+                          setSelectedTicketAssignee(matchingUser.id);
+                        } else {
+                          setSelectedTicketAssignee('');
+                        }
+                      }
+                    }}
+                    onFocus={() => setShowUserSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowUserSuggestions(false), 200)}
+                    onClick={() => setShowUserSuggestions(true)}
+                  />
+                  {showUserSuggestions && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto min-w-[400px]">
+                      <div 
+                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => {
+                          setSelectedTicketAssignee('unassigned');
+                          setShowUserSuggestions(false);
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span>Unassigned</span>
+                        </div>
+                      </div>
+                      {loadingUsers ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          Loading users...
+                        </div>
+                      ) : (
+                        users.map((user) => (
+                          <div 
+                            key={user.id}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                            onClick={() => {
+                              setSelectedTicketAssignee(user.id);
+                              setShowUserSuggestions(false);
+                            }}
+                          >
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <div className="flex-1">
+                              <div className="font-medium">{user.firstName} {user.lastName}</div>
+                              <div className="text-xs text-muted-foreground">{user.email}</div>
+                              <div className="flex items-center gap-2 mt-1">
+                                {user.role && (
+                                  <span className="text-xs text-blue-600 font-medium">
+                                    {user.role}
+                                  </span>
+                                )}
+                                {user.departmentEntity?.name && (
+                                  <span className="text-xs text-green-600 font-medium">
+                                    {user.departmentEntity.name}
+                                  </span>
+                                )}
+                                {user.isAgent && (
+                                  <span className="text-xs text-purple-600 font-medium">
+                                    Support Agent
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Department Assignment */}
+            {assignmentType === 'department' && (
+              <div className="space-y-2">
+                <Label htmlFor="ticket-department" className="text-sm font-medium">
+                  Assign to Department
+                </Label>
+                <Select value={selectedTicketDepartment} onValueChange={setSelectedTicketDepartment}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {loadingDepartments ? (
+                      <SelectItem value="loading" disabled>Loading departments...</SelectItem>
+                    ) : (
+                      departments.map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Reason */}
+            <div className="space-y-2">
+              <Label htmlFor="assignment-reason" className="text-sm font-medium">
+                Reason (Optional)
+              </Label>
+              <Textarea
+                id="assignment-reason"
+                placeholder="Enter reason for assignment..."
+                value={assignmentReason}
+                onChange={(e) => setAssignmentReason(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setShowTicketAssignDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={assignTicket}>
+              Assign Ticket
             </Button>
           </div>
         </DialogContent>

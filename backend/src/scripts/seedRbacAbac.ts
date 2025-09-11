@@ -38,6 +38,7 @@ async function seedRbacAbac() {
       'knowledge:read',
       'knowledge:write',
       // settings
+      'settings:read',
       'settings:write',
       'reports:read'
     ];
@@ -64,8 +65,8 @@ async function seedRbacAbac() {
 
     // Role -> Permission assignments
     const rolePerms: Record<string, string[]> = {
-      admin: ['tickets:read','tickets:write','tickets:delete','tickets:assign','ticket-status:change','comments:write','attachments:upload','users:read','users:write','knowledge:read','knowledge:write','settings:write','reports:read'],
-      manager: ['tickets:read','tickets:write','tickets:assign','ticket-status:change','comments:write','attachments:upload','users:read','knowledge:read','knowledge:write','reports:read'],
+      admin: ['tickets:read','tickets:write','tickets:delete','tickets:assign','ticket-status:change','comments:write','attachments:upload','users:read','users:write','knowledge:read','knowledge:write','settings:read','settings:write','reports:read'],
+      manager: ['tickets:read','tickets:write','tickets:assign','ticket-status:change','comments:write','attachments:upload','users:read','knowledge:read','knowledge:write','settings:read','reports:read'],
       agent: ['tickets:read','tickets:write','ticket-status:change','comments:write','attachments:upload','knowledge:read','reports:read'],
       user: ['tickets:read','tickets:write','knowledge:read']
     };
@@ -135,9 +136,23 @@ async function seedRbacAbac() {
 
     // Assign departments via relational field when available
     const setDept = async (userId: string, deptId: string, deptName: string) => {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { departmentId: deptId }
+      await prisma.userDepartment.upsert({
+        where: {
+          userId_departmentId: {
+            userId: userId,
+            departmentId: deptId
+          }
+        },
+        update: {
+          isPrimary: true,
+          role: 'admin'
+        },
+        create: {
+          userId: userId,
+          departmentId: deptId,
+          isPrimary: true,
+          role: 'admin'
+        }
       });
     };
 
@@ -171,7 +186,7 @@ async function seedRbacAbac() {
         subjectId: agentRole.id,
         resource: 'tickets',
         action: 'read',
-        conditions: { equals: { 'ticket.departmentId': 'user.departmentId' } }
+        conditions: { in: { 'ticket.assignedToDepartmentId': 'user.departments.departmentId' } }
       },
       {
         name: 'Agents can update assigned tickets',
@@ -211,7 +226,7 @@ async function seedRbacAbac() {
         subjectId: managerRole.id,
         resource: 'tickets',
         action: 'delete',
-        conditions: { equals: { 'ticket.departmentId': 'user.departmentId' } }
+        conditions: { in: { 'ticket.assignedToDepartmentId': 'user.departments.departmentId' } }
       },
       {
         name: 'Admins can delete any tickets',
