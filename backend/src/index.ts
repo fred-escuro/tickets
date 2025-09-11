@@ -24,6 +24,7 @@ import menuRoutes from './routes/menu';
 import assignmentRulesRoutes from './routes/assignmentRules';
 import emailLogsRoutes from './routes/emailLogs';
 import autoResponseRoutes from './routes/autoResponse';
+import followupRoutes from './routes/followups';
 // Legacy settings routes removed after migration to v2
 // import settingsRoutes from './routes/settings';
 import settingsV2Routes from './routes/settingsV2';
@@ -78,6 +79,7 @@ app.use('/api/menu', menuRoutes);
 app.use('/api/assignment-rules', assignmentRulesRoutes);
 app.use('/api/email-logs', emailLogsRoutes);
 app.use('/api/auto-response', autoResponseRoutes);
+app.use('/api/followups', followupRoutes);
 // app.use('/api/settings', settingsRoutes);
 app.use('/api/settings/v2', settingsV2Routes);
 

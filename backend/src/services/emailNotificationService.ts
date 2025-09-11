@@ -36,6 +36,76 @@ export class EmailNotificationService {
   }
 
   /**
+   * Send follow-up notification to agent
+   */
+  async sendFollowupNotification(data: {
+    agentEmail: string;
+    agentName: string;
+    ticketId: string;
+    ticketTitle: string;
+    customerEmail: string;
+    followupContent: string;
+    ticketUrl: string;
+  }): Promise<string> {
+    const subject = `[Follow-up] Ticket #${data.ticketId} - ${data.ticketTitle}`;
+    
+    const text = `Hello ${data.agentName},
+
+A customer has replied to an auto-response on ticket #${data.ticketId}.
+
+Ticket: ${data.ticketTitle}
+Customer: ${data.customerEmail}
+
+Follow-up content:
+${data.followupContent}
+
+View ticket: ${data.ticketUrl}
+
+Best regards,
+TicketHub Support System`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Follow-up Received</h2>
+        <p>Hello ${data.agentName},</p>
+        <p>A customer has replied to an auto-response on ticket <strong>#${data.ticketId}</strong>.</p>
+        
+        <div style="background: #f5f5f5; padding: 15px; margin: 20px 0; border-radius: 5px;">
+          <h3 style="margin-top: 0;">Ticket Details</h3>
+          <p><strong>Ticket:</strong> ${data.ticketTitle}</p>
+          <p><strong>Customer:</strong> ${data.customerEmail}</p>
+        </div>
+        
+        <div style="background: #fff; border: 1px solid #ddd; padding: 15px; margin: 20px 0; border-radius: 5px;">
+          <h3 style="margin-top: 0;">Follow-up Content</h3>
+          <div style="white-space: pre-wrap;">${data.followupContent}</div>
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${data.ticketUrl}" style="background: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+            View Ticket
+          </a>
+        </div>
+        
+        <p style="color: #666; font-size: 14px;">
+          Best regards,<br>
+          TicketHub Support System
+        </p>
+      </div>
+    `;
+
+    return this.sendTicketNotification(
+      data.agentEmail,
+      subject,
+      { text, html },
+      {
+        ticketId: data.ticketId,
+        type: EmailMessageType.FOLLOWUP
+      }
+    );
+  }
+
+  /**
    * Send ticket created notification
    */
   async sendTicketCreatedNotification(

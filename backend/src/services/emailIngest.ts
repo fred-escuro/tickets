@@ -6,6 +6,8 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import { emailTrackingService } from './emailTrackingService';
 import { autoResponseGenerator } from './autoResponseGenerator';
+import { followupDetectionService, InboundEmail as FollowupInboundEmail } from './followupDetectionService';
+import { followupProcessorService } from './followupProcessorService';
 import { EmailMessageType } from '@prisma/client';
 
 export interface InboundEmailSettings {
@@ -398,6 +400,38 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 							} 
 						});
 						await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+						continue;
+					}
+				}
+
+				// Check if this is a follow-up to an auto-response
+				const followupEmail: FollowupInboundEmail = {
+					id: messageId,
+					from: fromEmail,
+					to: getAddressesText((parsed as any).to),
+					subject: parsed.subject || '',
+					body: parsed.text || '',
+					htmlBody: typeof parsed.html === 'string' ? parsed.html : undefined,
+					threadId: (parsed as any).headers?.get('thread-id') || (parsed as any).headers?.get('x-thread-id'),
+					inReplyTo: (parsed as any).headers?.get('in-reply-to'),
+					references: (parsed as any).headers?.get('references'),
+					messageId: messageId,
+					receivedAt: new Date(),
+					attachments: parsed.attachments?.map(att => ({
+						filename: att.filename || 'attachment',
+						contentType: att.contentType || 'application/octet-stream',
+						content: att.content
+					}))
+				};
+
+				// Try to detect if this is a follow-up to an auto-response
+				const followupDetection = await followupDetectionService.detectAutoResponseReply(followupEmail);
+				if (followupDetection.isFollowup && followupDetection.ticketId) {
+					// Process as follow-up
+					const followupResult = await followupProcessorService.processFollowup(followupEmail);
+					if (followupResult.success) {
+						result.replies++;
+						await markProcessed(client, msg.uid, settings.moveOnSuccessFolder);
 						continue;
 					}
 				}

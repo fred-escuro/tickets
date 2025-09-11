@@ -814,6 +814,7 @@ enum TicketSource {
 enum EmailMessageType {
   NEW
   REPLY
+  FOLLOWUP
 }
 
 enum EmailDirection {

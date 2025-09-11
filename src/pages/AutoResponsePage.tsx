@@ -116,18 +116,18 @@ const VariableHelper = ({
       </div>
       
       {!isCollapsed && (
-        <div className="p-3 border-t max-h-[calc(90vh-200px)] overflow-y-auto">
-          <div className="space-y-4">
+        <div className="p-2 border-t max-h-[calc(90vh-200px)] overflow-y-auto">
+          <div className="space-y-2">
             {Object.entries(AVAILABLE_VARIABLES).map(([category, variables]) => (
-              <div key={category} className="space-y-2">
-                <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              <div key={category} className="space-y-0.5">
+                <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
                   {category}
                 </h5>
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {variables.map((variable) => (
                     <div
                       key={variable.name}
-                      className="group flex items-start justify-between p-2 hover:bg-muted/50 rounded border border-dashed border-muted-foreground/20 hover:border-primary/30 transition-colors"
+                      className="group flex items-start justify-between p-1 hover:bg-muted/50 rounded border border-dashed border-muted-foreground/20 hover:border-primary/30 transition-colors"
                     >
                       <div className="flex-1 min-w-0">
                         <button
@@ -496,11 +496,11 @@ export default function AutoResponsePage() {
                   New Template
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-[70vw] max-h-[90vh] overflow-hidden w-[70vw] sm:max-w-[80vw]">
+              <DialogContent className="max-w-[70vw] max-h-[90vh] overflow-hidden w-[70vw] sm:max-w-[80vw] px-4">
                 <DialogHeader className="pb-4">
                   <DialogTitle>Create Auto-Response Template</DialogTitle>
                 </DialogHeader>
-                <div className="flex flex-col lg:flex-row gap-4 h-[calc(80vh-50px)]">
+                <div className="flex flex-col lg:flex-row gap-1 h-[calc(80vh-50px)]">
                   {/* Variable Helper Sidebar */}
                   <div className="lg:w-[280px] w-full flex-shrink-0">
                     <VariableHelper
@@ -510,9 +510,9 @@ export default function AutoResponsePage() {
                     />
                   </div>
                   
-                  {/* Main Form */}
-                  <div className="flex-1 space-y-4 overflow-y-auto min-w-0 lg:min-w-[250px]">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {/* Main Form */}
+            <div className="flex-1 space-y-2 overflow-y-auto min-w-0 lg:min-w-[250px]">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
                     <div className="space-y-2">
                       <Label htmlFor="name">Template Name *</Label>
                       <Input
@@ -868,11 +868,11 @@ export default function AutoResponsePage() {
 
       {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-[70vw] max-h-[90vh] overflow-hidden w-[70vw] sm:max-w-[70vw]">
+        <DialogContent className="max-w-[70vw] max-h-[90vh] overflow-hidden w-[70vw] sm:max-w-[70vw] px-4">
           <DialogHeader className="pb-4">
             <DialogTitle>Edit Auto-Response Template</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col lg:flex-row gap-4 h-[calc(90vh-100px)]">
+          <div className="flex flex-col lg:flex-row gap-1 h-[calc(90vh-100px)]">
             {/* Variable Helper Sidebar */}
             <div className="lg:w-[280px] w-full flex-shrink-0">
               <VariableHelper
@@ -883,8 +883,8 @@ export default function AutoResponsePage() {
             </div>
             
             {/* Main Form */}
-            <div className="flex-1 space-y-4 overflow-y-auto min-w-0 lg:min-w-[350px]">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="flex-1 space-y-2 overflow-y-auto min-w-0 lg:min-w-[350px]">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
               <div className="space-y-2">
                 <Label htmlFor="edit-name">Template Name *</Label>
                 <Input

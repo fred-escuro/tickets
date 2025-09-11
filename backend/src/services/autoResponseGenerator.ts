@@ -52,12 +52,17 @@ export class AutoResponseGenerator {
     email: any
   ): Promise<any> {
     try {
+      // Add response ID to the email content for follow-up tracking
+      const responseIdText = `\n\n---\n[Response-ID: ${generated.responseId}]\n[Ticket: ${ticket.ticketNumber}]`;
+      const enhancedBody = generated.body + responseIdText;
+      const enhancedSubject = generated.subject + ` [Response-ID: ${generated.responseId}]`;
+
       // Send the email using the existing email service
       const messageId = await emailTrackingService.sendEmail({
         to: toEmail,
-        subject: generated.subject,
-        text: generated.body,
-        html: this.convertToHtml(generated.body),
+        subject: enhancedSubject,
+        text: enhancedBody,
+        html: this.convertToHtml(enhancedBody),
         options: {
           inReplyTo: email.messageId || undefined,
           references: email.messageId || undefined,

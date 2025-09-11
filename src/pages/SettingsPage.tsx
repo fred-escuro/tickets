@@ -16,6 +16,7 @@ import {
   Settings,
   Building2,
   Mail,
+  MessageSquare,
   Bell,
   RefreshCw,
   Users,
@@ -2298,6 +2299,67 @@ export default function SettingsPage() {
                     <div className="p-4 border rounded-lg">
                       <h5 className="font-medium mb-2">Department Rules</h5>
                       <p className="text-sm text-muted-foreground">Associate templates with specific departments</p>
+                    </div>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Follow-up Management */}
+            <AccordionItem value="followups" className="border rounded-lg">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
+                    <MessageSquare className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">Follow-up Management</h3>
+                    <p className="text-sm text-muted-foreground">Manage customer follow-ups to auto-responses</p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.location.href = '/settings/followups';
+                      }}
+                    >
+                      <Settings className="h-4 w-4 mr-2" />
+                      Manage Follow-ups
+                    </Button>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="space-y-4">
+                  <p className="text-muted-foreground">
+                    Track and manage customer follow-up emails to auto-responses, automatically adding them as ticket comments.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => window.location.href = '/settings/followups'}
+                      className="bg-purple-600 hover:bg-purple-700"
+                    >
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Manage Follow-ups
+                    </Button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 border rounded-lg">
+                      <h5 className="font-medium mb-2">Follow-up Detection</h5>
+                      <p className="text-sm text-muted-foreground">Automatically detect customer replies to auto-responses</p>
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                      <h5 className="font-medium mb-2">Comment Integration</h5>
+                      <p className="text-sm text-muted-foreground">Add follow-ups as ticket comments automatically</p>
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                      <h5 className="font-medium mb-2">Agent Notifications</h5>
+                      <p className="text-sm text-muted-foreground">Notify agents when customers respond to auto-responses</p>
                     </div>
                   </div>
                 </div>

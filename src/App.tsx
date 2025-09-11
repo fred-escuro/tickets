@@ -24,6 +24,7 @@ import { TicketDetailPage } from './pages/TicketDetailPage';
 import { DepartmentOverviewPage } from './pages/DepartmentOverviewPage';
 import EmailLogsPage from './pages/EmailLogsPage';
 import AutoResponsePage from './pages/AutoResponsePage';
+import FollowupsPage from './pages/FollowupsPage';
 
 const AppRoutes: FC = () => {
   return (
@@ -137,6 +138,18 @@ const AppRoutes: FC = () => {
             requireAnyRoleNames={["admin","manager"]}
           >
             <AutoResponsePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings/followups"
+        element={
+          <ProtectedRoute
+            pageTitle="Follow-up Management"
+            pageDescription="Manage customer follow-ups to auto-responses."
+            requireAnyRoleNames={["admin","manager"]}
+          >
+            <FollowupsPage />
           </ProtectedRoute>
         }
       />
