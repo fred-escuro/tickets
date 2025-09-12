@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../index';
 import { JwtPayload, AuthenticatedRequest } from '../types';
+import { isSessionIdleExpired, isSessionAbsoluteExpired, getSessionTimeouts } from '../utils/sessionUtils';
 
 export const authenticate = async (
   req: Request,
@@ -20,6 +21,28 @@ export const authenticate = async (
 
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
+
+    // Check session expiry
+    const { idleTimeoutMs, absoluteTimeoutMs } = getSessionTimeouts();
+    const now = Date.now();
+    
+    // Check absolute session timeout (total session duration)
+    if (decoded.sessionStart && isSessionAbsoluteExpired(decoded.sessionStart, absoluteTimeoutMs)) {
+      return res.status(401).json({
+        success: false,
+        error: 'Session expired due to absolute timeout',
+        code: 'SESSION_ABSOLUTE_EXPIRED'
+      });
+    }
+    
+    // Check idle timeout (user inactivity)
+    if (decoded.lastActivity && isSessionIdleExpired(decoded.lastActivity, idleTimeoutMs)) {
+      return res.status(401).json({
+        success: false,
+        error: 'Session expired due to inactivity',
+        code: 'SESSION_IDLE_EXPIRED'
+      });
+    }
 
     // Get user from database
     const user = await prisma.user.findUnique({

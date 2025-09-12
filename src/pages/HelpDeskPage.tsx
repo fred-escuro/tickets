@@ -53,6 +53,34 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ticketSystemService, type TicketCategory, type TicketPriority, type TicketStatus, type TicketTemplate } from '@/lib/services/ticketSystemService';
 
+import DOMPurify from 'dompurify';
+
+// Robust HTML sanitization using DOMPurify
+const sanitizeHtml = (html: string): string => {
+  if (!html) return '';
+  
+  // Configure DOMPurify to allow safe HTML tags and attributes
+  const config = {
+    ALLOWED_TAGS: [
+      'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'span', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'hr', 'sub', 'sup', 'small', 'mark', 'del', 'ins'
+    ],
+    ALLOWED_ATTR: [
+      'href', 'title', 'alt', 'src', 'width', 'height', 'class', 'id', 'style',
+      'target', 'rel', 'colspan', 'rowspan', 'align', 'valign'
+    ],
+    ALLOW_DATA_ATTR: false,
+    ALLOW_UNKNOWN_PROTOCOLS: false,
+    SANITIZE_DOM: true,
+    KEEP_CONTENT: true,
+    RETURN_DOM: false,
+    RETURN_DOM_FRAGMENT: false,
+    RETURN_DOM_IMPORT: false
+  };
+  
+  return DOMPurify.sanitize(html, config);
+};
 
 const getStatusColor = (status: string | undefined) => {
   if (!status) return 'bg-gray-100 text-gray-700 border-gray-200';
@@ -238,7 +266,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
   return (
     <>
       <Card 
-        className="h-full group hover:shadow-xl hover:bg-gradient-to-br hover:from-blue-50/60 hover:to-blue-100/30 dark:hover:from-white/5 dark:hover:to-white/[0.03] hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 duration-300 cursor-pointer border-border hover:border-primary/20 dark:hover:border-white/10 hover:ring-2 hover:ring-primary/10 dark:hover:ring-white/10 relative overflow-hidden flex flex-col"
+        className="h-full group hover:shadow-xl hover:bg-gradient-to-br hover:from-blue-50/60 hover:to-blue-100/30 dark:hover:from-white/5 dark:hover:to-white/[0.03] transition-colors duration-300 animate-in fade-in slide-in-from-bottom-4 duration-300 cursor-pointer border-border hover:border-primary/20 dark:hover:border-white/10 hover:ring-2 hover:ring-primary/10 dark:hover:ring-white/10 relative overflow-hidden flex flex-col"
         style={{ animationDelay: `${(index + 1) * 100}ms` }}
         onClick={() => navigate(`/tickets/${ticket.id}`)}
       >
@@ -249,7 +277,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
           <div className="space-y-4 flex-1 flex flex-col">
                          {/* Header with category, title, and ticket number */}
              <div className="flex items-start gap-3">
-               <div className="group-hover:scale-110 transition-transform duration-300 p-2 bg-primary/10 rounded-lg">
+               <div className="transition-colors duration-300 p-2 bg-primary/10 rounded-lg">
                 {getCategoryIcon(
                   typeof (ticket as any).category === 'object' ? (ticket as any).category?.name || 'general' : (ticket as any).category || 'general',
                   typeof (ticket as any).category === 'object' ? (ticket as any).category : (ticket as any).categoryInfo
@@ -265,17 +293,17 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
             
             {/* Status badges row */}
             <div className="flex flex-row gap-2 items-center">
-              <Badge variant="outline" className={`${getStatusColor(typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name)} border text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm hover:brightness-95`}>
+              <Badge variant="outline" className={`${getStatusColor(typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name)} border text-xs transition-colors duration-300 shadow-sm hover:brightness-95`}>
                 <div className="flex items-center gap-1">
                   {getStatusIcon(typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name)}
                   <span className="capitalize font-medium">{typeof (ticket as any).status === 'string' ? (ticket as any).status : (ticket as any).status?.name || 'Unknown'}</span>
                 </div>
               </Badge>
-              <Badge variant="outline" className={`${getPriorityColor(typeof (ticket as any).priority === 'string' ? (ticket as any).priority : (ticket as any).priority?.name)} text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm font-medium hover:brightness-95`}>
+              <Badge variant="outline" className={`${getPriorityColor(typeof (ticket as any).priority === 'string' ? (ticket as any).priority : (ticket as any).priority?.name)} text-xs transition-colors duration-300 shadow-sm font-medium hover:brightness-95`}>
                 {(typeof (ticket as any).priority === 'string' ? (ticket as any).priority : (ticket as any).priority?.name || 'Unknown').toUpperCase()}
               </Badge>
               {ticket.comments && ticket.comments.length > 0 && (
-                <Badge variant="secondary" className="text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm">
+                <Badge variant="secondary" className="text-xs transition-colors duration-300 shadow-sm">
                   <div className="flex items-center gap-1">
                     <MessageSquare className="h-3 w-3" />
                     <span className="font-medium">{ticket.comments.length}</span>
@@ -288,7 +316,7 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
                  const catName = typeof (ticket as any).category === 'object' ? (ticket as any).category?.name : ((ticket as any).category || (ticket as any).categoryInfo?.name);
                  const catNameStr = typeof catName === 'string' ? catName : 'general';
                  return (
-                  <Badge variant="outline" className={`${getCategoryBadgeColor(catObj)} text-xs rounded-full px-2.5 py-0.5 group-hover:scale-105 transition-transform duration-300 shadow-sm border hover:brightness-95`}> 
+                  <Badge variant="outline" className={`${getCategoryBadgeColor(catObj)} text-xs rounded-full px-2.5 py-0.5 transition-colors duration-300 shadow-sm border hover:brightness-95`}> 
                      <div className="flex items-center gap-1">
                        {getCategoryIcon(catNameStr, catObj as any)}
                        <span className="capitalize font-medium">{catNameStr || 'Unknown'}</span>
@@ -301,10 +329,10 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
             {/* Description and attachments */}
             <div className="space-y-3">
               <div 
-                className="text-[10px] prose prose-[10px] max-w-none group-hover:text-foreground/90 transition-colors duration-300 bg-muted/30 p-3 rounded-lg max-h-20 overflow-y-auto scrollbar-thin"
+                className="text-[10px] max-w-none group-hover:text-foreground/90 transition-colors duration-300 bg-muted/30 p-3 rounded-lg max-h-20 overflow-y-auto scrollbar-thin"
                 style={{ scrollbarWidth: 'thin' }}
                 dangerouslySetInnerHTML={{ 
-                  __html: ticket.description
+                  __html: sanitizeHtml(ticket.description)
                 }}
               />
 
@@ -315,14 +343,14 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
                     <Paperclip className="h-3 w-3" />
                     <span className="font-medium">Attachments ({ticket.attachments.length})</span>
                   </div>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1 max-w-full">
                     {ticket.attachments.slice(0, 3).map((attachment) => (
                       <div
                         key={attachment.id}
                         className="flex items-center gap-1 px-2 py-1 bg-muted/50 rounded text-xs text-muted-foreground border border-border/50"
                       >
                         <FileText className="h-2 w-2" />
-                        <span className="truncate max-w-20">{attachment.name}</span>
+                        <span className="truncate max-w-16">{attachment.name}</span>
                       </div>
                     ))}
                     {ticket.attachments.length > 3 && (
@@ -338,11 +366,11 @@ const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[];
             {/* Footer with metadata and action buttons */}
             <div className="mt-auto flex items-center justify-between pt-2 border-t border-border/50">
                              <div className="flex flex-col gap-2 text-xs text-muted-foreground group-hover:text-muted-foreground/80 transition-colors duration-300">
-                 <span className="group-hover:translate-x-1 transition-transform duration-300 flex items-center gap-1">
+                 <span className="transition-colors duration-300 flex items-center gap-1">
                    <Calendar className="h-3 w-3" />
                    {formatDate(ticket.submittedAt)}
                  </span>
-                                   <span className="group-hover:translate-x-1 transition-transform duration-300 flex items-center gap-1">
+                                   <span className="transition-colors duration-300 flex items-center gap-1">
                     <User className="h-3 w-3" />
                     <span className="truncate">
                       {ticket.submitter 
@@ -1139,7 +1167,7 @@ export const HelpDeskPage: FC = () => {
         setLoadingUsers(true);
         const response = await UserService.getUsers({ isActive: true });
         if (response.success && response.data) {
-          setUsers(response.data.data || []);
+          setUsers(Array.isArray(response.data) ? response.data : []);
         }
       } catch (e) {
         console.error('Failed to load users:', e);
@@ -1181,7 +1209,7 @@ export const HelpDeskPage: FC = () => {
 
   return (
     <div className="relative z-0 min-h-screen bg-background">
-      <PageWrapper className="max-w-[1500px] lg:pl-[calc(var(--sidebar-width,14rem)+1.5rem)] py-6 transition-[padding]">
+      <PageWrapper className="max-w-[1500px] lg:pl-[calc(var(--sidebar-width,14rem)+1.5rem)] py-6">
         {/* Header Section */}
         <PageSection index={0} className="mb-6">
           <Breadcrumb 

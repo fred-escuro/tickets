@@ -25,6 +25,7 @@ export interface OutboundEmailData {
 
 export interface InboundEmailData {
   messageId: string;
+  imapUid?: number;
   from: string;
   to: string;
   cc?: string;
@@ -231,6 +232,7 @@ export class EmailTrackingService {
     const emailLog = await prisma.emailLog.create({
       data: {
         messageId: emailData.messageId,
+        imapUid: emailData.imapUid,
         direction: EmailDirection.INBOUND,
         type: emailData.options?.type || EmailMessageType.NEW,
         from: emailData.from,

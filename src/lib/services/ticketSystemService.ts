@@ -148,15 +148,12 @@ class TicketSystemService {
   // Categories
   async getCategories(): Promise<TicketCategory[]> {
     const token = localStorage.getItem('auth-token');
-    console.log('Token for categories request:', token ? 'Present' : 'Missing');
     
     const response = await fetch(`${this.baseUrl}/categories`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
     });
-    
-    console.log('Categories response status:', response.status);
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -165,14 +162,11 @@ class TicketSystemService {
     }
     
     const data = await response.json();
-    console.log('Categories API response:', data);
     return data.data;
   }
 
   async createCategory(category: Omit<TicketCategory, 'id' | 'sortOrder' | 'isActive'>): Promise<TicketCategory> {
     const token = localStorage.getItem('auth-token');
-    console.log('Creating category with data:', category);
-    console.log('Token for create category:', token ? 'Present' : 'Missing');
     
     const response = await fetch(`${this.baseUrl}/categories`, {
       method: 'POST',

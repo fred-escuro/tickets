@@ -21,7 +21,7 @@ export const PageWrapper: FC<PageWrapperProps> = ({ children, className = '' }) 
 
   return (
     <AnimationContext.Provider value={{ getItemStyle, getItemClassName }}>
-      <div ref={containerRef} className={`mx-auto w-full px-4 sm:px-6 lg:px-8 lg:pl ${className}`}>
+      <div ref={containerRef} className={`mx-auto w-full px-4 sm:px-6 lg:px-8 ${className}`}>
         {children}
       </div>
     </AnimationContext.Provider>

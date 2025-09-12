@@ -204,6 +204,8 @@ npm run db:seed      # Seed database with sample data
 | `JWT_SECRET` | JWT signing secret | Required |
 | `JWT_EXPIRES_IN` | JWT expiration time | `7d` |
 | `JWT_REFRESH_EXPIRES_IN` | Refresh token expiration | `30d` |
+| `SESSION_IDLE_TIMEOUT` | User idle timeout before session expires | `30m` |
+| `SESSION_ABSOLUTE_TIMEOUT` | Maximum session duration | `8h` |
 | `MAX_FILE_SIZE` | Maximum file upload size | `10485760` (10MB) |
 | `UPLOAD_PATH` | File upload directory | `./uploads` |
 | `CORS_ORIGIN` | Allowed CORS origin | `http://localhost:3000` |
@@ -211,11 +213,34 @@ npm run db:seed      # Seed database with sample data
 ## 🔒 Security Features
 
 - **JWT Authentication**: Secure token-based authentication
+- **Session Management**: Automatic session expiry with idle timeout detection
 - **Password Hashing**: Bcrypt password hashing
 - **CORS Protection**: Configurable cross-origin resource sharing
 - **Helmet**: Security headers middleware
 - **Input Validation**: Request validation and sanitization
 - **Role-based Access Control**: Granular permission system
+
+## ⏰ Session Management
+
+The system includes comprehensive session management with automatic expiry:
+
+### Session Timeouts
+- **Idle Timeout**: Users are logged out after 30 minutes of inactivity (configurable)
+- **Absolute Timeout**: Maximum session duration of 8 hours (configurable)
+- **Warning System**: Users receive a warning 5 minutes before idle timeout
+
+### Features
+- **Activity Detection**: Tracks mouse, keyboard, scroll, and touch events
+- **Automatic Refresh**: Sessions are refreshed every 5 minutes during activity
+- **Warning Dialog**: Interactive dialog allows users to extend their session
+- **Graceful Logout**: Automatic logout with user notification
+
+### Configuration
+Set these environment variables to customize session behavior:
+```bash
+SESSION_IDLE_TIMEOUT=30m    # Time before idle timeout (30m, 1h, 2h, etc.)
+SESSION_ABSOLUTE_TIMEOUT=8h # Maximum session duration (8h, 1d, etc.)
+```
 
 ## 📊 Sample Data
 

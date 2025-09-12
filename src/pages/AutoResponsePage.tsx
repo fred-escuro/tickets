@@ -277,12 +277,14 @@ export default function AutoResponsePage() {
       if (!loadMore && !forceRefresh) {
         const cached = cache.get(cacheKey);
         if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+          console.log('Using cached templates');
           setTemplates(cached.data);
           setLoading(false);
           return;
         }
       }
       
+      console.log('Fetching templates from server', { forceRefresh, loadMore, cacheKey });
       const result = await autoResponseService.getTemplates(filters);
       
       if (!result) {
@@ -290,6 +292,7 @@ export default function AutoResponsePage() {
       }
       
       const newTemplates = result.templates || [];
+      console.log('Received templates:', newTemplates.length);
       
       if (loadMore) {
         // Append new templates for infinite scroll
@@ -297,8 +300,10 @@ export default function AutoResponsePage() {
       } else {
         // Replace templates for new search/filter
         setTemplates(newTemplates);
-        // Cache the results
-        setCache(prev => new Map(prev.set(cacheKey, { data: newTemplates, timestamp: now })));
+        // Cache the results (only if not forcing refresh)
+        if (!forceRefresh) {
+          setCache(prev => new Map(prev.set(cacheKey, { data: newTemplates, timestamp: now })));
+        }
       }
       
       setPagination({
@@ -351,8 +356,10 @@ export default function AutoResponsePage() {
 
   // Clear cache
   const clearCache = useCallback(() => {
+    console.log('Clearing cache manually');
     setCache(new Map());
-    loadTemplates();
+    setRefreshKey(prev => prev + 1);
+    loadTemplates(false, true);
   }, []);
 
   // Statistics calculation
@@ -391,9 +398,11 @@ export default function AutoResponsePage() {
         departmentId: '',
         isActive: true,
       });
-      // Force refresh by incrementing refresh key
+      
+      // Clear cache completely and force refresh
+      setCache(new Map());
       setRefreshKey(prev => prev + 1);
-      loadTemplates(false, true);
+      await loadTemplates(false, true);
     } catch (error: any) {
       console.error('Error creating template:', error);
       toast.error('Failed to create template');
@@ -409,12 +418,29 @@ export default function AutoResponsePage() {
         ...formData,
         departmentId: formData.departmentId === 'global' ? undefined : formData.departmentId
       };
+      console.log('Updating template with data:', templateData);
+      console.log('Original formData:', formData);
       await autoResponseService.updateTemplate(selectedTemplate.id, templateData);
       toast.success('Template updated successfully');
       setShowEditDialog(false);
       setSelectedTemplate(null);
-      // Force refresh by incrementing refresh key
+      
+      // Clear cache completely and force refresh
+      setCache(new Map());
       setRefreshKey(prev => prev + 1);
+      
+      // Reset form data
+      setFormData({
+        name: '',
+        description: '',
+        subjectTemplate: '',
+        bodyTemplate: '',
+        triggerConditions: {},
+        departmentId: '',
+        isActive: true,
+      });
+      
+      // Force refresh without cache
       await loadTemplates(false, true);
     } catch (error: any) {
       console.error('Error updating template:', error);
@@ -429,9 +455,11 @@ export default function AutoResponsePage() {
     try {
       await autoResponseService.deleteTemplate(id);
       toast.success('Template deleted successfully');
-      // Force refresh by incrementing refresh key
+      
+      // Clear cache completely and force refresh
+      setCache(new Map());
       setRefreshKey(prev => prev + 1);
-      loadTemplates(false, true);
+      await loadTemplates(false, true);
     } catch (error: any) {
       console.error('Error deleting template:', error);
       toast.error('Failed to delete template');
@@ -440,14 +468,17 @@ export default function AutoResponsePage() {
 
   // Edit template
   const handleEditTemplate = (template: AutoResponseTemplate) => {
+    console.log('Editing template:', template);
     setSelectedTemplate(template);
+    const departmentId = template.departmentId || 'global';
+    console.log('Setting departmentId to:', departmentId);
     setFormData({
       name: template.name,
       description: template.description || '',
       subjectTemplate: template.subjectTemplate,
       bodyTemplate: template.bodyTemplate,
       triggerConditions: template.triggerConditions || {},
-      departmentId: template.departmentId || 'global',
+      departmentId: departmentId,
       isActive: template.isActive,
     });
     setShowEditDialog(true);
@@ -897,9 +928,15 @@ export default function AutoResponsePage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-departmentId">Department</Label>
+                <div className="text-xs text-muted-foreground mb-1">
+                  Current value: {formData.departmentId}
+                </div>
                 <Select
                   value={formData.departmentId}
-                  onValueChange={(value) => setFormData({ ...formData, departmentId: value })}
+                  onValueChange={(value) => {
+                    console.log('Department changed to:', value);
+                    setFormData({ ...formData, departmentId: value });
+                  }}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue placeholder="Select department (optional)" />

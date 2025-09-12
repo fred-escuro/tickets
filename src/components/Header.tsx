@@ -57,6 +57,7 @@ export const Header: FC = () => {
     } catch { return { support: false, tools: false, settings: false }; }
   });
 
+
   // Dynamic menu from API
   const [menu, setMenu] = useState<MenuItemDto[]>([]);
   useEffect(() => {
@@ -300,7 +301,7 @@ export const Header: FC = () => {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {/* Management & Tools Dropdown */}
+                {/* Tools Dropdown */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button 
@@ -335,38 +336,40 @@ export const Header: FC = () => {
                 </DropdownMenu>
 
                 {/* Settings Dropdown */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                        location.pathname === '/settings'
-                          ? 'bg-primary/10 text-primary shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-                      }`}
-                    >
-                      <Settings className="h-4 w-4" />
-                      <span className="hidden sm:inline">Settings</span>
-                      <ChevronDown className="h-3 w-3 opacity-50" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="center" className="w-48">
-                    {settingsNavItems.map((item) => {
-                      const Icon = iconMap[item.icon || ''] || Settings;
-                      return (
-                        <DropdownMenuItem key={item.path || item.label} asChild>
-                          <Link
-                            to={item.path || '#'}
-                            className="flex items-center gap-2 w-full"
-                          >
-                            <Icon className="h-4 w-4" />
-                            {item.label}
-                          </Link>
-                        </DropdownMenuItem>
-                      );
-                    })}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {canSeeSettings && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                          settingsNavItems.some(item => location.pathname === item.path)
+                            ? 'bg-primary/10 text-primary shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                        }`}
+                      >
+                        <Settings className="h-4 w-4" />
+                        <span className="hidden sm:inline">Settings</span>
+                        <ChevronDown className="h-3 w-3 opacity-50" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="center" className="w-48">
+                      {settingsNavItems.map((item) => {
+                        const Icon = iconMap[item.icon || ''] || Settings;
+                        return (
+                          <DropdownMenuItem key={item.path || item.label} asChild>
+                            <Link
+                              to={item.path || '#'}
+                              className="flex items-center gap-2 w-full"
+                            >
+                              <Icon className="h-4 w-4" />
+                              {item.label}
+                            </Link>
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </nav>
             </div>
           </div>
@@ -376,7 +379,7 @@ export const Header: FC = () => {
       {/* Sidebar Navigation (desktop) */}
       {isAuthenticated && (
         <aside 
-          className={`hidden lg:flex fixed top-16 left-0 h-[calc(100vh-4rem)] ${effectiveCollapsed ? 'w-16' : 'w-56'} border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-20 transition-[width] duration-200`}
+          className={`hidden lg:flex fixed top-16 left-0 h-[calc(100vh-4rem)] ${effectiveCollapsed ? 'w-16' : 'w-56'} border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-20`}
           onMouseEnter={() => setSidebarHover(true)}
           onMouseLeave={() => setSidebarHover(false)}
         >

@@ -8,8 +8,9 @@ import { Separator } from './ui/separator';
 import { Card, CardContent } from './ui/card';
 import { AttachmentDisplay } from './ui/attachment-display';
 import { RichTextDisplay } from './ui/rich-text-display';
+import { EmailContentDisplay } from './ui/email-content-display';
 import { toast } from 'sonner';
-import { Calendar, Paperclip, User, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, Paperclip, User, MessageSquare, ChevronDown, ChevronUp, Mail, Globe, Smartphone, Zap } from 'lucide-react';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
@@ -59,6 +60,21 @@ export const TicketDetailPanel: React.FC<Props> = ({ ticketId }) => {
       return roleNames.includes('admin') || perms.includes('tickets:write');
     } catch { return false; }
   }, []);
+
+  const getSourceInfo = (source: string) => {
+    switch (source) {
+      case 'EMAIL':
+        return { icon: Mail, label: 'Email', color: 'text-blue-600' };
+      case 'WEB':
+        return { icon: Globe, label: 'Web Portal', color: 'text-green-600' };
+      case 'MOBILE':
+        return { icon: Smartphone, label: 'Mobile App', color: 'text-purple-600' };
+      case 'API':
+        return { icon: Zap, label: 'API', color: 'text-orange-600' };
+      default:
+        return { icon: Globe, label: 'Other', color: 'text-gray-600' };
+    }
+  };
 
   const loadTaskComments = async (taskId: string) => {
     try {
@@ -113,12 +129,24 @@ export const TicketDetailPanel: React.FC<Props> = ({ ticketId }) => {
                 <>
                   <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{new Date(ticket.submittedAt).toLocaleString()}</span>
                   <span className="flex items-center gap-1"><User className="h-3 w-3" />{ticket.submitter ? `${ticket.submitter.firstName} ${ticket.submitter.lastName}` : ticket.submittedBy}</span>
+                  {ticket.source && (
+                    <span className={`flex items-center gap-1 ${getSourceInfo(ticket.source).color}`}>
+                      {React.createElement(getSourceInfo(ticket.source).icon, { className: "h-3 w-3" })}
+                      {getSourceInfo(ticket.source).label}
+                    </span>
+                  )}
                 </>
               )}
             </div>
             <Separator />
             {ticket ? (
-              <RichTextDisplay content={ticket.description} />
+              <>
+                {ticket.source === 'EMAIL' && ticket.emailLogs && ticket.emailLogs.length > 0 ? (
+                  <EmailContentDisplay emailLogs={ticket.emailLogs} />
+                ) : (
+                  <RichTextDisplay content={ticket.description} />
+                )}
+              </>
             ) : (
               <p className="text-sm text-muted-foreground">{loading ? 'Loading…' : 'No description'}</p>
             )}

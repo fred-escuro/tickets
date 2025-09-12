@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../index';
-import { CreateUserRequest, LoginRequest, AuthResponse, ApiResponse } from '../types';
+import { CreateUserRequest, LoginRequest, AuthResponse, ApiResponse, JwtPayload } from '../types';
 import { authenticate } from '../middleware/auth';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -202,9 +202,15 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Generate JWT tokens
+    // Generate JWT tokens with session timestamps
+    const now = Date.now();
     const token = (jwt.sign as any)(
-      { userId: user.id, email: user.email },
+      { 
+        userId: user.id, 
+        email: user.email,
+        sessionStart: now,
+        lastActivity: now
+      },
       process.env.JWT_SECRET!,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
@@ -267,6 +273,47 @@ router.get('/verify', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Verify token error:', error);
     return res.status(500).json({ success: false, error: 'Failed to verify token' });
+  }
+});
+
+// Refresh session (update lastActivity timestamp)
+router.post('/refresh-session', authenticate, async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Access token required'
+      });
+    }
+
+    const token = authHeader.substring(7);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
+
+    // Create new token with updated lastActivity timestamp
+    const now = Date.now();
+    const updatedToken = (jwt.sign as any)(
+      { 
+        userId: decoded.userId, 
+        email: decoded.email,
+        sessionStart: decoded.sessionStart || now, // Keep original session start
+        lastActivity: now // Update last activity
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    return res.json({
+      success: true,
+      data: { token: updatedToken },
+      message: 'Session refreshed successfully'
+    });
+  } catch (error) {
+    console.error('Refresh session error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to refresh session'
+    });
   }
 });
 
@@ -529,9 +576,15 @@ router.post('/refresh', async (req, res) => {
       });
     }
 
-    // Generate new access token
+    // Generate new access token with session timestamps
+    const now = Date.now();
     const newToken = (jwt.sign as any)(
-      { userId: user.id, email: user.email },
+      { 
+        userId: user.id, 
+        email: user.email,
+        sessionStart: now, // Start new session on refresh
+        lastActivity: now
+      },
       process.env.JWT_SECRET!,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );

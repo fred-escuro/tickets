@@ -37,6 +37,35 @@ import { cacheUtils } from '@/lib/utils';
 import type { EmailLog, EmailLogsFilters, EmailStatistics } from '@/lib/types/emailLogs';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+
+import DOMPurify from 'dompurify';
+
+// Robust HTML sanitization using DOMPurify
+const sanitizeHtml = (html: string): string => {
+  if (!html) return '';
+  
+  // Configure DOMPurify to allow safe HTML tags and attributes
+  const config = {
+    ALLOWED_TAGS: [
+      'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'span', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'hr', 'sub', 'sup', 'small', 'mark', 'del', 'ins'
+    ],
+    ALLOWED_ATTR: [
+      'href', 'title', 'alt', 'src', 'width', 'height', 'class', 'id', 'style',
+      'target', 'rel', 'colspan', 'rowspan', 'align', 'valign'
+    ],
+    ALLOW_DATA_ATTR: false,
+    ALLOW_UNKNOWN_PROTOCOLS: false,
+    SANITIZE_DOM: true,
+    KEEP_CONTENT: true,
+    RETURN_DOM: false,
+    RETURN_DOM_FRAGMENT: false,
+    RETURN_DOM_IMPORT: false
+  };
+  
+  return DOMPurify.sanitize(html, config);
+};
 import { Link } from 'react-router-dom';
 import { Separator } from '@/components/ui/separator';
 
@@ -1284,7 +1313,7 @@ export default function EmailLogsPage() {
                     <TabsContent value="html" className="mt-2">
                       {selectedLog.htmlBody ? (
                         <div className="bg-background p-3 rounded border max-h-36 overflow-y-auto">
-                          <div className="prose prose-xs max-w-none" dangerouslySetInnerHTML={{ __html: selectedLog.htmlBody }} />
+                          <div className="prose prose-xs max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedLog.htmlBody) }} />
                         </div>
                       ) : (
                         <div className="bg-muted/50 p-3 rounded border text-center text-xs text-muted-foreground">No HTML content available</div>

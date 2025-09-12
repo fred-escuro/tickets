@@ -38,12 +38,26 @@ export class AutoResponseService {
   }
 
   async createTemplate(data: CreateAutoResponseTemplateRequest): Promise<AutoResponseTemplate> {
+    console.log('Creating template:', data);
     const response = await apiClient.post('/api/auto-response/templates', data);
+    console.log('Create template response:', response);
+    
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to create template');
+    }
+    
     return response.data;
   }
 
   async updateTemplate(id: string, data: UpdateAutoResponseTemplateRequest): Promise<AutoResponseTemplate> {
+    console.log('Updating template:', { id, data });
     const response = await apiClient.put(`/api/auto-response/templates/${id}`, data);
+    console.log('Update template response:', response);
+    
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to update template');
+    }
+    
     return response.data;
   }
 

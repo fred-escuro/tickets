@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Breadcrumb } from '@/components/Breadcrumb';
+import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
 import { 
   Settings,
@@ -47,7 +49,6 @@ import { buildApiUrl, apiClient } from '@/lib/api';
 import { ticketSystemService, type TicketCategory, type TicketPriority, type TicketStatus } from '@/lib/services/ticketSystemService';
 import { TicketStatusWorkflow } from '@/components/TicketStatusWorkflow';
 import { PriorityWorkflow } from '@/components/PriorityWorkflow';
-import { AuthService } from '@/lib/services/authService';
 import { toast } from 'sonner';
 import { roleService, type Role } from '@/lib/services/roleService';
 import { permissionService, type Permission } from '@/lib/services/permissionService';
@@ -129,6 +130,33 @@ export default function SettingsPage() {
   const [newAllowedDomain, setNewAllowedDomain] = useState('');
   const [newBlockedDomain, setNewBlockedDomain] = useState('');
   const [showRestrictionsHelp, setShowRestrictionsHelp] = useState(false);
+
+  // Email truncation settings
+  const [emailTruncation, setEmailTruncation] = useState<{
+    enabled: boolean;
+    maxLength: number;
+    preserveFirstEmail: boolean;
+    truncationSuffix: string;
+  }>({
+    enabled: true,
+    maxLength: 1000,
+    preserveFirstEmail: true,
+    truncationSuffix: '... [Content truncated - click to expand]'
+  });
+
+
+  // Email response settings
+  const [emailResponses, setEmailResponses] = useState<{
+    includeOriginalContent: boolean;
+    includeAllRecipients: boolean;
+    includeCcRecipients: boolean;
+    includeBccRecipients: boolean;
+  }>({
+    includeOriginalContent: true,
+    includeAllRecipients: false,
+    includeCcRecipients: true,
+    includeBccRecipients: false
+  });
 
   // Helper functions for domain management
   const addAllowedDomain = () => {
@@ -257,6 +285,9 @@ export default function SettingsPage() {
   // Menu and Department counts
   const [menuItemsCount, setMenuItemsCount] = useState(0);
   const [departmentsCount, setDepartmentsCount] = useState(0);
+  const [autoResponseTemplatesCount, setAutoResponseTemplatesCount] = useState(0);
+  const [followupSettingsCount, setFollowupSettingsCount] = useState(0);
+  const [autoResponseEnabled, setAutoResponseEnabled] = useState(false);
   const [showRoleDialog, setShowRoleDialog] = useState(false);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [showPolicyDialog, setShowPolicyDialog] = useState(false);
@@ -380,7 +411,7 @@ export default function SettingsPage() {
         general: ['company', 'system'],
         tickets: ['categories', 'priorities', 'statuses', 'workflows'],
         users: ['roles', 'departments'],
-        notifications: ['email', 'inapp']
+        notifications: ['email', 'inapp', 'email-truncation', 'auto-response', 'email-responses']
       };
       setExpandedSections(allSections[currentTab as keyof typeof allSections] || []);
     }
@@ -444,12 +475,31 @@ export default function SettingsPage() {
         const g = res.data['auth.google'] || {};
         setGoogleAuth({ enabled: !!g.enabled, redirectUri: g.redirectUri || '', clientId: g.clientId || '', clientSecret: g.clientSecret || '' });
       }
+      
+        // Load email truncation settings
+        try {
+          const truncationRes = await apiClient.get('/api/settings/email-truncation');
+          if (truncationRes.success && truncationRes.data && typeof truncationRes.data === 'object' && !Array.isArray(truncationRes.data)) {
+            setEmailTruncation(prev => Object.assign({}, prev, truncationRes.data));
+          }
+        } catch (error) {
+          console.error('Failed to load email truncation settings:', error);
+        }
+
+
+        // Load email response settings
+        try {
+          const emailResponseRes = await apiClient.get('/api/settings/email-responses');
+          if (emailResponseRes.success && emailResponseRes.data && typeof emailResponseRes.data === 'object' && !Array.isArray(emailResponseRes.data)) {
+            setEmailResponses(prev => Object.assign({}, prev, emailResponseRes.data));
+          }
+        } catch (error) {
+          console.error('Failed to load email response settings:', error);
+        }
     })();
     loadTicketSystemData();
     loadRbacAbac();
     
-    // Log current user info for debugging
-    const currentUser = AuthService.getCurrentUser();
   }, []);
 
   // Reset accordion state when switching tabs
@@ -458,7 +508,7 @@ export default function SettingsPage() {
       general: ['company', 'system'],
       tickets: ['categories', 'priorities', 'statuses', 'workflows'],
       users: ['roles', 'departments'],
-      notifications: ['email', 'inapp']
+      notifications: ['email', 'inapp', 'email-truncation', 'auto-response', 'email-responses']
     };
     
     if (allAccordionsExpanded) {
@@ -491,7 +541,9 @@ export default function SettingsPage() {
       notifications: {
         smtp: ['smtp', 'mail', 'email server', 'from address', 'port', 'tls', 'ssl'],
         email: ['email', 'notification', 'notifications'],
-        inapp: ['in-app', 'inapp', 'in app']
+        inapp: ['in-app', 'inapp', 'in app'],
+        'email-truncation': ['email', 'truncation', 'truncate', 'content', 'length', 'characters', 'performance', 'thread'],
+        'auto-response': ['automatic', 'response', 'auto', 'reply', 'template', 'original', 'content', 'ticket', 'created']
       }
     } as any;
 
@@ -546,18 +598,24 @@ export default function SettingsPage() {
   const loadRbacAbac = async () => {
     try {
       setRbacLoading(true);
-      const [r, p, ap, menuItems, departments] = await Promise.all([
+      const [r, p, ap, menuItems, departments, autoResponseTemplates, followupSettings, autoResponseSettings] = await Promise.all([
         roleService.list().catch(() => []),
         permissionService.list().catch(() => []),
         policyService.list().catch(() => []),
         menuService.listItems().catch(() => ({ success: false, data: [] })),
         DepartmentService.getDepartments().catch(() => ({ success: false, data: [] })),
+        apiClient.get('/api/auto-response/templates').catch(() => ({ success: false, data: [] })),
+        apiClient.get('/api/settings/followup').catch(() => ({ success: false, data: {} })),
+        apiClient.get('/api/settings/auto-response').catch(() => ({ success: false, data: {} }))
       ]);
       setRoles(r);
       setPermissions(p);
       setPolicies(ap);
-      setMenuItemsCount(menuItems.success ? menuItems.data.length : 0);
-      setDepartmentsCount(departments.success ? departments.data.length : 0);
+      setMenuItemsCount(menuItems.success && menuItems.data && Array.isArray(menuItems.data) ? menuItems.data!.length : 0);
+      setDepartmentsCount(departments.success && departments.data && Array.isArray(departments.data) ? departments.data!.length : 0);
+      setAutoResponseTemplatesCount(autoResponseTemplates.success && autoResponseTemplates.data && typeof autoResponseTemplates.data === 'object' && 'templates' in autoResponseTemplates.data && Array.isArray((autoResponseTemplates.data as any).templates) ? (autoResponseTemplates.data as any).templates.length : 0);
+      setFollowupSettingsCount(followupSettings.success && followupSettings.data ? Object.keys(followupSettings.data).length : 0);
+      setAutoResponseEnabled(autoResponseSettings.success && autoResponseSettings.data && (autoResponseSettings.data as any).enabled === true);
     } catch (e) {
       console.error('Error loading RBAC/ABAC:', e);
     } finally {
@@ -795,6 +853,37 @@ export default function SettingsPage() {
       toast.success('Google auth settings saved');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to save Google auth');
+    }
+  };
+
+  const saveEmailTruncation = async () => {
+    try {
+      const res = await apiClient.put('/api/settings/email-truncation', emailTruncation);
+      if (!res.success) throw new Error(res.error || 'Failed to save email truncation settings');
+      toast.success('Email truncation settings saved');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save email truncation settings');
+    }
+  };
+
+
+  const saveEmailResponses = async () => {
+    try {
+      const res = await apiClient.put('/api/settings/email-responses', emailResponses);
+      if (!res.success) throw new Error(res.error || 'Failed to save email response settings');
+      toast.success('Email response settings saved');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save email response settings');
+    }
+  };
+
+  const saveAutoResponse = async () => {
+    try {
+      const res = await apiClient.put('/api/settings/auto-response', { enabled: autoResponseEnabled });
+      if (!res.success) throw new Error(res.error || 'Failed to save auto-response settings');
+      toast.success('Auto-response settings saved');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save auto-response settings');
     }
   };
 
@@ -1320,15 +1409,29 @@ export default function SettingsPage() {
 
   return (
     <div className="relative z-0 mx-auto w-full max-w-[1500px] px-4 sm:px-6 lg:px-8 py-6 lg:pl-[calc(var(--sidebar-width,14rem)+1.5rem)] space-y-6">
-      {/* Header with Search */}
+      {/* Header Section */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <Settings className="h-8 w-8 text-primary" />
-              Settings
-            </h1>
-            <p className="text-muted-foreground">Configure your ticketing system preferences</p>
+        <Breadcrumb 
+          items={[
+            { label: 'Settings', current: true }
+          ]} 
+          className="mb-4"
+        />
+        <div className="flex items-center gap-4 mb-4">
+          <Link to="/">
+            <Button variant="ghost" size="sm" className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Back to Dashboard
+            </Button>
+          </Link>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-2">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Settings</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
+              Configure your ticketing system preferences and manage system-wide settings
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <Button 
@@ -1587,6 +1690,7 @@ export default function SettingsPage() {
                 </div>
               </AccordionContent>
             </AccordionItem>
+
           </Accordion>
         </TabsContent>
 
@@ -2253,19 +2357,20 @@ export default function SettingsPage() {
                     <p className="text-sm text-muted-foreground">Manage automated email responses for new tickets</p>
                   </div>
                   <div className="flex items-center gap-2 ml-auto">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
+                    <div
+                      className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 h-8 px-3 border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 cursor-pointer"
                       onClick={(e) => {
                         e.stopPropagation();
                         window.location.href = '/settings/auto-response';
                       }}
                     >
-                      <Settings className="h-4 w-4 mr-2" />
+                      <Settings className="h-4 w-4" />
                       Manage Templates
-                    </Button>
+                    </div>
                   </div>
+                  <Badge variant="outline" className="ml-auto">
+                    {autoResponseTemplatesCount} templates
+                  </Badge>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-6 pb-6">
@@ -2284,6 +2389,26 @@ export default function SettingsPage() {
                         <Mail className="h-4 w-4 mr-2" />
                         Manage Auto-Response Templates
                       </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Auto-Response Toggle */}
+                  <div className="p-4 border rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="auto-response-enabled">Enable Auto-Response System</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Automatically send responses to new tickets created via email
+                        </p>
+                      </div>
+                      <Switch
+                        id="auto-response-enabled"
+                        checked={autoResponseEnabled}
+                        onCheckedChange={(checked) => {
+                          setAutoResponseEnabled(checked);
+                          saveAutoResponse();
+                        }}
+                      />
                     </div>
                   </div>
                   
@@ -2317,19 +2442,20 @@ export default function SettingsPage() {
                     <p className="text-sm text-muted-foreground">Manage customer follow-ups to auto-responses</p>
                   </div>
                   <div className="flex items-center gap-2 ml-auto">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
+                    <div
+                      className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 h-8 px-3 border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 cursor-pointer"
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.location.href = '/settings/followups';
+                        window.location.href = '/settings/followup-settings';
                       }}
                     >
-                      <Settings className="h-4 w-4 mr-2" />
+                      <Settings className="h-4 w-4" />
                       Manage Follow-ups
-                    </Button>
+                    </div>
                   </div>
+                  <Badge variant="outline" className="ml-auto">
+                    {followupSettingsCount} settings
+                  </Badge>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-6 pb-6">
@@ -2340,7 +2466,7 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-2">
                     <Button
                       type="button"
-                      onClick={() => window.location.href = '/settings/followups'}
+                        onClick={() => window.location.href = '/settings/followup-settings'}
                       className="bg-purple-600 hover:bg-purple-700"
                     >
                       <MessageSquare className="h-4 w-4 mr-2" />
@@ -3021,30 +3147,30 @@ export default function SettingsPage() {
 
             {/* Email Restrictions & Security */}
             <AccordionItem value="email-restrictions" className="border rounded-lg">
-              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
+              <div className="px-6 py-4 border-b">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-red-100 text-red-600">
                     <AlertCircle className="h-5 w-5" />
                   </div>
-                  <div className="text-left">
+                  <div className="text-left flex-1">
                     <h3 className="font-semibold">Email Security Settings</h3>
                     <p className="text-sm text-muted-foreground">Control which domains can send emails to your system</p>
                   </div>
-                  <div className="flex items-center gap-2 ml-auto">
+                  <div className="flex items-center gap-2">
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowRestrictionsHelp(!showRestrictionsHelp);
-                      }}
+                      onClick={() => setShowRestrictionsHelp(!showRestrictionsHelp)}
                     >
                       <AlertCircle className="h-4 w-4" />
                     </Button>
+                    <AccordionTrigger className="ml-2">
+                      <span className="sr-only">Toggle section</span>
+                    </AccordionTrigger>
                   </div>
                 </div>
-              </AccordionTrigger>
+              </div>
               <AccordionContent className="px-6 pb-6">
                 {showRestrictionsHelp && (
                   <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -3561,6 +3687,242 @@ export default function SettingsPage() {
                 </div>
               </AccordionContent>
             </AccordionItem>
+
+            {/* Email Truncation Settings */}
+            <AccordionItem value="email-truncation" className="border rounded-lg" data-section="email-truncation">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
+                    <Mail className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">Email Truncation</h3>
+                    <p className="text-sm text-muted-foreground">Configure how long email content is displayed in ticket threads</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="space-y-6">
+                  {/* Enable/Disable Truncation */}
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label htmlFor="truncation-enabled">Enable Email Truncation</Label>
+                      <p className="text-sm text-muted-foreground">Truncate long email content to improve performance</p>
+                    </div>
+                    <Switch 
+                      id="truncation-enabled" 
+                      checked={emailTruncation.enabled} 
+                      onCheckedChange={(checked) => setEmailTruncation(prev => ({ ...prev, enabled: checked }))} 
+                    />
+                  </div>
+
+                  {emailTruncation.enabled && (
+                    <>
+                      {/* Character Limit */}
+                      <div className="space-y-2">
+                        <Label htmlFor="truncation-max-length">Maximum Characters</Label>
+                        <div className="flex items-center gap-3">
+                          <Input 
+                            id="truncation-max-length"
+                            type="number"
+                            min="100"
+                            max="10000"
+                            value={emailTruncation.maxLength}
+                            onChange={(e) => setEmailTruncation(prev => ({ ...prev, maxLength: parseInt(e.target.value) || 1000 }))}
+                            className="w-32"
+                          />
+                          <span className="text-sm text-muted-foreground">characters (100-10,000)</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Emails longer than this will be truncated with a "Show More" button
+                        </p>
+                      </div>
+
+                      {/* Preserve First Email */}
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <Label htmlFor="preserve-first-email">Always Show Full First Email</Label>
+                          <p className="text-sm text-muted-foreground">Keep the original issue description complete</p>
+                        </div>
+                        <Switch 
+                          id="preserve-first-email" 
+                          checked={emailTruncation.preserveFirstEmail} 
+                          onCheckedChange={(checked) => setEmailTruncation(prev => ({ ...prev, preserveFirstEmail: checked }))} 
+                        />
+                      </div>
+
+                      {/* Truncation Suffix */}
+                      <div className="space-y-2">
+                        <Label htmlFor="truncation-suffix">Truncation Message</Label>
+                        <Input 
+                          id="truncation-suffix"
+                          value={emailTruncation.truncationSuffix}
+                          onChange={(e) => setEmailTruncation(prev => ({ ...prev, truncationSuffix: e.target.value }))}
+                          placeholder="... [Content truncated - click to expand]"
+                          maxLength={200}
+                        />
+                        <p className="text-sm text-muted-foreground">
+                          Message shown when content is truncated (max 200 characters)
+                        </p>
+                      </div>
+
+                      {/* Preview */}
+                      <div className="space-y-2">
+                        <Label>Preview</Label>
+                        <div className="p-3 bg-muted/30 rounded border">
+                          <p className="text-sm text-muted-foreground mb-2">
+                            Original email content: {emailTruncation.maxLength + 500} characters
+                          </p>
+                          <div className="text-sm">
+                            {emailTruncation.maxLength > 0 ? 
+                              `This is a sample email content that would be truncated at ${emailTruncation.maxLength} characters. ${emailTruncation.truncationSuffix}` :
+                              'Email content would not be truncated'
+                            }
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="flex justify-end">
+                    <Button type="button" onClick={saveEmailTruncation}>
+                      Save Email Truncation Settings
+                    </Button>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+
+            {/* Email Response Settings */}
+            <AccordionItem value="email-responses" className="border rounded-lg" data-section="email-responses">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline transition-colors hover:bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Mail className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold">Email Response Settings</h3>
+                    <p className="text-sm text-muted-foreground">Configure how email responses include original content and recipients</p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6">
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <Label htmlFor="include-original-content">Include Original Email Content</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Include the original email content in responses for better context and thread continuity
+                        </p>
+                      </div>
+                      <Switch 
+                        id="include-original-content"
+                        checked={emailResponses.includeOriginalContent}
+                        onCheckedChange={(checked) => 
+                          setEmailResponses(prev => ({ ...prev, includeOriginalContent: checked }))
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <Label htmlFor="include-all-recipients">Include All Original Recipients</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Send responses to all original email recipients (TO, CC) instead of just the sender
+                        </p>
+                      </div>
+                      <Switch 
+                        id="include-all-recipients"
+                        checked={emailResponses.includeAllRecipients}
+                        onCheckedChange={(checked) => 
+                          setEmailResponses(prev => ({ ...prev, includeAllRecipients: checked }))
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <Label htmlFor="include-cc-recipients">Include CC Recipients</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Include CC recipients from the original email in responses
+                        </p>
+                      </div>
+                      <Switch 
+                        id="include-cc-recipients"
+                        checked={emailResponses.includeCcRecipients}
+                        onCheckedChange={(checked) => 
+                          setEmailResponses(prev => ({ ...prev, includeCcRecipients: checked }))
+                        }
+                        disabled={!emailResponses.includeAllRecipients}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <Label htmlFor="include-bcc-recipients">Include BCC Recipients</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Include BCC recipients from the original email in responses (not recommended)
+                        </p>
+                      </div>
+                      <Switch 
+                        id="include-bcc-recipients"
+                        checked={emailResponses.includeBccRecipients}
+                        onCheckedChange={(checked) => 
+                          setEmailResponses(prev => ({ ...prev, includeBccRecipients: checked }))
+                        }
+                        disabled={!emailResponses.includeAllRecipients}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Preview Section */}
+                  {emailResponses.includeOriginalContent && (
+                    <>
+                      <Separator />
+                      <div className="space-y-3">
+                        <h4 className="font-medium">Preview</h4>
+                        <div className="bg-muted/50 p-4 rounded-lg border">
+                          <div className="text-sm font-medium mb-2">Sample Response Email:</div>
+                          <div className="text-sm text-muted-foreground space-y-2">
+                            <div>Subject: Re: Sample Ticket - Ticket #1234</div>
+                            <div className="whitespace-pre-wrap">
+                              Thank you for contacting our support team. We have received your ticket and will review it shortly.
+
+                              Ticket Details:
+                              - Ticket Number: 1234
+                              - Subject: Sample Ticket
+                              - Priority: Medium
+                              - Category: General
+
+                              Our support team will get back to you as soon as possible.
+
+                              Best regards,
+                              Support Team
+
+                              --- Original Message ---
+                              From: customer@example.com
+                              Date: {new Date().toLocaleString()}
+                              Subject: Sample Ticket
+
+                              This is the original message content that would be included in the response for better context and thread continuity.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex justify-end mt-6">
+                  <Button type="button" onClick={saveEmailResponses}>
+                    Save Email Response Settings
+                  </Button>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
             <div className="flex justify-end px-6">
               <Button type="button" variant="outline" onClick={saveNotifications}>Save Notification Preferences</Button>
             </div>

@@ -116,6 +116,9 @@ export const Profile: FC = () => {
       case 'logout':
         console.log('Logout user');
         
+        // Cleanup session management
+        AuthService.cleanupSession();
+        
         // Logout and clear all auth data
         await AuthService.logout();
         toast.success('Logged out successfully');

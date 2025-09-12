@@ -1,4 +1,5 @@
 import { apiClient, API_ENDPOINTS } from '../api';
+import { idleTimeoutService } from './idleTimeoutService';
 
 // Define ApiResponse locally to avoid import issues
 interface ApiResponse<T = any> {
@@ -186,6 +187,56 @@ export class AuthService {
     localStorage.removeItem('refresh-token');
     localStorage.removeItem('user');
   }
+
+  // Initialize session management with idle timeout
+  static initializeSession(): void {
+    const token = this.getAuthToken();
+    if (!token) return;
+
+    // Initialize idle timeout service
+    idleTimeoutService.initialize({
+      idleTimeoutMs: 30 * 60 * 1000, // 30 minutes
+      warningTimeoutMs: 25 * 60 * 1000, // 25 minutes (5 minutes before idle)
+      absoluteTimeoutMs: 8 * 60 * 60 * 1000, // 8 hours
+      refreshIntervalMs: 5 * 60 * 1000, // 5 minutes
+    });
+
+    // Set up callbacks
+    idleTimeoutService.setCallbacks({
+      onWarning: () => {
+        // Dispatch event for warning dialog
+        window.dispatchEvent(new CustomEvent('session-warning'));
+      },
+      onLogout: () => {
+        // Force logout when session expires
+        this.logout();
+        window.dispatchEvent(new CustomEvent('auth-expired'));
+      },
+    });
+  }
+
+  // Extend session (refresh lastActivity)
+  static async extendSession(): Promise<boolean> {
+    try {
+      const response = await apiClient.post(API_ENDPOINTS.AUTH.REFRESH_SESSION);
+      
+      if (response.success && response.data?.token) {
+        this.setAuthToken(response.data.token);
+        idleTimeoutService.updateActivity();
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Failed to extend session:', error);
+      return false;
+    }
+  }
+
+  // Cleanup session management
+  static cleanupSession(): void {
+    idleTimeoutService.cleanup();
+  }
 }
 
 // Auto-refresh token when it expires
@@ -232,6 +283,9 @@ export const forceLogout = () => {
   // Clear timeouts
   clearTokenRefresh();
   clearExpiryTimeout();
+  
+  // Cleanup session management
+  AuthService.cleanupSession();
   
   // Dispatch custom event to notify components
   window.dispatchEvent(new CustomEvent('auth-expired'));

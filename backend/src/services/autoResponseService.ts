@@ -149,6 +149,7 @@ export class AutoResponseService {
   }
 
   async updateTemplate(id: string, data: UpdateAutoResponseTemplateRequest): Promise<AutoResponseTemplate> {
+    console.log('Backend updating template:', { id, data });
     const template = await prisma.autoResponseTemplate.update({
       where: { id },
       data: {
@@ -157,7 +158,7 @@ export class AutoResponseService {
         subjectTemplate: data.subjectTemplate,
         bodyTemplate: data.bodyTemplate,
         triggerConditions: data.triggerConditions as any,
-        departmentId: data.departmentId || undefined,
+        departmentId: data.departmentId === undefined ? null : data.departmentId,
         isActive: data.isActive,
         updatedAt: new Date(),
       },
@@ -179,6 +180,7 @@ export class AutoResponseService {
       },
     });
 
+    console.log('Backend updated template:', template);
     return template as AutoResponseTemplate;
   }
 

@@ -112,13 +112,41 @@ async function main() {
   await upsert('tasks', 'blockedEscalationHours', 48);
   // NOTE: task statuses and priorities are now first-class tables
 
+  // Email response settings (consolidated)
+  await upsert('email.responses', 'include_original_content', true);
+  await upsert('email.responses', 'include_all_recipients', false);
+  await upsert('email.responses', 'include_cc_recipients', true);
+  await upsert('email.responses', 'include_bcc_recipients', false);
+
+  // Auto-response settings (without redundant includeOriginalContent)
+  await upsert('system', 'auto_response_enabled', true);
+  await upsert('system', 'auto_response_content_truncation_length', 500);
+  await upsert('system', 'auto_response_template', `Thank you for contacting our support team. We have received your ticket and will review it shortly.
+
+Ticket Details:
+- Ticket Number: {{ticketNumber}}
+- Subject: {{ticketTitle}}
+- Priority: {{priority}}
+- Category: {{category}}
+
+{{#includeOriginalContent}}
+Original Message:
+{{originalContent}}
+{{/includeOriginalContent}}
+
+Our support team will get back to you as soon as possible. You can track the progress of your ticket by logging into our support portal.
+
+Best regards,
+Support Team`);
+  await upsert('system', 'auto_response_subject_template', 'Re: {{ticketTitle}} - Ticket #{{ticketNumber}}');
+
   // Google auth defaults
   await upsert('auth.google', 'enabled', false);
   await upsert('auth.google', 'redirectUri', 'http://localhost:3000/auth/callback/google');
   await upsertSecret('auth.google', 'clientId', '');
   await upsertSecret('auth.google', 'clientSecret', '');
 
-  console.log('✅ Seeded settings: branding, company, features, SMTP, notifications, email.inbound, auth.google');
+  console.log('✅ Seeded settings: branding, company, features, SMTP, notifications, email.inbound, email.responses, auto-response, auth.google');
 }
 
 export async function seedSettings() {

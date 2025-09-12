@@ -2,6 +2,9 @@ import { prisma } from '../index';
 import { Comment, Ticket, User, FollowupStatus } from '@prisma/client';
 import { followupDetectionService, InboundEmail } from './followupDetectionService';
 import { emailNotificationService } from './emailNotificationService';
+import { ParsedMail } from 'mailparser';
+import fs from 'fs';
+import path from 'path';
 
 export interface FollowupProcessingResult {
   success: boolean;
@@ -24,7 +27,7 @@ export class FollowupProcessorService {
   /**
    * Processes a follow-up email and adds it as a ticket comment
    */
-  async processFollowup(email: InboundEmail): Promise<FollowupProcessingResult> {
+  async processFollowup(email: InboundEmail, parsedEmail?: ParsedMail): Promise<FollowupProcessingResult> {
     try {
       // Detect if this is a follow-up to an auto-response
       const detection = await followupDetectionService.detectAutoResponseReply(email);
@@ -51,20 +54,49 @@ export class FollowupProcessorService {
         };
       }
 
-      // Parse and clean the follow-up content
-      const cleanedContent = this.parseFollowupContent(email);
-      
-      // Log the cleaning process for debugging
-      console.log('Original follow-up content:', email.body.substring(0, 200) + '...');
-      console.log('Cleaned follow-up content:', cleanedContent);
+    // Parse and clean the follow-up content
+    const cleanedContent = this.parseFollowupContent(email, parsedEmail);
+    
+    // Log the cleaning process for debugging
+    console.log('=== FOLLOW-UP CONTENT DEBUG ===');
+    console.log('Email ID:', email.id);
+    console.log('Email From:', email.from);
+    console.log('Email Subject:', email.subject);
+    console.log('Original body length:', email.body?.length || 0);
+    console.log('Original HTML body length:', email.htmlBody?.length || 0);
+    console.log('Original body preview:', email.body?.substring(0, 200) + '...');
+    console.log('Cleaned content length:', cleanedContent?.length || 0);
+    console.log('Cleaned content preview:', cleanedContent?.substring(0, 200) + '...');
+    
+    // If cleaned content is too short or empty, use original content as fallback
+    const finalContent = cleanedContent.trim().length < 10 ? email.body || email.htmlBody || 'No content available' : cleanedContent;
+    
+    console.log('Final content length:', finalContent?.length || 0);
+    console.log('Final content preview:', finalContent?.substring(0, 200) + '...');
+    
+    if (finalContent !== cleanedContent) {
+      console.log('Using fallback content due to aggressive filtering');
+    }
+    
+    if (finalContent.trim().length < 10) {
+      console.log('WARNING: Final content is still too short!');
+      console.log('Final content:', JSON.stringify(finalContent));
+    }
+    
+    console.log('=== END FOLLOW-UP CONTENT DEBUG ===');
 
       // Add comment to ticket
       const comment = await this.addCommentToTicket(
         detection.ticketId,
-        cleanedContent,
+        finalContent,
         email.from,
         false // Not internal
       );
+
+      // Save attachments if we have parsed email data
+      if (parsedEmail && parsedEmail.attachments && parsedEmail.attachments.length > 0) {
+        await this.saveFollowupAttachments(parsedEmail, comment.id, email.from);
+      }
 
       // Record the follow-up
       const followup = await followupDetectionService.recordFollowup(
@@ -100,127 +132,103 @@ export class FollowupProcessorService {
   /**
    * Parses and cleans follow-up email content
    */
-  private parseFollowupContent(email: InboundEmail): string {
-    let content = email.body;
-
-    // Remove common email signatures and footers
-    const signaturePatterns = [
-      /--\s*$/m,
-      /Best regards,?$/m,
-      /Sincerely,?$/m,
-      /Thanks,?$/m,
-      /Regards,?$/m,
-      /Sent from my .+$/m,
-      /Get Outlook for .+$/m,
-      /This email was sent from .+$/m,
-      /TicketHub Support Team.*$/s,
-      /Our support team will review.*$/s
-    ];
-
-    for (const pattern of signaturePatterns) {
-      content = content.split(pattern)[0];
-    }
-
-    // First, try to remove auto-response content specifically
-    content = this.removeAutoResponseContent(content);
-
-    // Remove quoted content and original messages
-    const quotedPatterns = [
-      // Common email reply patterns
-      /On .+ wrote:.*$/s,
-      /From: .+ Sent: .+ To: .+ Subject: .+$/s,
-      /-----Original Message-----.*$/s,
-      /Begin forwarded message:.*$/s,
-      /From: .+ Date: .+ Subject: .+$/s,
-      /Sent: .+ To: .+ Subject: .+$/s,
-      
-      // Generic quoted content patterns
-      /^>.*$/gm,
-      /^On .+ at .+ wrote:$/m,
-      /^From: .+$/m,
-      /^To: .+$/m,
-      /^Subject: .+$/m,
-      /^Date: .+$/m,
-      /^Sent: .+$/m,
-      
-      // Outlook/Gmail specific patterns
-      /^From: .+ Sent: .+ To: .+ Subject: .+$/m,
-      /^On .+ wrote:$/m,
-      /^On .+ at .+ wrote:$/m,
-      
-      // Generic email thread patterns
-      /^On .+ wrote:.*$/s,
-      /^-----Original Message-----.*$/s,
-      /^Begin forwarded message:.*$/s
-    ];
-
-    for (const pattern of quotedPatterns) {
-      content = content.split(pattern)[0];
-    }
-
-    // Remove multiple consecutive empty lines
-    content = content.replace(/\n\s*\n\s*\n/g, '\n\n');
+  private parseFollowupContent(email: InboundEmail, parsedEmail?: ParsedMail): string {
+    console.log('=== PARSE FOLLOW-UP CONTENT DEBUG ===');
+    console.log('Input email body:', email.body?.substring(0, 100) + '...');
+    console.log('Input email htmlBody:', email.htmlBody?.substring(0, 100) + '...');
+    console.log('Parsed email HTML:', typeof parsedEmail?.html === 'string' ? parsedEmail.html.substring(0, 100) + '...' : 'No HTML content');
     
-    // Remove leading/trailing whitespace
-    content = content.trim();
-
-    // If content is too short after cleaning, try to extract meaningful content
-    if (content.length < 10) {
-      content = this.extractUserMessage(email.body);
+    // Prefer HTML content if available, otherwise use text
+    let content = email.htmlBody || email.body;
+    
+    // If we have parsed email data, use the processed HTML
+    if (parsedEmail && parsedEmail.html) {
+      content = parsedEmail.html;
+      console.log('Using parsed email HTML content');
+    } else {
+      console.log('Using original email body/htmlBody content');
     }
-
-    return content;
+    
+    console.log('Selected content preview:', content?.substring(0, 200) + '...');
+    
+    // If content appears to be HTML, preserve it
+    const isHtml = content.includes('<') && content.includes('>');
+    console.log('Content is HTML:', isHtml);
+    
+    let result: string;
+    if (isHtml) {
+      // For HTML content, we'll clean it but preserve the HTML structure
+      result = this.cleanHtmlContent(content);
+      console.log('HTML cleaning result preview:', result?.substring(0, 200) + '...');
+      
+      // If HTML processing resulted in very short content, try using the plain text body
+      if (result.length < 20) {
+        console.log('HTML processing resulted in short content, trying plain text body');
+        const plainTextResult = this.convertPlainTextToHtml(email.body || '');
+        if (plainTextResult.length > result.length) {
+          console.log('Using plain text body instead');
+          result = plainTextResult;
+        }
+      }
+    } else {
+      // For plain text content, convert to HTML for proper display in timeline
+      result = this.convertPlainTextToHtml(content);
+      console.log('Plain text conversion result preview:', result?.substring(0, 200) + '...');
+    }
+    
+    console.log('Final parse result length:', result?.length || 0);
+    console.log('=== END PARSE FOLLOW-UP CONTENT DEBUG ===');
+    
+    return result;
   }
 
   /**
    * Removes auto-response content from follow-up emails
    */
   private removeAutoResponseContent(content: string): string {
-    // Auto-response specific patterns to remove
+    console.log('=== REMOVE AUTO-RESPONSE CONTENT DEBUG ===');
+    console.log('Input content length:', content?.length || 0);
+    console.log('Input content preview:', content?.substring(0, 200) + '...');
+    
+    // Auto-response specific patterns to remove (more conservative approach)
     const autoResponsePatterns = [
-      // Ticket acknowledgment patterns
-      /Thank you for contacting.*?Support Team.*$/s,
-      /We have received your request.*?Support Team.*$/s,
-      /Your ticket has been created.*?Support Team.*$/s,
-      /Ticket #\d+ has been created.*?Support Team.*$/s,
+      // Full auto-response patterns (must match entire content)
+      /^Thank you for contacting.*?Support Team.*$/s,
+      /^We have received your request.*?Support Team.*$/s,
+      /^Your ticket has been created.*?Support Team.*$/s,
+      /^Ticket #\d+ has been created.*?Support Team.*$/s,
       
-      // Auto-response headers
-      /RE: .+ - Ticket #\d+.*$/s,
-      /Ticket number: .+$/m,
-      /Subject: .+$/m,
-      /Priority: .+$/m,
-      /Category: .+$/m,
-      /Status: .+$/m,
+      // Auto-response body content (full patterns)
+      /^Our support team will review your request.*$/s,
+      /^You can track the progress of your ticket.*$/s,
+      /^If you have any additional information.*$/s,
+      /^Please do not reply to this email.*$/s,
+      /^This email was sent automatically.*$/s,
+      /^This is an automated response.*$/s,
       
-      // Auto-response body content
-      /Our support team will review your request.*$/s,
-      /You can track the progress of your ticket.*$/s,
-      /If you have any additional information.*$/s,
-      /Please do not reply to this email.*$/s,
-      /This email was sent automatically.*$/s,
-      /This is an automated response.*$/s,
-      
-      // Common auto-response phrases
-      /Thank you for contacting .+ support.*$/s,
-      /We have received your request and created ticket.*$/s,
-      /Your request has been logged as ticket.*$/s,
-      /We will respond within \d+ hours.*$/s,
-      /Our team will review and respond.*$/s,
-      
-      // TicketHub specific patterns
-      /TicketHub.*$/s,
-      /Support Team.*$/s,
-      /Best regards,.*$/s
+      // TicketHub specific full patterns
+      /^TicketHub Support Team.*$/s,
+      /^Best regards,\s*Support Team.*$/s,
+      /^Best regards,\s*TicketHub.*$/s
     ];
 
     let cleanedContent = content;
+    let removedPatterns = 0;
     
     for (const pattern of autoResponsePatterns) {
+      const beforeLength = cleanedContent.length;
       cleanedContent = cleanedContent.split(pattern)[0];
+      if (cleanedContent.length < beforeLength) {
+        removedPatterns++;
+        console.log('Removed auto-response pattern:', pattern.toString());
+      }
     }
 
-    // Also remove content that looks like it's from an auto-response
-    // by checking for common auto-response structure
+    console.log('Removed patterns count:', removedPatterns);
+    console.log('After pattern removal length:', cleanedContent?.length || 0);
+    console.log('After pattern removal preview:', cleanedContent?.substring(0, 200) + '...');
+
+    // More conservative line-by-line filtering
     const lines = cleanedContent.split('\n');
     const filteredLines = [];
     let inAutoResponse = false;
@@ -228,15 +236,17 @@ export class FollowupProcessorService {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       
-      // Check if this line starts an auto-response
-      if (line.match(/^(Thank you for contacting|We have received|Your ticket|Ticket #|RE: .+ - Ticket #)/)) {
+      // Only mark as auto-response if it's a clear auto-response start
+      if (line.match(/^(Thank you for contacting our support team|We have received your request and created ticket|Your ticket has been created|Ticket #\d+ has been created|RE: .+ - Ticket #\d+)/)) {
         inAutoResponse = true;
+        console.log('Detected auto-response start at line:', i, line);
         continue;
       }
       
-      // Check if this line ends the auto-response
-      if (inAutoResponse && (line.match(/^(Best regards|Support Team|Thank you)/) || line === '')) {
+      // End auto-response only on clear endings
+      if (inAutoResponse && line.match(/^(Best regards,\s*Support Team|Best regards,\s*TicketHub|Support Team|Thank you for using our support system)/)) {
         inAutoResponse = false;
+        console.log('Detected auto-response end at line:', i, line);
         continue;
       }
       
@@ -246,7 +256,12 @@ export class FollowupProcessorService {
       }
     }
     
-    return filteredLines.join('\n').trim();
+    const result = filteredLines.join('\n').trim();
+    console.log('Final filtered content length:', result?.length || 0);
+    console.log('Final filtered content preview:', result?.substring(0, 200) + '...');
+    console.log('=== END REMOVE AUTO-RESPONSE CONTENT DEBUG ===');
+    
+    return result;
   }
 
   /**
@@ -293,6 +308,333 @@ export class FollowupProcessorService {
     
     // If still no meaningful content, include the original with a note
     return `Follow-up from user:\n\n${emailBody}`;
+  }
+
+  /**
+   * Cleans HTML content while preserving formatting for display
+   */
+  private cleanHtmlContent(htmlContent: string): string {
+    console.log('=== CLEAN HTML CONTENT DEBUG ===');
+    console.log('Input HTML length:', htmlContent?.length || 0);
+    console.log('Input HTML preview:', htmlContent?.substring(0, 200) + '...');
+    
+    // First, try to extract the actual user content from Microsoft Word HTML
+    // Look for the user's message before any auto-response content
+    let userContent = this.extractUserContentFromHtml(htmlContent);
+    
+    if (userContent && userContent.trim().length > 0) {
+      console.log('Extracted user content:', userContent);
+      return this.convertPlainTextToHtml(userContent);
+    }
+    
+    // If no user content found, proceed with normal HTML cleaning
+    console.log('No user content found, proceeding with HTML cleaning');
+    
+    // Remove auto-response content from HTML
+    let cleanedHtml = this.removeAutoResponseContent(htmlContent);
+    
+    console.log('After auto-response removal length:', cleanedHtml?.length || 0);
+    console.log('After auto-response removal preview:', cleanedHtml?.substring(0, 200) + '...');
+    
+    // Remove quoted content patterns that work with HTML
+    const quotedPatterns = [
+      // Common email reply patterns in HTML
+      /<div[^>]*class="[^"]*gmail_quote[^"]*"[^>]*>.*$/s,
+      /<blockquote[^>]*>.*$/s,
+      /<div[^>]*style="[^"]*border-left[^"]*"[^>]*>.*$/s,
+      /<!--.*?-->/gs,
+      /<div[^>]*class="[^"]*moz-cite-prefix[^"]*"[^>]*>.*$/s,
+      /<div[^>]*class="[^"]*OutlookMessageHeader[^"]*"[^>]*>.*$/s,
+      /<div[^>]*class="[^"]*WordSection1[^"]*"[^>]*>.*$/s
+    ];
+
+    let removedQuotedPatterns = 0;
+    for (const pattern of quotedPatterns) {
+      const beforeLength = cleanedHtml.length;
+      cleanedHtml = cleanedHtml.split(pattern)[0];
+      if (cleanedHtml.length < beforeLength) {
+        removedQuotedPatterns++;
+        console.log('Removed quoted HTML pattern:', pattern.toString());
+      }
+    }
+    
+    console.log('Removed quoted patterns count:', removedQuotedPatterns);
+    console.log('After quoted removal length:', cleanedHtml?.length || 0);
+    console.log('After quoted removal preview:', cleanedHtml?.substring(0, 200) + '...');
+    
+    // Clean up HTML while preserving formatting
+    let formattedHtml = cleanedHtml
+      // Remove script and style elements
+      .replace(/<script[^>]*>.*?<\/script>/gi, '')
+      .replace(/<style[^>]*>.*?<\/style>/gi, '')
+      // Clean up Microsoft Word HTML artifacts
+      .replace(/<o:p\s*\/?>/gi, '')
+      .replace(/<\/o:p>/gi, '')
+      .replace(/<w:[^>]*\/?>/gi, '')
+      .replace(/<\/w:[^>]*>/gi, '')
+      .replace(/xmlns:[^=]*="[^"]*"/gi, '')
+      // Normalize line breaks
+      .replace(/<br\s*\/?>/gi, '<br>')
+      // Clean up empty paragraphs and divs
+      .replace(/<p[^>]*>\s*<\/p>/gi, '')
+      .replace(/<div[^>]*>\s*<\/div>/gi, '')
+      // Ensure proper paragraph structure
+      .replace(/<p[^>]*>/gi, '<p>')
+      .replace(/<div[^>]*>/gi, '<div>')
+      // Clean up extra whitespace
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    console.log('After HTML cleanup length:', formattedHtml?.length || 0);
+    console.log('After HTML cleanup preview:', formattedHtml?.substring(0, 200) + '...');
+    
+    // If content is too short after cleaning, try to extract from original HTML
+    if (formattedHtml.length < 50) {
+      console.log('Content too short after cleaning, trying original HTML extraction');
+      // Try to extract content more aggressively but preserve HTML
+      formattedHtml = htmlContent
+        .replace(/<script[^>]*>.*?<\/script>/gi, '')
+        .replace(/<style[^>]*>.*?<\/style>/gi, '')
+        .replace(/<o:p\s*\/?>/gi, '')
+        .replace(/<\/o:p>/gi, '')
+        .replace(/<w:[^>]*\/?>/gi, '')
+        .replace(/<\/w:[^>]*>/gi, '')
+        .replace(/xmlns:[^=]*="[^"]*"/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    
+    // If still no meaningful HTML content, convert to HTML from plain text
+    if (formattedHtml.length < 10 || !formattedHtml.includes('<')) {
+      console.log('Still no meaningful content, converting to HTML from plain text');
+      const plainText = htmlContent
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      // Convert plain text to HTML with proper formatting
+      formattedHtml = plainText
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => `<p>${line}</p>`)
+        .join('');
+    }
+    
+    console.log('Final formatted HTML length:', formattedHtml?.length || 0);
+    console.log('Final formatted HTML preview:', formattedHtml?.substring(0, 200) + '...');
+    console.log('=== END CLEAN HTML CONTENT DEBUG ===');
+    
+    return formattedHtml;
+  }
+
+  /**
+   * Extracts user content from Microsoft Word HTML emails
+   */
+  private extractUserContentFromHtml(htmlContent: string): string {
+    console.log('=== EXTRACT USER CONTENT FROM HTML DEBUG ===');
+    
+    // First, try to find the user's message by looking for common patterns
+    // that appear before auto-response content
+    
+    // Look for simple user messages at the beginning
+    const simplePatterns = [
+      /^[^<]*?(Followup please|Thank you|Please|Update|Status|Hi|Hello|I need|Can you|When will)[^<]*/i,
+      /^[^<]*?([A-Z][a-z]+ [a-z]+)[^<]*/i, // Simple sentence patterns
+    ];
+    
+    for (const pattern of simplePatterns) {
+      const match = htmlContent.match(pattern);
+      if (match && match[0].trim().length > 0 && match[0].trim().length < 100) {
+        console.log('Found simple user message:', match[0].trim());
+        return match[0].trim();
+      }
+    }
+    
+    // Try to extract text content and look for user message
+    const textContent = htmlContent
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    console.log('Extracted text content:', textContent.substring(0, 200) + '...');
+    
+    // Look for user message patterns in the text
+    const userMessagePatterns = [
+      /^(Followup please|Thank you|Please|Update|Status|Hi|Hello|I need|Can you|When will).*$/i,
+      /^([A-Z][a-z]+ [a-z]+.*?)(?=From:|Sent:|To:|Subject:|-----|Best regards|Support Team)/i,
+    ];
+    
+    for (const pattern of userMessagePatterns) {
+      const match = textContent.match(pattern);
+      if (match && match[1] && match[1].trim().length > 0 && match[1].trim().length < 200) {
+        console.log('Found user message pattern:', match[1].trim());
+        return match[1].trim();
+      }
+    }
+    
+    // If no specific pattern found, try to get the first meaningful line
+    const lines = textContent.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    for (const line of lines) {
+      if (line.length > 0 && line.length < 100 && 
+          !line.match(/^(From:|Sent:|To:|Subject:|Date:|-----|Best regards|Support Team)/i)) {
+        console.log('Found first meaningful line:', line);
+        return line;
+      }
+    }
+    
+    console.log('No user content found in HTML');
+    console.log('=== END EXTRACT USER CONTENT FROM HTML DEBUG ===');
+    return '';
+  }
+
+  /**
+   * Converts plain text content to HTML for proper display
+   */
+  private convertPlainTextToHtml(plainText: string): string {
+    console.log('=== CONVERT PLAIN TEXT TO HTML DEBUG ===');
+    console.log('Input plain text length:', plainText?.length || 0);
+    console.log('Input plain text preview:', plainText?.substring(0, 200) + '...');
+    
+    // Remove auto-response content from plain text
+    let cleanedText = this.removeAutoResponseContent(plainText);
+    
+    console.log('After auto-response removal length:', cleanedText?.length || 0);
+    console.log('After auto-response removal preview:', cleanedText?.substring(0, 200) + '...');
+    
+    // Remove quoted content patterns (more conservative)
+    const quotedPatterns = [
+      /On .+ wrote:.*$/s,
+      /From: .+ Sent: .+ To: .+ Subject: .+$/s,
+      /-----Original Message-----.*$/s,
+      /Begin forwarded message:.*$/s,
+      /From: .+ Date: .+ Subject: .+$/s,
+      /Sent: .+ To: .+ Subject: .+$/s,
+    ];
+
+    let removedQuotedPatterns = 0;
+    for (const pattern of quotedPatterns) {
+      const beforeLength = cleanedText.length;
+      cleanedText = cleanedText.split(pattern)[0];
+      if (cleanedText.length < beforeLength) {
+        removedQuotedPatterns++;
+        console.log('Removed quoted pattern:', pattern.toString());
+      }
+    }
+    
+    console.log('Removed quoted patterns count:', removedQuotedPatterns);
+    console.log('After quoted removal length:', cleanedText?.length || 0);
+    console.log('After quoted removal preview:', cleanedText?.substring(0, 200) + '...');
+    
+    // If content is too short after cleaning, use original text
+    if (cleanedText.trim().length < 5) {
+      console.log('Content too short after cleaning, using original text');
+      cleanedText = plainText;
+    }
+    
+    // Convert plain text to HTML with proper formatting
+    const htmlContent = cleanedText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0)
+      .map(line => {
+        // Handle special formatting patterns
+        if (line.startsWith('--- ')) {
+          return `<hr><p><strong>${line.substring(4)}</strong></p>`;
+        }
+        if (line.includes(':') && line.split(':').length === 2) {
+          const [label, value] = line.split(':');
+          return `<p><strong>${label.trim()}:</strong> ${value.trim()}</p>`;
+        }
+        if (line.startsWith('- ')) {
+          return `<p>• ${line.substring(2)}</p>`;
+        }
+        return `<p>${line}</p>`;
+      })
+      .join('');
+    
+    const result = htmlContent || '<p>No content available</p>';
+    console.log('Final HTML content length:', result?.length || 0);
+    console.log('Final HTML content preview:', result?.substring(0, 200) + '...');
+    console.log('=== END CONVERT PLAIN TEXT TO HTML DEBUG ===');
+    
+    return result;
+  }
+
+  /**
+   * Saves attachments from follow-up emails
+   */
+  private async saveFollowupAttachments(parsedEmail: ParsedMail, commentId: string, authorEmail: string): Promise<void> {
+    try {
+      const uploadPath = process.env.UPLOAD_PATH || path.resolve(process.cwd(), 'uploads');
+      
+      // Ensure upload directory exists
+      if (!fs.existsSync(uploadPath)) {
+        fs.mkdirSync(uploadPath, { recursive: true });
+      }
+      
+      // Filter out inline images - only save true attachments
+      const trueAttachments = (parsedEmail.attachments || []).filter(att => {
+        return att.contentDisposition === 'attachment';
+      });
+      
+      console.log(`Processing ${parsedEmail.attachments?.length || 0} total parts, saving ${trueAttachments.length} as follow-up attachments`);
+      
+      // Find or create user for the author
+      let author = await prisma.user.findUnique({
+        where: { email: authorEmail }
+      });
+
+      if (!author) {
+        author = await prisma.user.create({
+          data: {
+            email: authorEmail,
+            firstName: authorEmail.split('@')[0],
+            lastName: 'User',
+            password: 'external-user',
+            isAgent: false
+          }
+        });
+      }
+      
+      for (const att of trueAttachments) {
+        const ext = att.filename ? path.extname(att.filename) : '';
+        const safeName = (att.filename || 'attachment')
+          .replace(/[^a-zA-Z0-9._-]/g, '_')
+          .slice(0, 120);
+        const fname = `followup-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext || ''}`;
+        const fpath = path.join(uploadPath, fname);
+        
+        fs.writeFileSync(fpath, att.content as Buffer);
+        
+        await prisma.attachment.create({
+          data: {
+            ticketId: null, // Attached to comment, not ticket directly
+            commentId: commentId,
+            name: safeName || fname,
+            filePath: fpath,
+            fileSize: (att.size as number) || (att.content as Buffer).length,
+            mimeType: att.contentType || 'application/octet-stream',
+            uploadedBy: author.id,
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Error saving follow-up attachments:', error);
+      // Don't throw - attachments are not critical for follow-up processing
+    }
   }
 
   /**

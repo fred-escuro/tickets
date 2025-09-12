@@ -152,7 +152,7 @@ export class FollowupDetectionService {
       }
 
       // Check inReplyTo header
-      if (email.inReplyTo) {
+      if (email.inReplyTo && typeof email.inReplyTo === 'string') {
         const autoResponse = await prisma.autoResponse.findFirst({
           where: {
             OR: [
@@ -175,7 +175,7 @@ export class FollowupDetectionService {
       }
 
       // Check references header
-      if (email.references) {
+      if (email.references && typeof email.references === 'string') {
         const references = email.references.split(/\s+/);
         for (const ref of references) {
           const autoResponse = await prisma.autoResponse.findFirst({

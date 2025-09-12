@@ -8,6 +8,7 @@ import { emailTrackingService } from './emailTrackingService';
 import { autoResponseGenerator } from './autoResponseGenerator';
 import { followupDetectionService, InboundEmail as FollowupInboundEmail } from './followupDetectionService';
 import { followupProcessorService } from './followupProcessorService';
+import { comprehensiveReplyLoggingService } from './comprehensiveReplyLoggingService';
 import { EmailMessageType } from '@prisma/client';
 
 export interface InboundEmailSettings {
@@ -179,7 +180,17 @@ async function findOrCreateUserByEmail(email: string, name?: string): Promise<st
 async function saveAttachments(parsed: ParsedMail, uploadedBy: string, ticketId?: string, commentId?: string) {
 	const uploadPath = process.env.UPLOAD_PATH || path.resolve(process.cwd(), 'uploads');
 	ensureDir(uploadPath);
-	for (const att of parsed.attachments || []) {
+	
+	// Filter out inline images - only save true attachments
+	const trueAttachments = (parsed.attachments || []).filter(att => {
+		// Only save attachments with contentDisposition: 'attachment'
+		// Skip inline images (contentDisposition: 'inline') as they should be part of HTML content
+		return att.contentDisposition === 'attachment';
+	});
+	
+	console.log(`Processing ${parsed.attachments?.length || 0} total parts, saving ${trueAttachments.length} as attachments`);
+	
+	for (const att of trueAttachments) {
 		const ext = att.filename ? path.extname(att.filename) : '';
 		const safeName = (att.filename || 'attachment')
 			.replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -192,7 +203,7 @@ async function saveAttachments(parsed: ParsedMail, uploadedBy: string, ticketId?
 				ticketId,
 				commentId,
 				name: safeName || fname,
-				filePath: `/uploads/${fname}`,
+				filePath: fpath,
 				fileSize: (att.size as number) || (att.content as Buffer).length,
 				mimeType: att.contentType || 'application/octet-stream',
 				uploadedBy,
@@ -204,6 +215,16 @@ async function saveAttachments(parsed: ParsedMail, uploadedBy: string, ticketId?
 export async function runEmailIngestOnce(): Promise<IngestResult> {
 	const result: IngestResult = { fetched: 0, created: 0, replies: 0, skipped: 0, errors: 0 };
 	const settings = await loadInboundSettings();
+	
+	console.log('=== EMAIL INGEST SETTINGS DEBUG ===');
+	console.log('IMAP Host:', settings.imapHost);
+	console.log('IMAP Port:', settings.imapPort);
+	console.log('IMAP User:', settings.imapUser);
+	console.log('Source Folder:', settings.folder);
+	console.log('Success Folder:', settings.moveOnSuccessFolder);
+	console.log('Error Folder:', settings.moveOnErrorFolder);
+	console.log('=== END EMAIL INGEST SETTINGS DEBUG ===');
+	
 	if (!settings.imapHost || !settings.imapUser || !settings.imapPassword) {
 		throw new Error('Inbound email is not fully configured');
 	}
@@ -218,6 +239,14 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 
 	await client.connect();
 	try {
+		// List available folders for debugging
+		console.log('=== AVAILABLE IMAP FOLDERS ===');
+		const folders = await client.list();
+		for (const folder of folders) {
+			console.log(`Folder: ${folder.name} (${Array.from(folder.flags).join(', ')})`);
+		}
+		console.log('=== END AVAILABLE IMAP FOLDERS ===');
+		
 		await client.mailboxOpen(settings.folder || 'INBOX');
 		const q = { seen: false } as any;
 		const messages: Array<FetchMessageObject & { uid: number }> = [] as any;
@@ -230,9 +259,9 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 			try {
 				const parsed = await simpleParser((msg as any).source);
 				const messageId = (parsed.messageId || '').trim();
-				if (!messageId) { result.skipped++; await markProcessed(client, msg.uid, settings.moveOnErrorFolder); continue; }
+				if (!messageId) { result.skipped++; await markProcessed(client, msg.uid, settings.moveOnErrorFolder, settings.folder, settings); continue; }
 				const existingEmail = await prisma.emailLog.findUnique({ where: { messageId } }).catch(() => null);
-				if (existingEmail) { result.skipped++; await markProcessed(client, msg.uid, settings.moveOnSuccessFolder); continue; }
+				if (existingEmail) { result.skipped++; await markProcessed(client, msg.uid, settings.moveOnSuccessFolder, settings.folder, settings); continue; }
 
 				const fromObj = (parsed as any).from?.value?.[0];
 				const fromEmail = (fromObj?.address || '').toLowerCase();
@@ -242,6 +271,7 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 					await prisma.emailLog.create({ 
 						data: { 
 							messageId, 
+							imapUid: msg.uid,
 							direction: 'INBOUND' as any,
 							type: 'NEW' as any, 
 							from: '', 
@@ -252,7 +282,7 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
 						} 
 					});
-					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+					await markProcessed(client, msg.uid, settings.moveOnErrorFolder, settings.folder, settings);
 					continue;
 				}
 				// Apply comprehensive domain restrictions
@@ -288,6 +318,7 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 					await prisma.emailLog.create({ 
 						data: { 
 							messageId, 
+							imapUid: msg.uid,
 							direction: 'INBOUND' as any,
 							type: 'NEW' as any, 
 							from: fromEmail, 
@@ -298,7 +329,7 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
 						} 
 					});
-					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+					await markProcessed(client, msg.uid, settings.moveOnErrorFolder, settings.folder, settings);
 					continue;
 				}
 
@@ -308,6 +339,7 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 					await prisma.emailLog.create({ 
 						data: { 
 							messageId, 
+							imapUid: msg.uid,
 							direction: 'INBOUND' as any,
 							type: 'NEW' as any, 
 							from: fromEmail, 
@@ -318,7 +350,7 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
 						} 
 					});
-					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+					await markProcessed(client, msg.uid, settings.moveOnErrorFolder, settings.folder, settings);
 					continue;
 				}
 
@@ -327,6 +359,7 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 					await prisma.emailLog.create({ 
 						data: { 
 							messageId, 
+							imapUid: msg.uid,
 							direction: 'INBOUND' as any,
 							type: 'NEW' as any, 
 							from: fromEmail, 
@@ -337,7 +370,7 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
 						} 
 					});
-					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+					await markProcessed(client, msg.uid, settings.moveOnErrorFolder, settings.folder, settings);
 					continue;
 				}
 
@@ -346,6 +379,7 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 					await prisma.emailLog.create({ 
 						data: { 
 							messageId, 
+							imapUid: msg.uid,
 							direction: 'INBOUND' as any,
 							type: 'NEW' as any, 
 							from: fromEmail, 
@@ -356,52 +390,90 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
 						} 
 					});
-					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+					await markProcessed(client, msg.uid, settings.moveOnErrorFolder, settings.folder, settings);
 					continue;
 				}
 
-				// Apply attachment restrictions
-				const attachments = parsed.attachments || [];
-				if (settings.maxAttachments && attachments.length > settings.maxAttachments) {
+				// Apply attachment restrictions - only count true attachments, not embedded images
+				const allAttachments = parsed.attachments || [];
+				const trueAttachments = allAttachments.filter(att => att.contentDisposition === 'attachment');
+				
+				if (settings.maxAttachments && trueAttachments.length > settings.maxAttachments) {
 					result.skipped++;
 					await prisma.emailLog.create({ 
 						data: { 
 							messageId, 
+							imapUid: msg.uid,
 							direction: 'INBOUND' as any,
 							type: 'NEW' as any, 
 							from: fromEmail, 
 							to: getAddressesText((parsed as any).to), 
 							subject: parsed.subject || '', 
 							status: 'ERROR' as any,
-							error: `Too many attachments (${attachments.length}/${settings.maxAttachments})`, 
+							error: `Too many attachments (${trueAttachments.length}/${settings.maxAttachments})`, 
 							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
 						} 
 					});
-					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+					await markProcessed(client, msg.uid, settings.moveOnErrorFolder, settings.folder, settings);
 					continue;
 				}
 
 				if (settings.maxAttachmentSize) {
 					const maxSizeBytes = settings.maxAttachmentSize * 1024 * 1024; // Convert MB to bytes
-					const oversizedAttachments = attachments.filter((att: any) => (att.size || 0) > maxSizeBytes);
+					const oversizedAttachments = trueAttachments.filter((att: any) => (att.size || 0) > maxSizeBytes);
 					if (oversizedAttachments.length > 0) {
 						result.skipped++;
-						await prisma.emailLog.create({ 
-							data: { 
-								messageId, 
-								direction: 'INBOUND' as any,
-								type: 'NEW' as any, 
-								from: fromEmail, 
-								to: getAddressesText((parsed as any).to), 
-								subject: parsed.subject || '', 
-								status: 'ERROR' as any,
-								error: `Attachment too large (max ${settings.maxAttachmentSize}MB)`, 
-								rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
-							} 
-						});
-						await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+					await prisma.emailLog.create({ 
+						data: { 
+							messageId, 
+							imapUid: msg.uid,
+							direction: 'INBOUND' as any,
+							type: 'NEW' as any, 
+							from: fromEmail, 
+							to: getAddressesText((parsed as any).to), 
+							subject: parsed.subject || '', 
+							status: 'ERROR' as any,
+							error: `Attachment too large (max ${settings.maxAttachmentSize}MB)`, 
+							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
+						} 
+					});
+						await markProcessed(client, msg.uid, settings.moveOnErrorFolder, settings.folder, settings);
 						continue;
 					}
+				}
+
+				// COMPREHENSIVE REPLY AND FOLLOWUP LOGGING
+				// Log ALL email interactions to database for complete tracking
+				try {
+					const emailInteractionData = {
+						messageId: messageId,
+						imapUid: msg.uid,
+						from: fromEmail,
+						to: getAddressesText((parsed as any).to),
+						cc: getAddressesText((parsed as any).cc),
+						bcc: getAddressesText((parsed as any).bcc),
+						subject: parsed.subject || '',
+						body: parsed.text || '',
+						htmlBody: typeof parsed.html === 'string' ? parsed.html : undefined,
+						receivedAt: new Date(),
+						inReplyTo: (parsed as any).headers?.get('in-reply-to'),
+						references: (parsed as any).headers?.get('references'),
+						threadId: (parsed as any).headers?.get('thread-id') || (parsed as any).headers?.get('x-thread-id'),
+						attachments: parsed.attachments?.map(att => ({
+							filename: att.filename || 'attachment',
+							contentType: att.contentType || 'application/octet-stream',
+							content: att.content
+						})),
+						headers: headersToObject((parsed as any).headers)
+					};
+
+					// Log the email interaction comprehensively
+					const loggedEmailId = await comprehensiveReplyLoggingService.logEmailInteraction(emailInteractionData);
+					console.log(`📧 Comprehensive logging completed for: ${parsed.subject} (ID: ${loggedEmailId})`);
+
+				} catch (loggingError) {
+					console.error('Error in comprehensive email logging:', loggingError);
+					// Continue processing even if logging fails
 				}
 
 				// Check if this is a follow-up to an auto-response
@@ -427,12 +499,46 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 				// Try to detect if this is a follow-up to an auto-response
 				const followupDetection = await followupDetectionService.detectAutoResponseReply(followupEmail);
 				if (followupDetection.isFollowup && followupDetection.ticketId) {
-					// Process as follow-up
-					const followupResult = await followupProcessorService.processFollowup(followupEmail);
+					// Create email log entry for follow-up email
+					const emailLogId = await prisma.emailLog.create({
+						data: {
+							messageId,
+							imapUid: msg.uid,
+							direction: 'INBOUND' as any,
+							type: 'REPLY' as any,
+							from: fromEmail,
+							to: getAddressesText((parsed as any).to),
+							subject: parsed.subject || '',
+							status: 'PROCESSING' as any,
+							ticketId: followupDetection.ticketId,
+							rawMeta: { headers: headersToObject((parsed as any).headers) } as any
+						}
+					});
+					
+					// Process as follow-up with parsed email data
+					const followupResult = await followupProcessorService.processFollowup(followupEmail, parsed);
 					if (followupResult.success) {
+						// Update email log with success
+						await prisma.emailLog.update({
+							where: { id: emailLogId.id },
+							data: { 
+								status: 'PROCESSED' as any,
+								processedAt: new Date()
+							}
+						});
+						
 						result.replies++;
-						await markProcessed(client, msg.uid, settings.moveOnSuccessFolder);
+						await markProcessed(client, msg.uid, settings.moveOnSuccessFolder, settings.folder, settings);
 						continue;
+					} else {
+						// Update email log with failure
+						await prisma.emailLog.update({
+							where: { id: emailLogId.id },
+							data: { 
+								status: 'ERROR' as any,
+								error: followupResult.error || 'Follow-up processing failed'
+							}
+						});
 					}
 				}
 
@@ -450,19 +556,45 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 				const textContent = (parsed.text && parsed.text.trim()) || parsed.html || '(no content)';
 
 				// Track the inbound email
+				// Process HTML content to handle embedded images
+				let processedHtml = typeof parsed.html === 'string' ? parsed.html : undefined;
+				
+				// If we have HTML content, we need to handle embedded images
+				if (processedHtml && parsed.attachments) {
+					// Convert cid: URLs to data: URLs for inline images
+					const inlineImages = parsed.attachments.filter(att => att.contentDisposition === 'inline');
+					
+					for (const img of inlineImages) {
+						if (img.contentId && img.content) {
+							// Convert image content to base64 data URL
+							const base64 = (img.content as Buffer).toString('base64');
+							const dataUrl = `data:${img.contentType || 'image/jpeg'};base64,${base64}`;
+							
+							// Replace cid: references with data: URLs
+							const cidPattern = new RegExp(`cid:${img.contentId.replace(/[<>]/g, '')}`, 'gi');
+							processedHtml = processedHtml.replace(cidPattern, dataUrl);
+						}
+					}
+				}
+
 				const emailLogId = await emailTrackingService.trackInboundEmail({
 					messageId,
+					imapUid: msg.uid,
 					from: fromEmail,
 					to: getAddressesText((parsed as any).to),
+					cc: getAddressesText((parsed as any).cc),
+					bcc: getAddressesText((parsed as any).bcc),
 					subject: parsed.subject || '',
 					text: parsed.text,
-					html: typeof parsed.html === 'string' ? parsed.html : undefined,
+					html: processedHtml,
 					receivedAt: new Date(),
 					rawMeta: { headers: headersToObject((parsed as any).headers) },
 					attachments: parsed.attachments?.map(att => ({
 						filename: att.filename,
 						contentType: att.contentType,
 						size: att.size,
+						contentDisposition: att.contentDisposition,
+						contentId: att.contentId
 					})),
 					options: {
 						ticketId: targetTicketId || undefined,
@@ -486,7 +618,7 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 					});
 					
 					result.replies++;
-					await markProcessed(client, msg.uid, settings.moveOnSuccessFolder);
+					await markProcessed(client, msg.uid, settings.moveOnSuccessFolder, settings.folder, settings);
 					continue;
 				}
 
@@ -503,25 +635,30 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 					await prisma.emailLog.create({ 
 						data: { 
 							messageId, 
+							imapUid: msg.uid,
 							direction: 'INBOUND' as any,
 							type: 'NEW' as any,
 							from: fromEmail, 
-							to: getAddressesText((parsed as any).to), 
+							to: getAddressesText((parsed as any).to),
+							cc: getAddressesText((parsed as any).cc),
+							bcc: getAddressesText((parsed as any).bcc),
 							subject: parsed.subject || '', 
 							status: 'ERROR' as any,
 							error: 'Missing category/priority/status', 
 							rawMeta: { headers: headersToObject((parsed as any).headers) } as any 
 						} 
 					});
-					await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+					await markProcessed(client, msg.uid, settings.moveOnErrorFolder, settings.folder, settings);
 					continue;
 				}
 
 				const title = parsed.subject || 'Email Ticket';
+				// For EMAIL source tickets, use processed HTML content with embedded images
+				const emailContent = processedHtml || textContent;
 				const created = await prisma.ticket.create({
 					data: {
 						title,
-						description: textContent,
+						description: emailContent,
 						categoryId: category.id,
 						priorityId: priority.id,
 						statusId: status.id,
@@ -559,6 +696,8 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 					if (ticket) {
 						await autoResponseGenerator.processTicketForAutoResponse(ticket, {
 							from: fromEmail,
+							to: getAddressesText((parsed as any).to),
+							cc: getAddressesText((parsed as any).cc),
 							subject: parsed.subject || '',
 							body: textContent,
 							messageId: messageId,
@@ -570,7 +709,7 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 				}
 				
 				result.created++;
-				await markProcessed(client, msg.uid, settings.moveOnSuccessFolder);
+				await markProcessed(client, msg.uid, settings.moveOnSuccessFolder, undefined, settings);
 			} catch (e: any) {
 				result.errors++;
 				try {
@@ -578,6 +717,7 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 					await prisma.emailLog.create({ 
 						data: { 
 							messageId: 'unknown', 
+							imapUid: msg.uid,
 							direction: 'INBOUND' as any,
 							type: 'NEW' as any, 
 							from: '', 
@@ -590,7 +730,7 @@ export async function runEmailIngestOnce(): Promise<IngestResult> {
 				} catch (logError) {
 					console.error('Failed to log email processing error:', logError);
 				}
-				await markProcessed(client, msg.uid, settings.moveOnErrorFolder);
+				await markProcessed(client, msg.uid, settings.moveOnErrorFolder, undefined, settings);
 			}
 		}
 	} finally {
@@ -609,35 +749,118 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
 	});
 }
 
-async function markProcessed(client: ImapFlow, uid: number, dest?: string) {
+async function markProcessed(client: ImapFlow, uid: number, dest?: string, sourceFolder?: string, settings?: InboundEmailSettings) {
+	console.log(`=== MARK PROCESSED DEBUG ===`);
+	console.log(`Message UID: ${uid}`);
+	console.log(`Destination folder: ${dest || 'undefined'}`);
+	
 	try {
 		if (dest) {
 			try {
-				await client.messageMove(uid, dest);
-				console.log(`✅ Moved message ${uid} to folder: ${dest}`);
+				console.log(`Attempting to move message ${uid} to folder: ${dest}`);
+				
+				// Check if message exists in source folder before move
+				if (sourceFolder) {
+					try {
+						await client.mailboxOpen(sourceFolder);
+						console.log(`Source folder opened: ${sourceFolder}`);
+						
+						// Try to fetch the message to verify it exists
+						const messageExists = await client.fetchOne(uid, { uid: true });
+						console.log(`Message ${uid} exists in source folder:`, !!messageExists);
+					} catch (checkError: any) {
+						console.log(`Could not verify message ${uid} in source folder:`, checkError.message);
+					}
+				}
+				
+				// Use copy + delete approach since move operation is unreliable on this server
+				console.log(`Using copy + delete approach for message ${uid} to folder: ${dest}`);
+				
+				try {
+					// First copy the message to destination
+					await client.messageCopy(uid, dest);
+					console.log(`✅ Copy operation completed for message ${uid} to folder: ${dest}`);
+					
+					// Then delete from source folder
+					await client.messageDelete(uid);
+					console.log(`✅ Delete operation completed for message ${uid} from source folder`);
+					
+					// Note: Expunge is not available in ImapFlow, but delete should be sufficient
+					console.log(`✅ Message ${uid} deleted from source folder (expunge not available)`);
+					
+				} catch (copyDeleteError: any) {
+					console.error(`❌ Copy + Delete approach failed:`, copyDeleteError.message);
+					console.error(`Copy + Delete error details:`, copyDeleteError);
+					throw copyDeleteError; // Re-throw to trigger the outer catch
+				}
+				
+				// Verify the move by checking if message exists in destination folder
+				try {
+					await client.mailboxOpen(dest);
+					console.log(`Destination folder opened: ${dest}`);
+					
+					// Try to fetch the message in destination folder
+					const messageInDest = await client.fetchOne(uid, { uid: true });
+					console.log(`Message ${uid} found in destination folder:`, !!messageInDest);
+					
+					if (!messageInDest) {
+						console.log(`⚠️ WARNING: Message ${uid} not found in destination folder ${dest} after move operation`);
+					}
+				} catch (verifyError: any) {
+					console.log(`Could not verify message ${uid} in destination folder:`, verifyError.message);
+				}
+				
 			} catch (moveError: any) {
 				console.error(`❌ Failed to move message ${uid} to folder ${dest}:`, moveError.message);
+				console.error(`Move error details:`, moveError);
+				
 				// Try to create the folder if it doesn't exist
 				try {
+					console.log(`Attempting to create folder: ${dest}`);
 					await client.mailboxCreate(dest);
-					console.log(`📁 Created folder: ${dest}`);
+					console.log(`📁 Successfully created folder: ${dest}`);
+					
 					// Retry the move after creating the folder
+					console.log(`Retrying move to newly created folder: ${dest}`);
 					await client.messageMove(uid, dest);
 					console.log(`✅ Successfully moved message ${uid} to newly created folder: ${dest}`);
 				} catch (createError: any) {
 					console.error(`❌ Failed to create folder ${dest}:`, createError.message);
+					console.error(`Create folder error details:`, createError);
 				}
 			}
+		} else {
+			console.log(`No destination folder specified, skipping move operation`);
 		}
 		
 		// Mark as seen regardless of move success
 		try {
+			console.log(`Marking message ${uid} as seen`);
+			
+			// Ensure we're in the correct mailbox before marking as seen
+			// If email was moved, mark it as seen in the destination folder
+			// If no move occurred, mark it as seen in the original folder
+			const targetFolder = dest || sourceFolder || settings?.folder || 'INBOX';
+			
+			try {
+				await client.mailboxOpen(targetFolder);
+				console.log(`Opened mailbox ${targetFolder} for marking as seen`);
+			} catch (mailboxError: any) {
+				console.log(`Could not open mailbox ${targetFolder}, trying original folder:`, mailboxError.message);
+				// Fallback to original folder
+				await client.mailboxOpen(sourceFolder || settings?.folder || 'INBOX');
+			}
+			
 			await client.messageFlagsAdd(uid, ['\\Seen']);
-			console.log(`👁️ Marked message ${uid} as seen`);
+			console.log(`👁️ Successfully marked message ${uid} as seen`);
 		} catch (flagError: any) {
 			console.error(`❌ Failed to mark message ${uid} as seen:`, flagError.message);
+			console.error(`Flag error details:`, flagError);
 		}
 	} catch (error: any) {
 		console.error(`❌ Error in markProcessed for message ${uid}:`, error.message);
+		console.error(`General error details:`, error);
 	}
+	
+	console.log(`=== END MARK PROCESSED DEBUG ===`);
 }

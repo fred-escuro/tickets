@@ -52,14 +52,76 @@ export class AutoResponseGenerator {
     email: any
   ): Promise<any> {
     try {
+      // Get email response settings
+      const emailSettings = await this.getEmailResponseSettings();
+      
       // Add response ID to the email content for follow-up tracking
       const responseIdText = `\n\n---\n[Response-ID: ${generated.responseId}]\n[Ticket: ${ticket.ticketNumber}]`;
-      const enhancedBody = generated.body + responseIdText;
+      let enhancedBody = generated.body + responseIdText;
       const enhancedSubject = generated.subject + ` [Response-ID: ${generated.responseId}]`;
+
+      // Include original content if enabled
+      if (emailSettings.includeOriginalContent && email.body) {
+        const originalContentText = email.body || email.htmlBody || '';
+        const originalSubject = email.subject || '';
+        const originalFrom = email.from || '';
+        const originalDate = email.receivedAt || email.sentAt || new Date();
+        
+        const formattedDate = originalDate.toLocaleString();
+        const originalTextBlock = `\n\n--- Original Message ---\nFrom: ${originalFrom}\nDate: ${formattedDate}\nSubject: ${originalSubject}\n\n${originalContentText}`;
+        
+        enhancedBody = generated.body + originalTextBlock + responseIdText;
+      }
+
+      // Get system's own email address to exclude it from recipients
+      const systemEmailAddress = await this.getSystemEmailAddress();
+      
+      // Determine recipients
+      let finalRecipients: string | string[] = toEmail;
+      let ccRecipients: string[] = [];
+      
+      if (emailSettings.includeAllRecipients) {
+        const recipients = new Set<string>();
+        
+        // Add primary recipient (but not if it's the system's own email)
+        if (toEmail !== systemEmailAddress) {
+          recipients.add(toEmail);
+        }
+        
+        // Add original email recipients (excluding system's own email)
+        if (email.from) {
+          const fromEmail = this.extractEmailFromAddress(email.from);
+          if (fromEmail && fromEmail !== systemEmailAddress) {
+            recipients.add(fromEmail);
+          }
+        }
+        
+        if (email.to) {
+          const toEmails = email.to.split(',').map((email: string) => email.trim());
+          toEmails.forEach((email: string) => {
+            const cleanEmail = this.extractEmailFromAddress(email);
+            if (cleanEmail && cleanEmail !== systemEmailAddress) {
+              recipients.add(cleanEmail);
+            }
+          });
+        }
+        
+        finalRecipients = Array.from(recipients);
+      }
+      
+      // Handle CC recipients separately (regardless of includeAllRecipients setting)
+      if (emailSettings.includeCcRecipients && email.cc) {
+        const ccEmails = email.cc.split(',').map((email: string) => email.trim());
+        ccRecipients = ccEmails.map((email: string) => {
+          const cleanEmail = this.extractEmailFromAddress(email);
+          return cleanEmail;
+        }).filter(Boolean).filter((email: string) => email !== systemEmailAddress) as string[];
+      }
 
       // Send the email using the existing email service
       const messageId = await emailTrackingService.sendEmail({
-        to: toEmail,
+        to: finalRecipients,
+        cc: ccRecipients.length > 0 ? ccRecipients : undefined,
         subject: enhancedSubject,
         text: enhancedBody,
         html: this.convertToHtml(enhancedBody),
@@ -160,6 +222,73 @@ export class AutoResponseGenerator {
   }
 
   /**
+   * Get email response settings
+   */
+  private async getEmailResponseSettings() {
+    const settings = await prisma.appSetting.findMany({
+      where: {
+        namespace: 'email.responses',
+        key: {
+          in: [
+            'include_original_content',
+            'include_all_recipients',
+            'include_cc_recipients',
+            'include_bcc_recipients'
+          ]
+        }
+      }
+    });
+
+    const defaultSettings = {
+      includeOriginalContent: true,
+      includeAllRecipients: false,
+      includeCcRecipients: true,
+      includeBccRecipients: false
+    };
+
+    const result = { ...defaultSettings };
+
+    settings.forEach((setting: any) => {
+      switch (setting.key) {
+        case 'include_original_content':
+          result.includeOriginalContent = setting.value === true || setting.value === 'true';
+          break;
+        case 'include_all_recipients':
+          result.includeAllRecipients = setting.value === true || setting.value === 'true';
+          break;
+        case 'include_cc_recipients':
+          result.includeCcRecipients = setting.value === true || setting.value === 'true';
+          break;
+        case 'include_bcc_recipients':
+          result.includeBccRecipients = setting.value === true || setting.value === 'true';
+          break;
+      }
+    });
+
+    return result;
+  }
+
+  /**
+   * Extract email address from formatted address string
+   */
+  private extractEmailFromAddress(address: string): string | null {
+    if (!address) return null;
+    
+    // Handle "Name <email@domain.com>" format
+    const match = address.match(/<([^>]+)>/);
+    if (match) {
+      return match[1].trim();
+    }
+    
+    // Handle plain email format
+    if (address.includes('@')) {
+      return address.trim();
+    }
+    
+    return null;
+  }
+
+  /**
    * Check if auto-response is enabled in system settings
    */
   private async isAutoResponseEnabled(): Promise<boolean> {
@@ -182,11 +311,59 @@ export class AutoResponseGenerator {
    * Convert plain text to basic HTML
    */
   private convertToHtml(text: string): string {
-    return text
-      .replace(/\n/g, '<br>')
+    if (!text) return '';
+    
+    // Start with a proper HTML structure
+    let html = text
+      // Convert line breaks to HTML
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      
+      // Convert markdown-style formatting
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/\n\n/g, '<p></p>');
+      
+      // Convert ticket details section to a proper list
+      .replace(/Ticket Details:\s*\n((?:- .*\n?)*)/g, (match, listItems) => {
+        const items = listItems.split('\n')
+          .filter((line: string) => line.trim().startsWith('-'))
+          .map((line: string) => `<li>${line.replace(/^- /, '')}</li>`)
+          .join('');
+        return '<h3>Ticket Details:</h3><ul>' + items + '</ul>';
+      })
+      
+      // Convert "Original Message:" section
+      .replace(/Original Message:\s*\n/g, '<h3>Original Message:</h3>')
+      
+      // Convert "Best regards," section
+      .replace(/Best regards,\s*\n([^\n]+)/g, '<p><strong>Best regards,</strong><br>$1</p>')
+      
+      // Convert "Thank you for contacting" to a proper greeting
+      .replace(/^(Thank you for contacting[^.]*\.)/gm, '<p><strong>$1</strong></p>')
+      
+      // Convert paragraphs (double line breaks)
+      .replace(/\n\n+/g, '</p><p>')
+      
+      // Convert single line breaks to <br> tags
+      .replace(/\n/g, '<br>')
+      
+      // Clean up any empty paragraphs
+      .replace(/<p><\/p>/g, '')
+      .replace(/<p>\s*<\/p>/g, '');
+    
+    // Wrap in proper HTML structure
+    html = `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+      <p>${html}</p>
+    </div>`;
+    
+    // Clean up any malformed HTML
+    html = html
+      .replace(/<p><p>/g, '<p>')
+      .replace(/<\/p><\/p>/g, '</p>')
+      .replace(/<br><\/p>/g, '</p>')
+      .replace(/<p><br>/g, '<p>');
+    
+    return html;
   }
 
   /**
@@ -247,6 +424,27 @@ export class AutoResponseGenerator {
         responsesToday: 0,
         successRate: 0,
       };
+    }
+  }
+
+  /**
+   * Get the system's own email address from SMTP settings
+   */
+  private async getSystemEmailAddress(): Promise<string> {
+    try {
+      const settings = await prisma.appSetting.findMany({
+        where: { namespace: 'email.smtp' }
+      });
+      
+      const smtpSettings: any = {};
+      settings.forEach(setting => {
+        smtpSettings[setting.key] = setting.value;
+      });
+
+      return smtpSettings.fromAddress || process.env.SMTP_FROM || 'hd@wesupportinc.com';
+    } catch (error) {
+      console.error('Error getting system email address:', error);
+      return 'hd@wesupportinc.com'; // fallback
     }
   }
 }

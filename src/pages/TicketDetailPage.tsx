@@ -9,6 +9,7 @@ import { PriorityBadge } from '@/components/PriorityBadge';
 import { TicketStatusChange } from '@/components/TicketStatusChange';
 import { AttachmentDisplay } from '@/components/ui/attachment-display';
 import { RichTextDisplay } from '@/components/ui/rich-text-display';
+import { EmailContentDisplay } from '@/components/ui/email-content-display';
 import { AddCommentDialog } from '@/components/ui/add-comment-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import TicketDetailPanel from '@/components/TicketDetailPanel';
@@ -18,7 +19,7 @@ import { AuthService } from '@/lib/services/authService';
 import type { FileAttachment } from '@/components/ui/file-upload';
 import { apiClient, API_ENDPOINTS } from '@/lib/api';
 import { toast } from 'sonner';
-import { ArrowLeft, Paperclip, MessageSquare, ChevronDown, ChevronRight, FileText, Settings, Clock, ChevronUp, CheckSquare, UserPlus, User, Building } from 'lucide-react';
+import { ArrowLeft, Paperclip, MessageSquare, ChevronDown, ChevronRight, FileText, Settings, Clock, ChevronUp, CheckSquare, UserPlus, User, Building, Mail, Globe, Smartphone, Zap } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,6 +32,79 @@ import { TaskCommentDialog } from '@/components/TaskCommentDialog';
 import { Breadcrumb } from '@/components/Breadcrumb';
 
 type LoadedTicket = any;
+
+// Helper functions to detect and parse email content in comments
+const isEmailContent = (content: string): boolean => {
+  if (!content) return false;
+  
+  // Check for common email patterns
+  const emailPatterns = [
+    /From:\s*[^\n]+/i,
+    /To:\s*[^\n]+/i,
+    /Subject:\s*[^\n]+/i,
+    /CC:\s*[^\n]+/i,
+    /BCC:\s*[^\n]+/i,
+    /Sent:\s*[^\n]+/i,
+    /Received:\s*[^\n]+/i,
+    /Message-ID:\s*[^\n]+/i,
+    /--- Original Message ---/i,
+    /Thank you for contacting our support team/i
+  ];
+  
+  return emailPatterns.some(pattern => pattern.test(content));
+};
+
+const parseEmailContent = (content: string): any => {
+  if (!content) return null;
+  
+  // Extract email headers and content
+  const lines = content.split('\n');
+  let from = '';
+  let to = '';
+  let cc = '';
+  let subject = '';
+  let body = '';
+  let receivedAt = new Date().toISOString();
+  
+  let inBody = false;
+  let bodyLines: string[] = [];
+  
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    
+    if (trimmedLine.startsWith('From:')) {
+      from = trimmedLine.replace(/^From:\s*/i, '');
+    } else if (trimmedLine.startsWith('To:')) {
+      to = trimmedLine.replace(/^To:\s*/i, '');
+    } else if (trimmedLine.startsWith('CC:')) {
+      cc = trimmedLine.replace(/^CC:\s*/i, '');
+    } else if (trimmedLine.startsWith('Subject:')) {
+      subject = trimmedLine.replace(/^Subject:\s*/i, '');
+    } else if (trimmedLine.startsWith('Sent:') || trimmedLine.startsWith('Received:')) {
+      const dateMatch = trimmedLine.match(/(\d{1,2}\/\d{1,2}\/\d{4},?\s+\d{1,2}:\d{2}:\d{2}\s*(AM|PM)?)/i);
+      if (dateMatch) {
+        receivedAt = new Date(dateMatch[1]).toISOString();
+      }
+    } else if (trimmedLine === '--- Original Message ---' || trimmedLine.startsWith('Thank you for contacting')) {
+      inBody = true;
+    } else if (inBody) {
+      bodyLines.push(line);
+    }
+  }
+  
+  body = bodyLines.join('\n').trim();
+  
+  return {
+    id: `parsed-${Date.now()}`,
+    from: from || 'Unknown',
+    to: to || 'Unknown',
+    cc: cc || undefined,
+    subject: subject || 'No Subject',
+    body: body,
+    htmlBody: body, // Use body as HTML for now
+    receivedAt: receivedAt
+  };
+};
 
 export const TicketDetailPage: React.FC = () => {
   const { id } = useParams();
@@ -150,6 +224,21 @@ export const TicketDetailPage: React.FC = () => {
     if (p === 'high') return 'bg-orange-100 text-orange-800 border-orange-200';
     if (p === 'critical') return 'bg-red-100 text-red-700 border-red-200';
     return 'bg-gray-100 text-gray-700 border-gray-200';
+  };
+
+  const getSourceInfo = (source: string) => {
+    switch (source) {
+      case 'EMAIL':
+        return { icon: Mail, label: 'Email', color: 'text-blue-600' };
+      case 'WEB':
+        return { icon: Globe, label: 'Web Portal', color: 'text-green-600' };
+      case 'MOBILE':
+        return { icon: Smartphone, label: 'Mobile App', color: 'text-purple-600' };
+      case 'API':
+        return { icon: Zap, label: 'API', color: 'text-orange-600' };
+      default:
+        return { icon: Globe, label: 'Other', color: 'text-gray-600' };
+    }
   };
 
   const addTask = async () => {
@@ -662,6 +751,17 @@ export const TicketDetailPage: React.FC = () => {
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
+                  <div className="text-xs text-muted-foreground">Source</div>
+                  {ticket && ticket.source ? (
+                    <div className={`flex items-center gap-1 text-sm ${getSourceInfo(ticket.source).color}`}>
+                      {React.createElement(getSourceInfo(ticket.source).icon, { className: "h-3 w-3" })}
+                      {getSourceInfo(ticket.source).label}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Unknown</div>
+                  )}
+                </div>
+                <div>
                   <div className="text-xs text-muted-foreground">Date Created</div>
                   {ticket && <div className="text-sm">{new Date(ticket?.submittedAt || new Date()).toLocaleString()}</div>}
                 </div>
@@ -683,6 +783,9 @@ export const TicketDetailPage: React.FC = () => {
                     <div className="text-sm text-muted-foreground">No assignment</div>
                   )}
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <div className="text-xs text-muted-foreground">Assigned Department</div>
                   {ticket && ticket?.assignedToDepartment ? (
@@ -699,10 +802,16 @@ export const TicketDetailPage: React.FC = () => {
 
               <div className="max-w-none max-h-[320px] overflow-y-auto rounded-md border bg-muted/30 p-3">
                 {ticket ? (
-                  <RichTextDisplay
-                    content={ticket.description}
-                    className="prose max-w-none ticket-prose-compact prose-[7px]"
-                  />
+                  <>
+                    {ticket.source === 'EMAIL' && ticket.emailLogs && ticket.emailLogs.length > 0 ? (
+                      <EmailContentDisplay emailLogs={ticket.emailLogs} />
+                    ) : (
+                      <RichTextDisplay
+                        content={ticket.description}
+                        className="prose max-w-none ticket-prose-compact prose-[7px]"
+                      />
+                    )}
+                  </>
                 ) : (
                   <p className="text-sm text-muted-foreground">{loading ? 'Loading description…' : 'No description'}</p>
                 )}
@@ -775,12 +884,30 @@ export const TicketDetailPage: React.FC = () => {
                         <div className="p-4">
                           {item.type === 'issue' ? (
                             <div className="space-y-3">
-                              <RichTextDisplay content={item.data.description} className="ticket-prose-compact" />
+                              <div className="max-w-none max-h-[320px] overflow-y-auto rounded-md border bg-muted/30 p-3">
+                                {item.data.source === 'EMAIL' && item.data.emailLogs && item.data.emailLogs.length > 0 ? (
+                                  <EmailContentDisplay emailLogs={item.data.emailLogs} />
+                                ) : (
+                                  <RichTextDisplay 
+                                    content={item.data.description} 
+                                    className="prose max-w-none ticket-prose-compact prose-[7px]" 
+                                  />
+                                )}
+                              </div>
                               {item.data.attachments?.length > 0 && <AttachmentDisplay attachments={item.data.attachments} />}
                             </div>
                           ) : (
                             <div className="space-y-3">
-                              <RichTextDisplay content={item.data.content} className="ticket-prose-compact" />
+                              <div className="max-w-none max-h-[320px] overflow-y-auto rounded-md border bg-muted/30 p-3">
+                                {item.data.content && isEmailContent(item.data.content) ? (
+                                  <EmailContentDisplay emailLogs={[parseEmailContent(item.data.content)]} />
+                                ) : (
+                                  <RichTextDisplay 
+                                    content={item.data.content} 
+                                    className="prose max-w-none ticket-prose-compact prose-[7px]" 
+                                  />
+                                )}
+                              </div>
                               {item.data.attachments?.length > 0 && <AttachmentDisplay attachments={item.data.attachments} />}
                             </div>
                           )}

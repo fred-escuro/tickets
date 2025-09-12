@@ -3,6 +3,8 @@ import { prisma } from '../index';
 import { authenticate, requireAgent, authorize, authorizePermission } from '../middleware/auth';
 import { CreateTicketRequest, UpdateTicketRequest, TicketFilters, ApiResponse, TicketSource } from '../types';
 import { AutoAssignmentService } from '../services/autoAssignmentService';
+import { processEmailLogsForDisplay, DEFAULT_TRUNCATION_OPTIONS } from '../utils/emailTruncation';
+import { emailNotificationService } from '../services/emailNotificationService';
 
 const router = Router();
 
@@ -283,7 +285,32 @@ router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req
 
     const ticket = await prisma.ticket.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        ticketNumber: true,
+        title: true,
+        description: true,
+        categoryId: true,
+        priorityId: true,
+        statusId: true,
+        submittedBy: true,
+        submittedAt: true,
+        assignedTo: true,
+        assignedToDepartmentId: true,
+        assignedAt: true,
+        dueDate: true,
+        resolvedAt: true,
+        resolution: true,
+        satisfaction: true,
+        tags: true,
+        customFields: true,
+        slaResponseAt: true,
+        slaResolveAt: true,
+        escalatedAt: true,
+        escalatedBy: true,
+        source: true,
+        createdAt: true,
+        updatedAt: true,
         submitter: {
           select: {
             id: true,
@@ -349,7 +376,11 @@ router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req
           select: { id: true, name: true, color: true, icon: true }
         },
         comments: {
-          include: {
+          select: {
+            id: true,
+            content: true,
+            isInternal: true,
+            createdAt: true,
             author: {
               select: {
                 id: true,
@@ -366,14 +397,40 @@ router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req
         },
         attachments: true,
         tasks: {
-          orderBy: { createdAt: 'desc' },
-          include: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            dueDate: true,
+            createdAt: true,
             status: { select: { id: true, key: true, name: true, color: true, sortOrder: true } },
             priority: { select: { id: true, key: true, name: true, color: true, level: true, sortOrder: true } }
-          }
+          },
+          orderBy: { createdAt: 'desc' }
         },
         events: {
+          select: {
+            id: true,
+            type: true,
+            description: true,
+            date: true
+          },
           orderBy: { date: 'desc' }
+        },
+        emailLogs: {
+          select: {
+            id: true,
+            from: true,
+            to: true,
+            cc: true,
+            subject: true,
+            body: true,
+            htmlBody: true,
+            receivedAt: true,
+            messageId: true
+          },
+          where: { direction: 'INBOUND' },
+          orderBy: { receivedAt: 'asc' }
         }
       }
     });
@@ -383,6 +440,11 @@ router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req
         success: false,
         error: 'Ticket not found'
       });
+    }
+
+    // Process email logs with truncation for better performance
+    if (ticket.emailLogs && ticket.emailLogs.length > 0) {
+      ticket.emailLogs = processEmailLogsForDisplay(ticket.emailLogs, DEFAULT_TRUNCATION_OPTIONS);
     }
 
     return res.json({
@@ -488,56 +550,72 @@ router.post('/', authenticate, authorizePermission('tickets:write'), async (req,
       if (assignmentResult.success) {
         // Update agent's last assignment time
         await AutoAssignmentService.updateAgentAssignmentTime(assignmentResult.assignedTo!);
-        
-        // Fetch updated ticket with assignee information
-        const updatedTicket = await prisma.ticket.findUnique({
-          where: { id: ticket.id },
-          include: {
-            submitter: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                email: true,
-                avatar: true
-              }
-            },
-            assignee: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                middleName: true,
-                email: true,
-                avatar: true
-              }
-            },
-            category: true,
-            priority: true,
-            status: true
-          }
-        });
-
-        return res.status(201).json({
-          success: true,
-          data: updatedTicket,
-          message: `Ticket created and auto-assigned successfully via ${assignmentResult.method}`,
-          assignment: {
-            success: true,
-            method: assignmentResult.method,
-            assignedTo: assignmentResult.assignedTo
-          }
-        });
       }
     } catch (assignmentError) {
       console.error('Auto-assignment failed:', assignmentError);
       // Continue with ticket creation even if auto-assignment fails
     }
 
+    // Send automatic response if enabled
+    try {
+      await emailNotificationService.sendAutomaticResponse(
+        ticket.id,
+        ticket.ticketNumber,
+        ticket.title,
+        ticket.submitter.email,
+        ticket.description
+      );
+    } catch (autoResponseError) {
+      console.error('Automatic response failed:', autoResponseError);
+      // Continue with ticket creation even if automatic response fails
+    }
+
+    // Fetch updated ticket with assignee information
+    const updatedTicket = await prisma.ticket.findUnique({
+      where: { id: ticket.id },
+      include: {
+        submitter: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            email: true,
+            avatar: true
+          }
+        },
+        assignee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            email: true,
+            avatar: true
+          }
+        },
+        category: true,
+        priority: true,
+        status: true
+      }
+    });
+
+    if (assignmentResult?.success) {
+      return res.status(201).json({
+        success: true,
+        data: updatedTicket,
+        message: `Ticket created and auto-assigned successfully via ${assignmentResult.method}`,
+        assignment: {
+          success: true,
+          method: assignmentResult.method,
+          assignedTo: assignmentResult.assignedTo
+        }
+      });
+    }
+
     return res.status(201).json({
       success: true,
-      data: ticket,
+      data: updatedTicket,
       message: 'Ticket created successfully' + (assignmentResult ? ` (Auto-assignment: ${assignmentResult.reason || assignmentResult.error})` : ''),
       assignment: assignmentResult || { success: false, reason: 'Auto-assignment not attempted' }
     });

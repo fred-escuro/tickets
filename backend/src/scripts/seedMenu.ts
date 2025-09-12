@@ -74,13 +74,13 @@ export async function seedMenu() {
     // Support items
     await createMenu('Users', 1, { parentId: support.id, path: '/users', icon: 'Users', permissionKeys: ['users:read'] });
     await createMenu('Tasks', 2, { parentId: support.id, path: '/tasks', icon: 'FileText', permissionKeys: ['tickets:read'] });
+    await createMenu('Email Logs', 3, { parentId: support.id, path: '/email-logs', icon: 'Mail', permissionKeys: ['tickets:read'] });
+    await createMenu('Follow-up List', 4, { parentId: support.id, path: '/settings/followups', icon: 'MessageSquare', permissionKeys: ['tickets:read'] });
 
     // Tools items
     await createMenu('Calendar', 1, { parentId: tools.id, path: '/calendar', icon: 'Calendar', permissionKeys: ['tickets:read'] });
     await createMenu('Reports', 2, { parentId: tools.id, path: '/reports', icon: 'BarChart3', permissionKeys: ['reports:read'] });
     await createMenu('Knowledge Base', 3, { parentId: tools.id, path: '/knowledge-base', icon: 'Headphones', permissionKeys: ['knowledge:read'] });
-    await createMenu('Email Logs', 4, { parentId: tools.id, path: '/email-logs', icon: 'Mail', permissionKeys: ['tickets:read'] });
-    await createMenu('User Management', 5, { parentId: tools.id, path: '/admin/users', icon: 'Shield', permissionKeys: ['users:write'] });
 
     // Settings items (grouped under Settings section)
     await createMenu('General', 1, { parentId: settings.id, path: '/settings', icon: 'Building2', permissionKeys: ['settings:write'] });

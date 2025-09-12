@@ -130,6 +130,7 @@ model Ticket {
 model EmailLog {
   id          String   @id @default(cuid())
   messageId   String?  @unique // Unique message ID from email headers
+  imapUid     Int?     // IMAP message UID for tracking email movement
   direction   EmailDirection
   type        EmailMessageType @default(NEW)
   from        String
@@ -154,6 +155,7 @@ model EmailLog {
   replyTo     String?  // Reply-to address
   inReplyTo   String?  // In-reply-to header for threading
   references  String?  // References header for threading
+  threadId    String?  // Conversation thread identifier
 
   // Relations
   ticket      Ticket?  @relation(fields: [ticketId], references: [id], onDelete: SetNull)
@@ -165,6 +167,10 @@ model EmailLog {
   @@index([receivedAt])
   @@index([ticketId])
   @@index([userId])
+  @@index([imapUid])
+  @@index([threadId])
+  @@index([inReplyTo])
+  @@index([references])
   @@map("email_logs")
 }
 

@@ -7,9 +7,10 @@ import { ScrollToTop } from './components/ScrollToTop';
 import { FloatingHelpButton } from './components/FloatingHelpButton';
 import { Header } from './components/Header';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { SessionManager } from './components/SessionManager';
 import { Dashboard } from './pages/Dashboard';
 import { HelpDeskPage } from './pages/HelpDeskPage';
-import { setupTokenRefresh } from './lib/services/authService';
+import { setupTokenRefresh, AuthService } from './lib/services/authService';
 import { useAppTitle } from './hooks/useAppTitle';
 
 import { TaskPage } from './pages/TasksPage';
@@ -25,6 +26,7 @@ import { DepartmentOverviewPage } from './pages/DepartmentOverviewPage';
 import EmailLogsPage from './pages/EmailLogsPage';
 import AutoResponsePage from './pages/AutoResponsePage';
 import FollowupsPage from './pages/FollowupsPage';
+import FollowupSettingsPage from './pages/FollowupSettingsPage';
 
 const AppRoutes: FC = () => {
   return (
@@ -154,6 +156,18 @@ const AppRoutes: FC = () => {
         }
       />
       <Route
+        path="/settings/followup-settings"
+        element={
+          <ProtectedRoute
+            pageTitle="Follow-up Settings"
+            pageDescription="Configure follow-up management settings."
+            requireAnyRoleNames={["admin","manager"]}
+          >
+            <FollowupSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/profile"
         element={
           <ProtectedRoute pageTitle="Profile" pageDescription="Please log in to view and edit your profile.">
@@ -189,6 +203,12 @@ const App: FC = () => {
   useEffect(() => {
     // Initialize token refresh system when app starts
     setupTokenRefresh();
+    
+    // Initialize session management if user is already logged in
+    const token = AuthService.getAuthToken();
+    if (token) {
+      AuthService.initializeSession();
+    }
   }, []);
 
   return (
@@ -199,6 +219,7 @@ const App: FC = () => {
             <Header />
             <AppRoutes />
             <FloatingHelpButton />
+            <SessionManager />
             <Toaster />
           </BrowserRouter>
       </TooltipProvider>

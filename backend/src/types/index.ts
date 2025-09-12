@@ -291,6 +291,8 @@ export interface JwtPayload {
   role?: string;
   iat?: number;
   exp?: number;
+  sessionStart?: number; // Session start timestamp
+  lastActivity?: number; // Last activity timestamp
 }
 
 // Middleware types

@@ -1,5 +1,33 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import DOMPurify from 'dompurify';
+
+// Robust HTML sanitization using DOMPurify
+const sanitizeHtml = (html: string): string => {
+  if (!html) return '';
+  
+  // Configure DOMPurify to allow safe HTML tags and attributes
+  const config = {
+    ALLOWED_TAGS: [
+      'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'span', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'hr', 'sub', 'sup', 'small', 'mark', 'del', 'ins'
+    ],
+    ALLOWED_ATTR: [
+      'href', 'title', 'alt', 'src', 'width', 'height', 'class', 'id', 'style',
+      'target', 'rel', 'colspan', 'rowspan', 'align', 'valign'
+    ],
+    ALLOW_DATA_ATTR: false,
+    ALLOW_UNKNOWN_PROTOCOLS: false,
+    SANITIZE_DOM: true,
+    KEEP_CONTENT: true,
+    RETURN_DOM: false,
+    RETURN_DOM_FRAGMENT: false,
+    RETURN_DOM_IMPORT: false
+  };
+  
+  return DOMPurify.sanitize(html, config);
+};
 
 interface RichTextDisplayProps {
   content: string;
@@ -29,7 +57,7 @@ export const RichTextDisplay: React.FC<RichTextDisplayProps> = ({
         'prose-hr:border-border',
         className
       )}
-      dangerouslySetInnerHTML={{ __html: content }}
+      dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
     />
   );
 };

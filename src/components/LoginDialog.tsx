@@ -57,6 +57,9 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
         // Setup token refresh system
         setupTokenRefresh();
         
+        // Initialize session management with idle timeout
+        AuthService.initializeSession();
+        
         // Dispatch custom event to notify other components
         window.dispatchEvent(new Event('auth-change'));
         
