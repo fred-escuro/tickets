@@ -7,27 +7,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { ticketSystemService, type TicketCategory, type TicketPriority, type TicketStatus, type TicketTemplate, type TicketWorkflow } from '@/lib/services/ticketSystemService';
 import { TicketStatusWorkflow } from '@/components/TicketStatusWorkflow';
 import { 
-  Settings, 
   Plus, 
   Edit, 
-  Trash2, 
   Save, 
-  X,
   Folder,
   AlertTriangle,
-  Clock,
   CheckCircle,
   FileText,
   Workflow,
   BarChart3,
-  Palette,
-  Eye,
   EyeOff
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -78,7 +72,7 @@ export const TicketSystemAdminPage: FC = () => {
     icon: '',
     isClosed: false,
     isResolved: false,
-    allowedTransitions: { transitions: [] },
+    allowedTransitions: { transitions: [] as string[] },
     permissions: { roles: ['admin', 'manager', 'agent'] }
   });
 
@@ -263,7 +257,7 @@ export const TicketSystemAdminPage: FC = () => {
   if (loading) {
     return (
       <PageWrapper>
-        <PageSection>
+        <PageSection index={0}>
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
@@ -277,7 +271,7 @@ export const TicketSystemAdminPage: FC = () => {
 
   return (
     <PageWrapper>
-      <PageSection>
+      <PageSection index={1}>
         <div className="space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">

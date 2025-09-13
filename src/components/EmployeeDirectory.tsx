@@ -129,11 +129,11 @@ export const EmployeeDirectory: FC = () => {
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium truncate">{agent.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{agent.department}</p>
+                      <p className="text-xs font-medium truncate">{agent.firstName} {agent.lastName}</p>
+                      <p className="text-xs text-muted-foreground truncate">{agent.departmentId}</p>
                     </div>
-                    <Badge className={`${getDepartmentBadgeColor(agent.department)} text-xs px-1.5 py-0.5`}>
-                      {agent.department}
+                    <Badge className={`${getDepartmentBadgeColor(agent.departmentId || '')} text-xs px-1.5 py-0.5`}>
+                      {agent.departmentId}
                     </Badge>
                   </div>
                   

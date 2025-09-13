@@ -427,7 +427,10 @@ router.get('/:id', authenticate, authorizePermission('tickets:read'), async (req
             body: true,
             htmlBody: true,
             receivedAt: true,
-            messageId: true
+            messageId: true,
+            imap_raw: true,
+            rawMeta: true,
+            processedAt: true
           },
           where: { direction: 'INBOUND' },
           orderBy: { receivedAt: 'asc' }
@@ -1557,6 +1560,53 @@ router.get('/:id/assignment-history', authenticate, authorizePermission('tickets
   } catch (error) {
     console.error('Failed to get assignment history:', error);
     return res.status(500).json({ success: false, error: 'Failed to get assignment history' });
+  }
+});
+
+// Get full email content without truncation
+router.get('/:ticketId/emails/:emailId/full', authenticate, authorizePermission('tickets:read'), async (req, res) => {
+  try {
+    const { ticketId, emailId } = req.params;
+
+    // Verify the email belongs to the ticket
+    const emailLog = await prisma.emailLog.findFirst({
+      where: {
+        id: emailId,
+        ticketId: ticketId
+      },
+      select: {
+        id: true,
+        from: true,
+        to: true,
+        cc: true,
+        subject: true,
+        body: true,
+        htmlBody: true,
+        receivedAt: true,
+        messageId: true,
+        imap_raw: true,
+        rawMeta: true,
+        processedAt: true
+      }
+    });
+
+    if (!emailLog) {
+      return res.status(404).json({
+        success: false,
+        error: 'Email not found or does not belong to this ticket'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: emailLog
+    });
+  } catch (error) {
+    console.error('Failed to get full email content:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to get full email content' 
+    });
   }
 });
 

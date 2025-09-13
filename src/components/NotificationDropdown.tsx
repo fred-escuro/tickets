@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { Bell, Check, X, MessageSquare, AlertCircle, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -64,7 +64,7 @@ export const NotificationDropdown = () => {
   const [notificationsList, setNotificationsList] = useState(notifications);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useOnClickOutside(dropdownRef, () => setIsOpen(false));
+  useOnClickOutside(dropdownRef as React.RefObject<HTMLElement>, () => setIsOpen(false));
 
   const unreadCount = notificationsList.filter(n => !n.read).length;
 

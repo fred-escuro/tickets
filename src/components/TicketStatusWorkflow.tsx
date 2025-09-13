@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { 
-  ArrowRight, 
   Play, 
   Pause, 
   CheckCircle, 
@@ -58,9 +57,9 @@ export const TicketStatusWorkflow: React.FC<TicketStatusWorkflowProps> = ({
 
     // Calculate layout dimensions - responsive
     const containerWidth = Math.max(800, windowWidth * 0.8);
-    const containerHeight = Math.max(400, Math.max(startStatuses.length, middleStatuses.length, endStatuses.length) * 120 + 100);
+    // Removed unused containerHeight variable
     const nodeWidth = 140;
-    const nodeHeight = 80;
+    // Removed unused nodeHeight variable
     const horizontalSpacing = Math.max(200, (containerWidth - nodeWidth * 3) / 2);
     const verticalSpacing = 120;
 
@@ -129,24 +128,6 @@ export const TicketStatusWorkflow: React.FC<TicketStatusWorkflowProps> = ({
     });
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!draggedNode || !containerRef.current) return;
-
-    const rect = containerRef.current.getBoundingClientRect();
-    const newX = e.clientX - rect.left - dragOffset.x;
-    const newY = e.clientY - rect.top - dragOffset.y;
-
-    setWorkflowNodes(prev => prev.map(node => 
-      node.id === draggedNode 
-        ? { ...node, x: Math.max(0, Math.min(newX, 800 - 140)), y: Math.max(0, newY) }
-        : node
-    ));
-  };
-
-  const handleMouseUp = () => {
-    setDraggedNode(null);
-    setDragOffset({ x: 0, y: 0 });
-  };
 
   // Add global mouse event listeners for drag
   useEffect(() => {
@@ -338,7 +319,7 @@ export const TicketStatusWorkflow: React.FC<TicketStatusWorkflowProps> = ({
                 } ${draggedNode === node.id ? 'z-20 cursor-grabbing' : 'cursor-grab'}`}
                 style={{ left: node.x, top: node.y }}
                 onMouseDown={(e) => handleMouseDown(e, node.id)}
-                onClick={(e) => {
+                onClick={() => {
                   if (draggedNode !== node.id) {
                     setSelectedNode(selectedNode === node.id ? null : node.id);
                   }

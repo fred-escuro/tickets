@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -14,7 +13,6 @@ import {
 } from '@/components/ui/table';
 import { 
   Building2, 
-  Users, 
   Ticket, 
   Clock, 
   AlertCircle, 
@@ -25,7 +23,7 @@ import {
 } from 'lucide-react';
 import { DepartmentService } from '@/lib/services/departmentService';
 import type { Department, DepartmentStats } from '@/lib/services/departmentService';
-import { TicketService, type Ticket as TicketType } from '@/lib/services/ticketService';
+import { type Ticket as TicketType } from '@/lib/services/ticketService';
 import { TicketStatusBadge } from './TicketStatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { toast } from 'sonner';

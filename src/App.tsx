@@ -11,7 +11,6 @@ import { SessionManager } from './components/SessionManager';
 import { Dashboard } from './pages/Dashboard';
 import { HelpDeskPage } from './pages/HelpDeskPage';
 import { setupTokenRefresh, AuthService } from './lib/services/authService';
-import { useAppTitle } from './hooks/useAppTitle';
 
 import { TaskPage } from './pages/TasksPage';
 import TaskDetailPage from './pages/TaskDetailPage';
@@ -36,7 +35,6 @@ const AppRoutes: FC = () => {
         element={
           <ProtectedRoute
             pageTitle="Welcome to Dashboard"
-            pageDescription="Please log in to access your dashboard and view analytics."
             requireAnyPermissionKeys={["tickets:read"]}
           >
             <Dashboard />
@@ -46,7 +44,7 @@ const AppRoutes: FC = () => {
       <Route
         path="/tickets"
         element={
-          <ProtectedRoute pageTitle="Welcome to TicketHub" pageDescription="Please log in to access the help desk and support system.">
+          <ProtectedRoute pageTitle="Welcome to TicketHub" >
             <HelpDeskPage />
           </ProtectedRoute>
         }
@@ -54,7 +52,7 @@ const AppRoutes: FC = () => {
       <Route
         path="/tickets/:id"
         element={
-          <ProtectedRoute pageTitle="Ticket Detail" pageDescription="View and update ticket details.">
+          <ProtectedRoute pageTitle="Ticket Detail">
             <TicketDetailPage />
           </ProtectedRoute>
         }
@@ -62,7 +60,7 @@ const AppRoutes: FC = () => {
       <Route
         path="/users"
         element={
-          <ProtectedRoute pageTitle="User Management" pageDescription="Please log in to manage users and view the employee directory.">
+          <ProtectedRoute pageTitle="User Management">
             <UsersPage />
           </ProtectedRoute>
         }
@@ -70,7 +68,7 @@ const AppRoutes: FC = () => {
       <Route
         path="/directory"
         element={
-          <ProtectedRoute pageTitle="Employee Directory" pageDescription="Please log in to view the employee directory and team information.">
+          <ProtectedRoute pageTitle="Employee Directory">
             <UsersPage />
           </ProtectedRoute>
         }
@@ -78,7 +76,7 @@ const AppRoutes: FC = () => {
       <Route
         path="/tasks"
         element={
-          <ProtectedRoute pageTitle="Tasks" pageDescription="Please log in to manage tasks.">
+          <ProtectedRoute pageTitle="Tasks">
             <TaskPage />
           </ProtectedRoute>
         }
@@ -86,7 +84,7 @@ const AppRoutes: FC = () => {
       <Route
         path="/tasks/:taskId"
         element={
-          <ProtectedRoute pageTitle="Task Details" pageDescription="Please log in to view task details.">
+          <ProtectedRoute pageTitle="Task Details">
             <TaskDetailPage />
           </ProtectedRoute>
         }
@@ -94,7 +92,7 @@ const AppRoutes: FC = () => {
       <Route
         path="/calendar"
         element={
-          <ProtectedRoute pageTitle="Team Calendar" pageDescription="Please log in to view and manage team schedules.">
+          <ProtectedRoute pageTitle="Team Calendar">
             <CalendarPage />
           </ProtectedRoute>
         }
@@ -104,7 +102,6 @@ const AppRoutes: FC = () => {
         element={
           <ProtectedRoute
             pageTitle="Analytics & Reports"
-            pageDescription="Please log in to view analytics and generate reports."
             requireAnyRoleNames={["admin","manager"]}
           >
             <AnalyticsPage />
@@ -114,7 +111,7 @@ const AppRoutes: FC = () => {
       <Route
         path="/knowledge-base"
         element={
-          <ProtectedRoute pageTitle="Knowledge Base" pageDescription="Please log in to access the knowledge base and resources.">
+          <ProtectedRoute pageTitle="Knowledge Base">
             <ResourcesPage />
           </ProtectedRoute>
         }
@@ -124,7 +121,6 @@ const AppRoutes: FC = () => {
         element={
           <ProtectedRoute
             pageTitle="Settings"
-            pageDescription="Please log in to access your account settings and preferences."
             requireAnyRoleNames={["admin","manager"]}
           >
             <SettingsPage />
@@ -136,7 +132,6 @@ const AppRoutes: FC = () => {
         element={
           <ProtectedRoute
             pageTitle="Auto-Response Templates"
-            pageDescription="Manage automated email responses for new tickets."
             requireAnyRoleNames={["admin","manager"]}
           >
             <AutoResponsePage />
@@ -148,7 +143,6 @@ const AppRoutes: FC = () => {
         element={
           <ProtectedRoute
             pageTitle="Follow-up Management"
-            pageDescription="Manage customer follow-ups to auto-responses."
             requireAnyRoleNames={["admin","manager"]}
           >
             <FollowupsPage />
@@ -160,7 +154,6 @@ const AppRoutes: FC = () => {
         element={
           <ProtectedRoute
             pageTitle="Follow-up Settings"
-            pageDescription="Configure follow-up management settings."
             requireAnyRoleNames={["admin","manager"]}
           >
             <FollowupSettingsPage />
@@ -170,7 +163,7 @@ const AppRoutes: FC = () => {
       <Route
         path="/profile"
         element={
-          <ProtectedRoute pageTitle="Profile" pageDescription="Please log in to view and edit your profile.">
+          <ProtectedRoute pageTitle="Profile">
             <ProfilePage />
           </ProtectedRoute>
         }
@@ -178,7 +171,7 @@ const AppRoutes: FC = () => {
       <Route
         path="/departments/:departmentId"
         element={
-          <ProtectedRoute pageTitle="Department Overview" pageDescription="View department details and ticket statistics.">
+          <ProtectedRoute pageTitle="Department Overview">
             <DepartmentOverviewPage />
           </ProtectedRoute>
         }
@@ -188,7 +181,6 @@ const AppRoutes: FC = () => {
         element={
           <ProtectedRoute 
             pageTitle="Email Logs" 
-            pageDescription="Track all inbound and outbound emails"
             requireAnyPermissionKeys={["tickets:read"]}
           >
             <EmailLogsPage />

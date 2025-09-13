@@ -13,7 +13,7 @@ class FollowupService {
   async detectFollowup(email: InboundEmail): Promise<FollowupDetectionResult> {
     try {
       const response = await apiClient.post('/api/followups/detect', email);
-      return response.data;
+      return response.data as FollowupDetectionResult;
     } catch (error) {
       console.error('Error detecting follow-up:', error);
       throw error;
@@ -32,7 +32,7 @@ class FollowupService {
   }> {
     try {
       const response = await apiClient.post('/api/followups/process', email);
-      return response.data;
+      return response.data as { success: boolean; ticketId?: string; commentId?: string; followupId?: string; error?: string; };
     } catch (error) {
       console.error('Error processing follow-up:', error);
       throw error;
@@ -51,7 +51,7 @@ class FollowupService {
   }>> {
     try {
       const response = await apiClient.post('/api/followups/process-batch', { emails });
-      return response.data;
+      return response.data as { success: boolean; ticketId?: string; commentId?: string; followupId?: string; error?: string; }[];
     } catch (error) {
       console.error('Error processing batch follow-ups:', error);
       throw error;
@@ -64,7 +64,7 @@ class FollowupService {
   async getTicketFollowups(ticketId: string): Promise<ProcessedFollowup[]> {
     try {
       const response = await apiClient.get(`/api/followups/ticket/${ticketId}`);
-      return response.data;
+      return response.data as ProcessedFollowup[];
     } catch (error) {
       console.error('Error fetching ticket follow-ups:', error);
       return [];
@@ -77,7 +77,7 @@ class FollowupService {
   async getAutoResponseFollowups(autoResponseId: string): Promise<ProcessedFollowup[]> {
     try {
       const response = await apiClient.get(`/api/followups/auto-response/${autoResponseId}`);
-      return response.data;
+      return response.data as ProcessedFollowup[];
     } catch (error) {
       console.error('Error fetching auto-response follow-ups:', error);
       return [];
@@ -91,7 +91,7 @@ class FollowupService {
     try {
       const endpoint = ticketId ? `/api/followups/stats?ticketId=${ticketId}` : '/api/followups/stats';
       const response = await apiClient.get(endpoint);
-      return response.data;
+      return response.data as FollowupStats;
     } catch (error) {
       console.error('Error fetching follow-up stats:', error);
       return {
@@ -110,7 +110,7 @@ class FollowupService {
     try {
       const endpoint = `/api/followups/recent?limit=${limit}&offset=${offset}`;
       const response = await apiClient.get(endpoint);
-      return response.data;
+      return response.data as ProcessedFollowup[];
     } catch (error) {
       console.error('Error fetching recent follow-ups:', error);
       return [];
@@ -123,7 +123,7 @@ class FollowupService {
   async updateFollowupStatus(followupId: string, status: 'PROCESSED' | 'FAILED' | 'PENDING' | 'IGNORED'): Promise<ProcessedFollowup> {
     try {
       const response = await apiClient.put(`/api/followups/${followupId}/status`, { status });
-      return response.data;
+      return response.data as ProcessedFollowup;
     } catch (error) {
       console.error('Error updating follow-up status:', error);
       throw error;
@@ -136,7 +136,7 @@ class FollowupService {
   async deleteFollowup(followupId: string): Promise<ProcessedFollowup> {
     try {
       const response = await apiClient.delete(`/api/followups/${followupId}`);
-      return response.data;
+      return response.data as ProcessedFollowup;
     } catch (error) {
       console.error('Error deleting follow-up:', error);
       throw error;

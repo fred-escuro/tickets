@@ -2,9 +2,65 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import DOMPurify from 'dompurify';
 
+// Sanitize MSO tags while preserving standard HTML
+const sanitizeMsoTags = (html: string): string => {
+  if (!html) return html;
+
+  let sanitized = html;
+
+  // Remove MSO-specific tags and attributes
+  // Remove MSO conditional comments
+  sanitized = sanitized.replace(/<!--\[if[^>]*>[\s\S]*?<!\[endif\]-->/gi, '');
+  
+  // Remove MSO-specific style attributes
+  sanitized = sanitized.replace(/\s*mso-[^;=]*[;"]/gi, '');
+  
+  // Remove MSO-specific CSS classes
+  sanitized = sanitized.replace(/\s*MsoNormal[^"'\s]*/gi, '');
+  sanitized = sanitized.replace(/\s*MsoListParagraph[^"'\s]*/gi, '');
+  sanitized = sanitized.replace(/\s*MsoListTable[^"'\s]*/gi, '');
+  
+  // Clean up empty attributes and extra spaces
+  sanitized = sanitized.replace(/style="\s*"/gi, '');
+  sanitized = sanitized.replace(/style="\s*;\s*"/gi, '');
+  sanitized = sanitized.replace(/style="\s*;\s*;"/gi, '');
+  sanitized = sanitized.replace(/class="\s*"/gi, '');
+  sanitized = sanitized.replace(/\s+style="/gi, ' style="');
+  sanitized = sanitized.replace(/\s+class="/gi, ' class="');
+  
+  // Clean up extra spaces around attributes
+  sanitized = sanitized.replace(/\s+>/gi, '>');
+  sanitized = sanitized.replace(/<([^>]+)\s+>/gi, '<$1>');
+  
+  // Remove MSO-specific XML namespaces
+  sanitized = sanitized.replace(/\s*xmlns:v="urn:schemas-microsoft-com:vml"/gi, '');
+  sanitized = sanitized.replace(/\s*xmlns:o="urn:schemas-microsoft-com:office:office"/gi, '');
+  sanitized = sanitized.replace(/\s*xmlns:w="urn:schemas-microsoft-com:office:word"/gi, '');
+  
+  // Remove MSO-specific tags
+  sanitized = sanitized.replace(/<o:p[^>]*>[\s\S]*?<\/o:p>/gi, '');
+  sanitized = sanitized.replace(/<v:[^>]*>[\s\S]*?<\/v:[^>]*>/gi, '');
+  sanitized = sanitized.replace(/<w:[^>]*>[\s\S]*?<\/w:[^>]*>/gi, '');
+  
+  // Remove MSO-specific style blocks
+  sanitized = sanitized.replace(/<style[^>]*>\s*\/\*\[if[^>]*>[\s\S]*?<!\[endif\]\*\/\s*<\/style>/gi, '');
+  
+  // Clean up empty paragraphs and divs that might be left behind
+  sanitized = sanitized.replace(/<p[^>]*>\s*<\/p>/gi, '');
+  sanitized = sanitized.replace(/<div[^>]*>\s*<\/div>/gi, '');
+  
+  // Clean up multiple consecutive line breaks
+  sanitized = sanitized.replace(/\n\s*\n\s*\n/g, '\n\n');
+  
+  return sanitized.trim();
+};
+
 // Robust HTML sanitization using DOMPurify
 const sanitizeHtml = (html: string): string => {
   if (!html) return '';
+  
+  // First sanitize MSO tags
+  const msoSanitized = sanitizeMsoTags(html);
   
   // Configure DOMPurify to allow safe HTML tags and attributes
   const config = {
@@ -26,7 +82,7 @@ const sanitizeHtml = (html: string): string => {
     RETURN_DOM_IMPORT: false
   };
   
-  return DOMPurify.sanitize(html, config);
+  return DOMPurify.sanitize(msoSanitized, config);
 };
 
 interface RichTextDisplayProps {

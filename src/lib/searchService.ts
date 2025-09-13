@@ -24,7 +24,7 @@ export const searchAll = (query: string): SearchResult[] => {
     const relevance = calculateRelevance(lowerQuery, [
       user.name || '',
       user.role || '',
-      user.departmentEntity?.name || '',
+      user.department || '',
       user.email || ''
     ]);
     
@@ -33,7 +33,7 @@ export const searchAll = (query: string): SearchResult[] => {
         id: user.id,
         type: 'user',
         title: user.name,
-        description: `${user.role} • ${user.departmentEntity?.name || 'No Department'}`,
+        description: `${user.role} • ${user.department || 'No Department'}`,
         url: `/users`,
         relevance
       });
@@ -107,7 +107,7 @@ export const searchAll = (query: string): SearchResult[] => {
   ticketEvents.forEach(event => {
     const relevance = calculateRelevance(lowerQuery, [
       event.title,
-      event.description,
+      event.description || '',
       event.type,
       event.priority
     ]);

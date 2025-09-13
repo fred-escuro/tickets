@@ -804,7 +804,7 @@ export const TicketDetailPage: React.FC = () => {
                 {ticket ? (
                   <>
                     {ticket.source === 'EMAIL' && ticket.emailLogs && ticket.emailLogs.length > 0 ? (
-                      <EmailContentDisplay emailLogs={ticket.emailLogs} />
+                      <EmailContentDisplay emailLogs={ticket.emailLogs} ticketId={ticket.id} />
                     ) : (
                       <RichTextDisplay
                         content={ticket.description}
@@ -886,7 +886,7 @@ export const TicketDetailPage: React.FC = () => {
                             <div className="space-y-3">
                               <div className="max-w-none max-h-[320px] overflow-y-auto rounded-md border bg-muted/30 p-3">
                                 {item.data.source === 'EMAIL' && item.data.emailLogs && item.data.emailLogs.length > 0 ? (
-                                  <EmailContentDisplay emailLogs={item.data.emailLogs} />
+                                  <EmailContentDisplay emailLogs={item.data.emailLogs} ticketId={ticket?.id} />
                                 ) : (
                                   <RichTextDisplay 
                                     content={item.data.description} 
@@ -900,7 +900,7 @@ export const TicketDetailPage: React.FC = () => {
                             <div className="space-y-3">
                               <div className="max-w-none max-h-[320px] overflow-y-auto rounded-md border bg-muted/30 p-3">
                                 {item.data.content && isEmailContent(item.data.content) ? (
-                                  <EmailContentDisplay emailLogs={[parseEmailContent(item.data.content)]} />
+                                  <EmailContentDisplay emailLogs={[parseEmailContent(item.data.content)]} ticketId={ticket?.id} />
                                 ) : (
                                   <RichTextDisplay 
                                     content={item.data.content} 

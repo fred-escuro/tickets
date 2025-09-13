@@ -73,7 +73,7 @@ export class AssignmentRulesService {
   }> {
     try {
       const response = await apiClient.get(`${API_ENDPOINTS.CATEGORY_RULES}/${categoryId}`);
-      return response;
+      return response as { success: boolean; data?: CategoryWithRules; error?: string; };
     } catch (error) {
       console.error('Get category rules error:', error);
       return {
@@ -93,7 +93,7 @@ export class AssignmentRulesService {
       const response = await apiClient.put(`${API_ENDPOINTS.CATEGORY_RULES}/${categoryId}`, {
         rules
       });
-      return response;
+      return response as { success: boolean; data?: CategoryWithRules; error?: string; };
     } catch (error) {
       console.error('Update category rules error:', error);
       return {
@@ -111,7 +111,7 @@ export class AssignmentRulesService {
   }> {
     try {
       const response = await apiClient.get(API_ENDPOINTS.CATEGORIES);
-      return response;
+      return response as { success: boolean; data?: CategoryWithRules[]; error?: string; };
     } catch (error) {
       console.error('Get all categories with rules error:', error);
       return {
@@ -129,7 +129,7 @@ export class AssignmentRulesService {
   }> {
     try {
       const response = await apiClient.get(API_ENDPOINTS.DEPARTMENTS);
-      return response;
+      return response as { success: boolean; data?: Department[]; error?: string; };
     } catch (error) {
       console.error('Get departments error:', error);
       return {
@@ -150,7 +150,7 @@ export class AssignmentRulesService {
         ? `${API_ENDPOINTS.AGENTS}?departmentId=${departmentId}`
         : API_ENDPOINTS.AGENTS;
       const response = await apiClient.get(url);
-      return response;
+      return response as { success: boolean; data?: Agent[]; error?: string; };
     } catch (error) {
       console.error('Get agents error:', error);
       return {

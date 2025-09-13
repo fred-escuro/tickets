@@ -67,7 +67,7 @@ export const OrganizationChart: FC = () => {
                     {departmentAgents.slice(0, 3).map((agent) => (
                       <div key={agent.id} className="flex items-center gap-2 text-xs">
                         <div className="w-2 h-2 bg-primary rounded-full"></div>
-                        <span className="truncate">{agent.middleName ? `${agent.firstName} ${agent.middleName} ${agent.lastName}` : `${agent.firstName} ${agent.lastName}`}</span>
+                        <span className="truncate">{agent.name}</span>
                         <span className="text-muted-foreground">({agent.role})</span>
                       </div>
                     ))}

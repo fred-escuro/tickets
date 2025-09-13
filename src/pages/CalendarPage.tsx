@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { ticketEvents, type TicketEvent } from '@/data/mockData';
-import { ArrowLeft, Search, Filter, Calendar, AlertCircle, Clock, CheckCircle, ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Search, Calendar, AlertCircle, Clock, CheckCircle, ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react';
 import { useState, type FC } from 'react';
 import { Link } from 'react-router-dom';
 

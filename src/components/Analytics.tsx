@@ -127,7 +127,7 @@ export const Analytics: FC = () => {
       <CardContent className="space-y-6">
         {/* Key Metrics Grid - Expanded for main layout */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 lg:gap-6">
-          {ticketMetrics.slice(0, 4).map((metric, index) => {
+          {ticketMetrics.slice(0, 4).map((metric) => {
             const getIcon = (iconName: string) => {
               switch (iconName) {
                 case 'AlertCircle': return <AlertCircle className="h-4 w-4" />;

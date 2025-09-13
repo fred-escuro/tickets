@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DepartmentService } from '@/lib/services/departmentService';
 import type { Department } from '@/lib/services/departmentService';
@@ -8,14 +8,12 @@ interface DepartmentFilterProps {
   value?: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  showAssignedTo?: boolean;
 }
 
 export function DepartmentFilter({ 
   value, 
   onChange, 
   placeholder = "Select department",
-  showAssignedTo = false 
 }: DepartmentFilterProps) {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(false);

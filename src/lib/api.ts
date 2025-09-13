@@ -196,7 +196,7 @@ export class ApiClient {
         }
         
         // Try to parse JSON error response, fallback to text if it fails
-        let errorData = {};
+        let errorData: any = {};
         let errorMessage = `HTTP error! status: ${response.status}`;
         
         try {
@@ -238,7 +238,7 @@ export class ApiClient {
         return {
           success: false,
           error: 'Invalid response format from server',
-          data: null
+          data: undefined
         };
       }
     } catch (error) {
@@ -246,7 +246,7 @@ export class ApiClient {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred',
-        data: null
+        data: undefined
       };
     }
   }

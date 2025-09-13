@@ -90,21 +90,25 @@ export interface EmailFollowup {
   };
 }
 
-export enum AutoResponseStatus {
-  SENT = 'SENT',
-  DELIVERED = 'DELIVERED',
-  FAILED = 'FAILED',
-  BOUNCED = 'BOUNCED',
-  PROCESSING = 'PROCESSING',
-  ERROR = 'ERROR'
-}
+export const AutoResponseStatus = {
+  SENT: 'SENT',
+  DELIVERED: 'DELIVERED',
+  FAILED: 'FAILED',
+  BOUNCED: 'BOUNCED',
+  PROCESSING: 'PROCESSING',
+  ERROR: 'ERROR'
+} as const;
 
-export enum FollowupStatus {
-  PROCESSED = 'PROCESSED',
-  FAILED = 'FAILED',
-  PENDING = 'PENDING',
-  IGNORED = 'IGNORED'
-}
+export type AutoResponseStatus = typeof AutoResponseStatus[keyof typeof AutoResponseStatus];
+
+export const FollowupStatus = {
+  PROCESSED: 'PROCESSED',
+  FAILED: 'FAILED',
+  PENDING: 'PENDING',
+  IGNORED: 'IGNORED'
+} as const;
+
+export type FollowupStatus = typeof FollowupStatus[keyof typeof FollowupStatus];
 
 // API Request/Response Types
 export interface CreateAutoResponseTemplateRequest {

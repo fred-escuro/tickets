@@ -62,7 +62,6 @@ export interface TicketStatus {
 export interface TicketTemplate {
   id: string;
   name: string;
-  description?: string;
   categoryId: string;
   title: string;
   description: string;

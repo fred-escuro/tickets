@@ -21,35 +21,126 @@ export interface EmailInteractionData {
 
 export class ComprehensiveReplyLoggingService {
   /**
+   * Sanitize HTML content by removing MSO tags while preserving standard HTML
+   */
+  private sanitizeHtmlContent(htmlContent: string): string {
+    if (!htmlContent) return htmlContent;
+
+    let sanitized = htmlContent;
+
+    // Remove MSO-specific tags and attributes
+    // Remove MSO conditional comments
+    sanitized = sanitized.replace(/<!--\[if[^>]*>[\s\S]*?<!\[endif\]-->/gi, '');
+    
+    // Remove MSO-specific style attributes
+    sanitized = sanitized.replace(/\s*mso-[^;=]*[;"]/gi, '');
+    
+    // Remove MSO-specific CSS classes
+    sanitized = sanitized.replace(/\s*MsoNormal[^"'\s]*/gi, '');
+    sanitized = sanitized.replace(/\s*MsoListParagraph[^"'\s]*/gi, '');
+    sanitized = sanitized.replace(/\s*MsoListTable[^"'\s]*/gi, '');
+    
+    // Clean up empty attributes and extra spaces
+    sanitized = sanitized.replace(/style="\s*"/gi, '');
+    sanitized = sanitized.replace(/style="\s*;\s*"/gi, '');
+    sanitized = sanitized.replace(/style="\s*;\s*;"/gi, '');
+    sanitized = sanitized.replace(/class="\s*"/gi, '');
+    sanitized = sanitized.replace(/\s+style="/gi, ' style="');
+    sanitized = sanitized.replace(/\s+class="/gi, ' class="');
+    
+    // Clean up extra spaces around attributes
+    sanitized = sanitized.replace(/\s+>/gi, '>');
+    sanitized = sanitized.replace(/<([^>]+)\s+>/gi, '<$1>');
+    
+    // Remove MSO-specific XML namespaces
+    sanitized = sanitized.replace(/\s*xmlns:v="urn:schemas-microsoft-com:vml"/gi, '');
+    sanitized = sanitized.replace(/\s*xmlns:o="urn:schemas-microsoft-com:office:office"/gi, '');
+    sanitized = sanitized.replace(/\s*xmlns:w="urn:schemas-microsoft-com:office:word"/gi, '');
+    
+    // Remove MSO-specific tags
+    sanitized = sanitized.replace(/<o:p[^>]*>[\s\S]*?<\/o:p>/gi, '');
+    sanitized = sanitized.replace(/<v:[^>]*>[\s\S]*?<\/v:[^>]*>/gi, '');
+    sanitized = sanitized.replace(/<w:[^>]*>[\s\S]*?<\/w:[^>]*>/gi, '');
+    
+    // Remove MSO-specific style blocks
+    sanitized = sanitized.replace(/<style[^>]*>\s*\/\*\[if[^>]*>[\s\S]*?<!\[endif\]\*\/\s*<\/style>/gi, '');
+    
+    // Clean up empty paragraphs and divs that might be left behind
+    sanitized = sanitized.replace(/<p[^>]*>\s*<\/p>/gi, '');
+    sanitized = sanitized.replace(/<div[^>]*>\s*<\/div>/gi, '');
+    
+    // Clean up multiple consecutive line breaks
+    sanitized = sanitized.replace(/\n\s*\n\s*\n/g, '\n\n');
+    
+    return sanitized.trim();
+  }
+
+  /**
    * Log all email interactions - replies, followups, and conversations
    */
   async logEmailInteraction(emailData: EmailInteractionData): Promise<string> {
     try {
-      // 1. Always log the email to EmailLog table
-      const emailLog = await prisma.emailLog.create({
-        data: {
-          messageId: emailData.messageId,
-          imapUid: emailData.imapUid,
-          direction: 'INBOUND',
-          type: this.determineEmailType(emailData),
-          from: emailData.from,
-          to: emailData.to,
-          cc: emailData.cc,
-          bcc: emailData.bcc,
-          subject: emailData.subject,
-          body: emailData.body,
-          htmlBody: emailData.htmlBody,
-          receivedAt: emailData.receivedAt,
-          inReplyTo: emailData.inReplyTo,
-          references: emailData.references,
-          status: 'PROCESSING',
-          rawMeta: { 
-            headers: emailData.headers,
-            threadId: emailData.threadId,
-            attachments: emailData.attachments?.length || 0
-          }
+      // Check if email with this messageId already exists
+      let emailLog;
+      if (emailData.messageId) {
+        const existingEmailLog = await prisma.emailLog.findUnique({
+          where: { messageId: emailData.messageId },
+          select: { id: true }
+        });
+
+        if (existingEmailLog) {
+          console.log(`📧 Email with messageId ${emailData.messageId} already exists in comprehensive logging, returning existing ID: ${existingEmailLog.id}`);
+          return existingEmailLog.id;
         }
-      });
+      }
+
+      // 1. Always log the email to EmailLog table
+      try {
+        emailLog = await prisma.emailLog.create({
+          data: {
+            messageId: emailData.messageId,
+            imapUid: emailData.imapUid,
+            direction: 'INBOUND',
+            type: this.determineEmailType(emailData),
+            from: emailData.from,
+            to: emailData.to,
+            cc: emailData.cc,
+            bcc: emailData.bcc,
+            subject: emailData.subject,
+            body: emailData.body,
+            htmlBody: emailData.htmlBody ? this.sanitizeHtmlContent(emailData.htmlBody) : undefined,
+            receivedAt: emailData.receivedAt,
+            inReplyTo: emailData.inReplyTo,
+            references: emailData.references,
+            status: 'PROCESSING',
+            rawMeta: { 
+              headers: emailData.headers,
+              threadId: emailData.threadId,
+              attachments: emailData.attachments?.length || 0
+            }
+          }
+        });
+      } catch (error: any) {
+        // Handle unique constraint violation gracefully
+        if (error.code === 'P2002' && error.meta?.target?.includes('messageId')) {
+          console.log(`⚠️ Duplicate messageId ${emailData.messageId} detected in comprehensive logging, attempting to find existing record`);
+          
+          // Try to find the existing record
+          const existingEmailLog = await prisma.emailLog.findUnique({
+            where: { messageId: emailData.messageId },
+            select: { id: true }
+          });
+
+          if (existingEmailLog) {
+            console.log(`✅ Found existing email log with ID: ${existingEmailLog.id}`);
+            emailLog = existingEmailLog;
+          } else {
+            throw error; // Re-throw if we can't find the existing record
+          }
+        } else {
+          throw error; // Re-throw if it's not a duplicate constraint error
+        }
+      }
 
       // 2. Detect and log reply relationships
       await this.logReplyRelationships(emailLog, emailData);

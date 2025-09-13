@@ -12,12 +12,7 @@ import { TaskStatusChangeDialog } from '@/components/TaskStatusChangeDialog';
 import { TaskCommentDialog } from '@/components/TaskCommentDialog';
 import { ArrowLeft, FileText, Clock, CheckCircle2, AlertCircle, Paperclip, MessageSquare, Settings, History, User, Calendar } from 'lucide-react';
 
-const FieldRow = ({ label, value }: { label: string; value: any }) => (
-  <div className="flex items-start justify-between text-sm py-2 border-b last:border-b-0">
-    <span className="text-muted-foreground">{label}</span>
-    <span className="font-medium text-right ml-4 break-words max-w-[70%]">{value ?? '-'}</span>
-  </div>
-);
+// Removed unused FieldRow component
 
 // color helpers to mirror ticket pills
 const getStatusColor = (status: any) => {
@@ -83,16 +78,16 @@ export default function TaskDetailPage() {
         
         // Debug: Log ticket data to see available fields
         console.log('Ticket data keys:', Object.keys(tr.data || {}));
-        console.log('Ticket ticketNumber:', tr.data?.ticketNumber);
+        console.log('Ticket ticketNumber:', (tr.data as any)?.ticketNumber);
         
-        const found = (tr.data?.tasks || []).find((t: any) => t.id === taskId);
+        const found = ((tr.data as any)?.tasks || []).find((t: any) => t.id === taskId);
         if (found) {
           // Add ticket number from the ticket data
           // Try multiple possible field names and fallbacks
-          found.ticketNumber = tr.data?.ticketNumber || 
-                              tr.data?.number || 
-                              tr.data?.ticketNumber || 
-                              (tr.data?.id ? parseInt(tr.data.id.slice(-6), 16) : null) ||
+          found.ticketNumber = (tr.data as any)?.ticketNumber || 
+                              (tr.data as any)?.number || 
+                              (tr.data as any)?.ticketNumber || 
+                              ((tr.data as any)?.id ? parseInt((tr.data as any).id.slice(-6), 16) : null) ||
                               Math.floor(Math.random() * 10000) + 1000;
           // console.log('Added ticketNumber to task:', found.ticketNumber);
         }
@@ -199,7 +194,7 @@ export default function TaskDetailPage() {
       const commentsResponse = await apiClient.get(API_ENDPOINTS.TICKETS.TASK_COMMENTS(ticketId, task.id));
       console.log('Comments response:', commentsResponse);
       if (commentsResponse.success) {
-        const comments = commentsResponse.data.map((comment: any) => ({
+        const comments = (commentsResponse.data as any[]).map((comment: any) => ({
           id: comment.id,
           content: comment.content,
           author: `${comment.author?.firstName || ''} ${comment.author?.lastName || ''}`.trim() || 'Unknown User',
@@ -215,7 +210,7 @@ export default function TaskDetailPage() {
       const statusResponse = await apiClient.get(API_ENDPOINTS.TICKETS.TASK_STATUS_HISTORY(ticketId, task.id));
       console.log('Status history response:', statusResponse);
       if (statusResponse.success) {
-        const statusHistory = statusResponse.data.map((status: any) => ({
+        const statusHistory = (statusResponse.data as any[]).map((status: any) => ({
           id: status.id,
           status: status.toStatusName || status.toStatusId,
           reason: status.reason,
@@ -232,7 +227,7 @@ export default function TaskDetailPage() {
       const assignmentResponse = await apiClient.get(API_ENDPOINTS.TICKETS.TASK_ASSIGNMENT_HISTORY(ticketId, task.id));
       console.log('Assignment history response:', assignmentResponse);
       if (assignmentResponse.success) {
-        const assignmentHistory = assignmentResponse.data.map((assignment: any) => ({
+        const assignmentHistory = (assignmentResponse.data as any[]).map((assignment: any) => ({
           id: assignment.id,
           fromAssignee: assignment.fromAssignee,
           toAssignee: assignment.toAssignee,
@@ -573,7 +568,6 @@ export default function TaskDetailPage() {
             setSelectedTaskForStatusChange(null);
           }}
           onConfirm={handleTaskStatusConfirm}
-          taskId={selectedTaskForStatusChange.id}
           taskTitle={selectedTaskForStatusChange.title}
           currentStatus={selectedTaskForStatusChange.currentStatus}
         />

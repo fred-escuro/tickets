@@ -11,6 +11,10 @@ export interface User {
   role: string;
   avatar?: string;
   departments?: UserDepartment[];
+  departmentEntity?: {
+    id: string;
+    name: string;
+  };
   phone?: string;
   location?: string;
   isAgent: boolean;
@@ -125,7 +129,7 @@ export class UserService {
     });
 
     const endpoint = `${API_ENDPOINTS.USERS.LIST}?${queryParams.toString()}`;
-    return apiClient.get(endpoint);
+    return apiClient.get(endpoint) as Promise<PaginatedResponse<User>>;
   }
 
   // Get user by ID
@@ -168,12 +172,7 @@ export class UserService {
     const formData = new FormData();
     formData.append('avatar', file);
 
-    return apiClient.post(API_ENDPOINTS.USERS.AVATAR, formData, {
-      headers: {
-        // Don't set Content-Type for FormData, let browser set it
-        'Content-Type': undefined,
-      },
-    });
+    return apiClient.post(API_ENDPOINTS.USERS.AVATAR, formData);
   }
 
   // Get user statistics

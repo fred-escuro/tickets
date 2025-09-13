@@ -37,12 +37,6 @@ export const WelcomeChecklist: FC<WelcomeChecklistProps> = ({ onDismiss }) => {
       completed: false
     },
     {
-      id: 'kudos',
-      label: 'Give someone kudos',
-      description: 'Recognize a colleague in the Kudos section',
-      completed: false
-    },
-    {
       id: 'directory',
       label: 'Explore the Employee Directory',
       description: 'Find and filter colleagues by department',

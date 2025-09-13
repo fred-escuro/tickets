@@ -56,8 +56,10 @@ export const QuickLinks: FC = () => {
 
     const newLink: QuickLink = {
       id: generateId(),
+      title: newLinkName.trim(),
       name: newLinkName.trim(),
-      url: newLinkUrl.trim()
+      url: newLinkUrl.trim(),
+      icon: 'Link'
     };
 
     const updatedLinks = [...links, newLink];

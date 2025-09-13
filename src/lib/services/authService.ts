@@ -100,7 +100,7 @@ export class AuthService {
       localStorage.removeItem('refresh-token');
       localStorage.removeItem('user');
       
-      return response;
+      return response as ApiResponse<void>;
     } catch (error) {
       console.error('Logout error:', error);
       
@@ -218,7 +218,7 @@ export class AuthService {
   // Extend session (refresh lastActivity)
   static async extendSession(): Promise<boolean> {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.AUTH.REFRESH_SESSION);
+      const response = await apiClient.post<{ token: string }>(API_ENDPOINTS.AUTH.REFRESH_SESSION, {});
       
       if (response.success && response.data?.token) {
         this.setAuthToken(response.data.token);

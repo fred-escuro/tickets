@@ -55,7 +55,7 @@ async function main() {
   await upsert('features', 'fileUpload', true);
 
   // SMTP defaults
-  await upsert('email.smtp', 'host', 'mail.wesupportinc.com');
+  await upsert('email.smtp', 'host', 'mail.6883432.apps.wesupportinc.com');
   await upsert('email.smtp', 'port', 465);
   await upsert('email.smtp', 'secure', true);
   await upsert('email.smtp', 'fromAddress', 'TicketHub (hd@wesupportinc.com)');
@@ -69,14 +69,14 @@ async function main() {
   await upsert('notifications', 'frequency', 'immediate');
 
   // Inbound email (IMAP) defaults
-  await upsert('email.inbound', 'imapHost', 'mail.wesupportinc.com');
+  await upsert('email.inbound', 'imapHost', 'mail.6883432.apps.wesupportinc.com');
   await upsert('email.inbound', 'imapPort', 993);
   await upsert('email.inbound', 'imapSecure', true);
   await upsertSecret('email.inbound', 'imapUser', 'hd@wesupportinc.com');
   await upsertSecret('email.inbound', 'imapPassword', 'wsi@WeSupportinc');
   await upsert('email.inbound', 'folder', 'INBOX');
-  await upsert('email.inbound', 'moveOnSuccessFolder', 'Processed');
-  await upsert('email.inbound', 'moveOnErrorFolder', 'Errors');
+  await upsert('email.inbound', 'moveOnSuccessFolder', 'INBOX.Processed');
+  await upsert('email.inbound', 'moveOnErrorFolder', 'INBOX.Errors');
   
   // Domain restriction settings (new comprehensive system)
   await upsert('email.inbound', 'domainRestrictionMode', 'allow_all');

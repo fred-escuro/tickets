@@ -6,18 +6,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Search, Command, Users, FileText, Calendar, BarChart3, Headphones } from 'lucide-react';
+import { Search, Users, FileText, Calendar, BarChart3, Headphones } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback, type FC } from 'react';
 import { searchAll, type SearchResult } from '@/lib/searchService';
 import { useNavigate } from 'react-router-dom';
 
-const typeLabels = {
-  user: 'User',
-  ticket: 'Ticket',
-  article: 'Article',
-  task: 'Task',
-  event: 'Event'
-};
 
 const typeIcons = {
   user: <Users className="h-4 w-4" />,

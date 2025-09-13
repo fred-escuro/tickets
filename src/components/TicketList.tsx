@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -172,9 +172,9 @@ export const TicketList = ({ showStatusChange = true }: TicketListProps) => {
                       })()}
                     </TableCell>
                     <TableCell>
-                      {ticket.assignee?.departmentEntity ? (
+                      {(ticket.assignee as any)?.departmentEntity ? (
                         <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
-                          {ticket.assignee.departmentEntity.name}
+                          {(ticket.assignee as any).departmentEntity.name}
                         </Badge>
                       ) : (
                         <span className="text-sm text-muted-foreground">No department</span>
@@ -193,9 +193,9 @@ export const TicketList = ({ showStatusChange = true }: TicketListProps) => {
                             <span className="text-sm">
                               {ticket.assignee.middleName ? `${ticket.assignee.firstName} ${ticket.assignee.middleName} ${ticket.assignee.lastName}` : `${ticket.assignee.firstName} ${ticket.assignee.lastName}`}
                             </span>
-                            {ticket.assignee.departmentEntity && (
+                            {(ticket.assignee as any)?.departmentEntity && (
                               <span className="text-xs text-muted-foreground">
-                                {ticket.assignee.departmentEntity.name}
+                                {(ticket.assignee as any).departmentEntity.name}
                               </span>
                             )}
                           </div>

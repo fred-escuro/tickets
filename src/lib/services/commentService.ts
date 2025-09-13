@@ -1,4 +1,3 @@
-import { API_ENDPOINTS } from '../api';
 import { AttachmentService, type FileAttachment } from './attachmentService';
 
 // Types
@@ -163,11 +162,11 @@ export class CommentService {
 
       console.log('CommentService: Comment creation response:', commentResponse);
 
-      if (!commentResponse.success) {
-        throw new Error(commentResponse.error || 'Failed to create comment');
+      if (!(commentResponse as any).success) {
+        throw new Error((commentResponse as any).error || 'Failed to create comment');
       }
 
-      const comment = commentResponse.data;
+      const comment = (commentResponse as any).data;
 
       // If there are attachments, upload them
       if (commentData.attachments && commentData.attachments.length > 0) {

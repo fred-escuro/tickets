@@ -80,7 +80,7 @@ export const TicketDetailPanel: React.FC<Props> = ({ ticketId }) => {
     try {
       setTaskCommentsLoading(prev => ({ ...prev, [taskId]: true }));
       const res = await apiClient.get(`/api/tickets/${ticketId}/tasks/${taskId}/comments`);
-      if (res.success) setTaskComments(prev => ({ ...prev, [taskId]: res.data || [] }));
+      if (res.success) setTaskComments(prev => ({ ...prev, [taskId]: Array.isArray(res.data) ? res.data : [] }));
       else toast.error(res.error || 'Failed to load task comments');
     } catch (e) {
       toast.error('Failed to load task comments');

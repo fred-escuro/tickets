@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Edit, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -24,9 +24,6 @@ export function DepartmentSettings() {
     parentId: null,
   });
 
-  const totalUsers = useMemo(() => {
-    return departments.reduce((sum, d) => sum + (d._count?.users ?? 0), 0);
-  }, [departments]);
 
   const load = async () => {
     setLoading(true);
@@ -66,11 +63,11 @@ export function DepartmentSettings() {
   };
 
   const submit = async () => {
-    const payload: CreateDepartmentInput | UpdateDepartmentInput = {
-      name: form.name || undefined as any,
+    const payload = {
+      name: form.name || '',
       description: form.description || undefined,
-      managerId: form.managerId,
-      parentId: form.parentId,
+      managerId: form.managerId || undefined,
+      parentId: form.parentId || undefined,
     };
 
     try {

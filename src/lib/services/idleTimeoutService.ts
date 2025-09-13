@@ -107,14 +107,14 @@ class IdleTimeoutService {
    */
   private async refreshSession(): Promise<boolean> {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.AUTH.REFRESH_SESSION);
+      const response = await apiClient.post(API_ENDPOINTS.AUTH.REFRESH_SESSION, {});
       
-      if (response.success && response.data?.token) {
+      if (response.success && (response.data as any)?.token) {
         // Update stored token
-        localStorage.setItem('auth-token', response.data.token);
+        localStorage.setItem('auth-token', (response.data as any).token);
         
         // Update session timestamps from token
-        this.updateSessionTimestamps(response.data.token);
+        this.updateSessionTimestamps((response.data as any).token);
         
         console.log('Session refreshed successfully');
         return true;

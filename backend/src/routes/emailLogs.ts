@@ -3,6 +3,7 @@ import { authenticate, authorizePermission } from '../middleware/auth';
 import { emailTrackingService } from '../services/emailTrackingService';
 import { EmailDirection, EmailStatus } from '@prisma/client';
 import { prisma } from '../index';
+import { simpleParser } from 'mailparser';
 
 const router = Router();
 
@@ -216,6 +217,74 @@ router.delete('/:id', authenticate, authorizePermission('settings:write'), async
   } catch (error: any) {
     console.error('Error deleting email log:', error);
     return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Parse email using mailparser
+router.post('/parse', authenticate, authorizePermission('tickets:read'), async (req, res) => {
+  try {
+    const { rawEmailData } = req.body;
+
+    if (!rawEmailData) {
+      return res.status(400).json({ success: false, error: 'Raw email data is required' });
+    }
+
+    // Parse the raw email data using mailparser
+    const parsed = await simpleParser(rawEmailData);
+    
+    // Extract email information
+    const from = Array.isArray(parsed.from) 
+      ? parsed.from[0]?.value?.[0]?.address || 'Unknown'
+      : parsed.from?.text || parsed.from?.value?.[0]?.address || 'Unknown';
+    const to = Array.isArray(parsed.to) 
+      ? parsed.to[0]?.value?.[0]?.address || 'Unknown'
+      : parsed.to?.text || parsed.to?.value?.[0]?.address || 'Unknown';
+    const subject = parsed.subject || 'No Subject';
+    const date = parsed.date?.toISOString() || new Date().toISOString();
+    
+    // Get the email content (prefer HTML over text)
+    const htmlContent = parsed.html || null;
+    const textContent = parsed.text || null;
+    
+    // Handle attachments
+    const attachments = parsed.attachments?.map(att => ({
+      filename: att.filename || 'Unknown file',
+      contentType: att.contentType || 'unknown type',
+      size: att.size || 0,
+      contentId: att.contentId || null
+    })) || [];
+
+    // Return parsed email data
+    return res.json({
+      success: true,
+      data: {
+        from,
+        to,
+        subject,
+        date,
+        htmlContent,
+        textContent,
+        attachments,
+        headers: {
+          messageId: parsed.messageId,
+          inReplyTo: parsed.inReplyTo,
+          references: parsed.references,
+          cc: Array.isArray(parsed.cc) 
+            ? parsed.cc.map(addr => addr.value?.[0]?.address).filter(Boolean).join(', ') || null
+            : parsed.cc?.text || null,
+          bcc: Array.isArray(parsed.bcc) 
+            ? parsed.bcc.map(addr => addr.value?.[0]?.address).filter(Boolean).join(', ') || null
+            : parsed.bcc?.text || null,
+          replyTo: parsed.replyTo?.text || null
+        }
+      }
+    });
+  } catch (error: any) {
+    console.error('Error parsing email with mailparser:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to parse email: ' + error.message 
+    });
   }
 });
 

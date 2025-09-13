@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,155 +8,134 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  firstName   String
-  lastName    String
-  middleName  String?
-  email       String   @unique
-  password    String
-  // Legacy single department removed; now using many-to-many relationship
-  avatar      String?
-  phone       String?
-  location    String?
-  isAgent     Boolean  @default(false)
-  skills      Json?
-  // Auto-assignment fields
-  maxConcurrentTickets Int      @default(10)
-  assignmentPriority   Int      @default(1)
-  isAvailable          Boolean  @default(true)
-  lastAssignmentAt     DateTime?
-  // Auth & recovery fields
-  passwordResetToken   String?
-  passwordResetExpires DateTime?
-  oauthProvider        String?
-  oauthProviderId      String?
-  emailVerifiedAt      DateTime?
-  lastLoginAt          DateTime?
-  // Email verification fields
-  emailVerificationToken   String?
-  emailVerificationExpires DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  submittedTickets Ticket[] @relation("SubmittedBy")
-  assignedTickets  Ticket[] @relation("AssignedTo")
-  escalatedTickets Ticket[] @relation("EscalatedBy")
-  comments        Comment[]
-  attachments     Attachment[]
-  knowledgeBase   KnowledgeBase[]
-  statusHistory   TicketStatusHistory[]
-  taskComments    TaskComment[]
-  taskStatusHistory TaskStatusHistory[]
-  taskAssignmentHistoryFrom TaskAssignmentHistory[] @relation("TaskAssignmentFrom")
-  taskAssignmentHistoryTo TaskAssignmentHistory[] @relation("TaskAssignmentTo")
-  taskAssignmentHistoryBy TaskAssignmentHistory[] @relation("TaskAssignmentBy")
+  id                          String                    @id @default(cuid())
+  firstName                   String
+  lastName                    String
+  middleName                  String?
+  email                       String                    @unique
+  password                    String
+  avatar                      String?
+  phone                       String?
+  location                    String?
+  isAgent                     Boolean                   @default(false)
+  skills                      Json?
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+  passwordResetToken          String?
+  passwordResetExpires        DateTime?
+  oauthProvider               String?
+  oauthProviderId             String?
+  emailVerifiedAt             DateTime?
+  lastLoginAt                 DateTime?
+  emailVerificationToken      String?
+  emailVerificationExpires    DateTime?
+  assignmentPriority          Int                       @default(1)
+  isAvailable                 Boolean                   @default(true)
+  lastAssignmentAt            DateTime?
+  maxConcurrentTickets        Int                       @default(10)
+  attachments                 Attachment[]
+  createdTemplates            AutoResponseTemplate[]    @relation("TemplateCreator")
+  comments                    Comment[]
+  managesDepartments          Department[]              @relation("DepartmentManager")
+  emailLogs                   EmailLog[]
+  knowledgeBase               KnowledgeBase[]
+  taskAssignmentHistoryBy     TaskAssignmentHistory[]   @relation("TaskAssignmentBy")
+  taskAssignmentHistoryFrom   TaskAssignmentHistory[]   @relation("TaskAssignmentFrom")
+  taskAssignmentHistoryTo     TaskAssignmentHistory[]   @relation("TaskAssignmentTo")
+  taskComments                TaskComment[]
+  taskStatusHistory           TaskStatusHistory[]
+  ticketAssignmentHistoryBy   TicketAssignmentHistory[] @relation("AssignmentAssignedBy")
   ticketAssignmentHistoryFrom TicketAssignmentHistory[] @relation("AssignmentFromUser")
-  ticketAssignmentHistoryTo TicketAssignmentHistory[] @relation("AssignmentToUser")
-  ticketAssignmentHistoryBy TicketAssignmentHistory[] @relation("AssignmentAssignedBy")
-
-  // Multiple departments relation
-  departments UserDepartment[]
-
-  // RBAC relations
-  roles UserRole[]
-
-  // Departments managed by the user
-  managesDepartments Department[] @relation("DepartmentManager")
-
-  // Email tracking relations
-  emailLogs EmailLog[]
-
-  // Auto-response relations
-  createdTemplates AutoResponseTemplate[] @relation("TemplateCreator")
+  ticketAssignmentHistoryTo   TicketAssignmentHistory[] @relation("AssignmentToUser")
+  statusHistory               TicketStatusHistory[]
+  assignedTickets             Ticket[]                  @relation("AssignedTo")
+  escalatedTickets            Ticket[]                  @relation("EscalatedBy")
+  submittedTickets            Ticket[]                  @relation("SubmittedBy")
+  departments                 UserDepartment[]
+  roles                       UserRole[]
 
   @@map("users")
 }
 
 model Ticket {
-  id            String    @id @default(cuid())
-  ticketNumber  Int       @unique @default(autoincrement())
-  title         String
-  description   String
-  categoryId    String
-  priorityId    String
-  statusId      String
-  submittedBy   String
-  submittedAt   DateTime  @default(now())
-  assignedTo    String?
+  id                     String                    @id @default(cuid())
+  title                  String
+  description            String
+  submittedBy            String
+  submittedAt            DateTime                  @default(now())
+  assignedTo             String?
+  assignedAt             DateTime?
+  dueDate                DateTime?
+  resolvedAt             DateTime?
+  resolution             String?
+  satisfaction           Int?                      @db.SmallInt
+  tags                   Json?
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  ticketNumber           Int                       @unique @default(autoincrement())
+  categoryId             String
+  customFields           Json?
+  escalatedAt            DateTime?
+  escalatedBy            String?
+  priorityId             String
+  slaResolveAt           DateTime?
+  slaResponseAt          DateTime?
+  statusId               String
   assignedToDepartmentId String?
-  assignedAt    DateTime?
-  dueDate       DateTime?
-  resolvedAt    DateTime?
-  resolution    String?
-  satisfaction  Int?      @db.SmallInt
-  tags          Json?
-  customFields  Json?     // For dynamic fields per category
-  slaResponseAt DateTime? // When SLA response time is due
-  slaResolveAt  DateTime? // When SLA resolution time is due
-  escalatedAt   DateTime? // When ticket was escalated
-  escalatedBy   String?   // Who escalated the ticket
-  source        TicketSource @default(WEB)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // Relations
-  submitter     User      @relation("SubmittedBy", fields: [submittedBy], references: [id])
-  assignee      User?     @relation("AssignedTo", fields: [assignedTo], references: [id])
-  assignedToDepartment Department? @relation("AssignedToDepartment", fields: [assignedToDepartmentId], references: [id])
-  escalator     User?     @relation("EscalatedBy", fields: [escalatedBy], references: [id])
-  category      TicketCategory @relation(fields: [categoryId], references: [id])
-  priority      TicketPriority @relation(fields: [priorityId], references: [id])
-  status        TicketStatus @relation(fields: [statusId], references: [id])
-  comments      Comment[]
-  attachments   Attachment[]
-  tasks         TicketTask[]
-  events        TicketEvent[]
-  statusHistory TicketStatusHistory[]
-  assignmentHistory TicketAssignmentHistory[]
-  emailLogs     EmailLog[]
-
-  // Auto-response relations
-  autoResponses AutoResponse[]
-  emailFollowups EmailFollowup[]
+  source                 TicketSource              @default(WEB)
+  attachments            Attachment[]
+  autoResponses          AutoResponse[]
+  comments               Comment[]
+  emailFollowups         EmailFollowup[]
+  emailLogs              EmailLog[]
+  assignmentHistory      TicketAssignmentHistory[]
+  events                 TicketEvent[]
+  statusHistory          TicketStatusHistory[]
+  tasks                  TicketTask[]
+  assignedToDepartment   Department?               @relation("AssignedToDepartment", fields: [assignedToDepartmentId], references: [id])
+  assignee               User?                     @relation("AssignedTo", fields: [assignedTo], references: [id])
+  category               TicketCategory            @relation(fields: [categoryId], references: [id])
+  escalator              User?                     @relation("EscalatedBy", fields: [escalatedBy], references: [id])
+  priority               TicketPriority            @relation(fields: [priorityId], references: [id])
+  status                 TicketStatus              @relation(fields: [statusId], references: [id])
+  submitter              User                      @relation("SubmittedBy", fields: [submittedBy], references: [id])
 
   @@map("tickets")
 }
 
 /// Comprehensive email tracking for both inbound and outbound emails
 model EmailLog {
-  id          String   @id @default(cuid())
-  messageId   String?  @unique // Unique message ID from email headers
-  imapUid     Int?     // IMAP message UID for tracking email movement
-  direction   EmailDirection
-  type        EmailMessageType @default(NEW)
-  from        String
-  to          String
-  cc          String?
-  bcc         String?
-  subject     String?
-  body        String?  // Email body content
-  htmlBody    String?  // HTML version if available
-  ticketId    String?  // Associated ticket if any
-  userId      String?  // User who sent/received the email
-  status      EmailStatus @default(SENT)
-  sentAt      DateTime? // When email was sent (for outbound)
-  receivedAt  DateTime? // When email was received (for inbound)
-  processedAt DateTime @default(now())
-  error       String?  // Error message if processing failed
-  retryCount  Int      @default(0)
-  rawMeta     Json?    // Raw email headers and metadata
-  attachments Json?    // Attachment metadata
-  deliveryStatus Json? // Delivery status for outbound emails
-  readAt      DateTime? // When email was read (if trackable)
-  replyTo     String?  // Reply-to address
-  inReplyTo   String?  // In-reply-to header for threading
-  references  String?  // References header for threading
-  threadId    String?  // Conversation thread identifier
-
-  // Relations
-  ticket      Ticket?  @relation(fields: [ticketId], references: [id], onDelete: SetNull)
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id             String           @id @default(cuid())
+  messageId      String?          @unique
+  direction      EmailDirection
+  type           EmailMessageType @default(NEW)
+  from           String
+  to             String
+  cc             String?
+  bcc            String?
+  subject        String?
+  body           String?
+  htmlBody       String?
+  ticketId       String?
+  userId         String?
+  status         EmailStatus      @default(SENT)
+  sentAt         DateTime?
+  receivedAt     DateTime?
+  processedAt    DateTime         @default(now())
+  error          String?
+  retryCount     Int              @default(0)
+  rawMeta        Json?
+  attachments    Json?
+  deliveryStatus Json?
+  readAt         DateTime?
+  replyTo        String?
+  inReplyTo      String?
+  references     String?
+  imapUid        Int?
+  imap_raw       String?
+  threadId       String?
+  ticket         Ticket?          @relation(fields: [ticketId], references: [id])
+  user           User?            @relation(fields: [userId], references: [id])
 
   @@index([direction])
   @@index([status])
@@ -174,25 +150,21 @@ model EmailLog {
   @@map("email_logs")
 }
 
-// Auto-Response System Models
-
 model AutoResponseTemplate {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  subjectTemplate String
-  bodyTemplate    String
-  triggerConditions Json? // JSON conditions for when to use this template
-  departmentId String?
-  isActive    Boolean  @default(true)
-  createdBy   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  department Department? @relation(fields: [departmentId], references: [id])
-  creator    User?       @relation("TemplateCreator", fields: [createdBy], references: [id])
-  responses  AutoResponse[]
+  id                String         @id @default(cuid())
+  name              String
+  description       String?
+  subjectTemplate   String
+  bodyTemplate      String
+  triggerConditions Json?
+  departmentId      String?
+  isActive          Boolean        @default(true)
+  createdBy         String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  creator           User?          @relation("TemplateCreator", fields: [createdBy], references: [id])
+  department        Department?    @relation(fields: [departmentId], references: [id])
+  responses         AutoResponse[]
 
   @@index([departmentId])
   @@index([isActive])
@@ -200,21 +172,19 @@ model AutoResponseTemplate {
 }
 
 model AutoResponse {
-  id          String   @id @default(cuid())
-  ticketId    String
-  templateId  String
-  responseId  String   @unique // Unique identifier for tracking replies
-  toEmail     String
-  subject     String
-  body        String
-  threadId    String?  // Email thread identifier
-  sentAt      DateTime @default(now())
-  status      AutoResponseStatus @default(SENT)
-
-  // Relations
-  ticket      Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  template    AutoResponseTemplate @relation(fields: [templateId], references: [id])
-  followups   EmailFollowup[]
+  id         String               @id @default(cuid())
+  ticketId   String
+  templateId String
+  responseId String               @unique
+  toEmail    String
+  subject    String
+  body       String
+  threadId   String?
+  sentAt     DateTime             @default(now())
+  status     AutoResponseStatus   @default(SENT)
+  template   AutoResponseTemplate @relation(fields: [templateId], references: [id])
+  ticket     Ticket               @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  followups  EmailFollowup[]
 
   @@index([ticketId])
   @@index([responseId])
@@ -224,18 +194,16 @@ model AutoResponse {
 }
 
 model EmailFollowup {
-  id                String   @id @default(cuid())
-  autoResponseId    String
-  ticketId          String
-  originalEmailId   String?  // Reference to original email
-  followupEmailId   String?  // Reference to follow-up email
-  content           String
-  processedAt       DateTime @default(now())
-  status            FollowupStatus @default(PROCESSED)
-
-  // Relations
-  autoResponse      AutoResponse @relation(fields: [autoResponseId], references: [id], onDelete: Cascade)
-  ticket            Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  id              String         @id @default(cuid())
+  autoResponseId  String
+  ticketId        String
+  originalEmailId String?
+  followupEmailId String?
+  content         String
+  processedAt     DateTime       @default(now())
+  status          FollowupStatus @default(PROCESSED)
+  autoResponse    AutoResponse   @relation(fields: [autoResponseId], references: [id], onDelete: Cascade)
+  ticket          Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([autoResponseId])
   @@index([ticketId])
@@ -243,19 +211,16 @@ model EmailFollowup {
   @@map("email_followups")
 }
 
-
 model Comment {
-  id          String   @id @default(cuid())
+  id          String       @id @default(cuid())
   ticketId    String
   authorId    String
   content     String
-  isInternal  Boolean  @default(false)
-  createdAt   DateTime @default(now())
-
-  // Relations
-  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  author      User         @relation(fields: [authorId], references: [id])
+  isInternal  Boolean      @default(false)
+  createdAt   DateTime     @default(now())
   attachments Attachment[]
+  author      User         @relation(fields: [authorId], references: [id])
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@map("comments")
 }
@@ -270,112 +235,100 @@ model Attachment {
   mimeType   String
   uploadedBy String
   uploadedAt DateTime @default(now())
-
-  // Relations
-  ticket     Ticket?  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   comment    Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  ticket     Ticket?  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   uploader   User     @relation(fields: [uploadedBy], references: [id])
 
   @@map("attachments")
 }
 
 model TicketTask {
-  id             String    @id @default(cuid())
-  ticketId       String
-  title          String
-  description    String
-  taskStatusId   String
-  taskPriorityId String
-  progress       Int       @default(0) @db.SmallInt
-  assignedTo     String?
-  dueDate        DateTime?
-  startDate      DateTime  @default(now())
-  completedDate  DateTime?
-  estimatedHours Float?
-  actualHours    Float?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  // Relations
-  ticket         Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  status         TaskStatusDef   @relation(fields: [taskStatusId], references: [id])
-  priority       TaskPriorityDef @relation(fields: [taskPriorityId], references: [id])
-  comments       TaskComment[]
-  statusHistory  TaskStatusHistory[]
+  id                String                  @id @default(cuid())
+  ticketId          String
+  title             String
+  description       String
+  progress          Int                     @default(0) @db.SmallInt
+  assignedTo        String?
+  dueDate           DateTime?
+  startDate         DateTime                @default(now())
+  completedDate     DateTime?
+  estimatedHours    Float?
+  actualHours       Float?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  taskPriorityId    String
+  taskStatusId      String
   assignmentHistory TaskAssignmentHistory[]
+  comments          TaskComment[]
+  statusHistory     TaskStatusHistory[]
+  priority          TaskPriorityDef         @relation(fields: [taskPriorityId], references: [id])
+  status            TaskStatusDef           @relation(fields: [taskStatusId], references: [id])
+  ticket            Ticket                  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@map("ticket_tasks")
 }
 
 model TaskComment {
-  id         String   @id @default(cuid())
+  id         String     @id @default(cuid())
   taskId     String
   authorId   String
   content    String
-  isInternal Boolean  @default(false)
-  createdAt  DateTime @default(now())
-
-  // Relations
-  task   TicketTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  author User       @relation(fields: [authorId], references: [id])
+  isInternal Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+  author     User       @relation(fields: [authorId], references: [id])
+  task       TicketTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@map("task_comments")
 }
 
 model TaskStatusHistory {
-  id         String    @id @default(cuid())
+  id         String     @id @default(cuid())
   taskId     String
   fromStatus TaskStatus
   toStatus   TaskStatus
   changedBy  String
-  changedAt  DateTime  @default(now())
+  changedAt  DateTime   @default(now())
   reason     String?
-
-  // Relations
-  task TicketTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User       @relation(fields: [changedBy], references: [id])
+  user       User       @relation(fields: [changedBy], references: [id])
+  task       TicketTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@map("task_status_history")
 }
 
 model TaskAssignmentHistory {
-  id         String    @id @default(cuid())
-  taskId     String
-  fromUserId String?
-  toUserId   String?
+  id           String     @id @default(cuid())
+  taskId       String
+  fromUserId   String?
+  toUserId     String?
   assignedById String
-  assignedAt DateTime @default(now())
-  reason     String?
-
-  // Relations
-  task      TicketTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  fromUser  User?      @relation("TaskAssignmentFrom", fields: [fromUserId], references: [id])
-  toUser    User?      @relation("TaskAssignmentTo", fields: [toUserId], references: [id])
-  assignedBy User      @relation("TaskAssignmentBy", fields: [assignedById], references: [id])
+  assignedAt   DateTime   @default(now())
+  reason       String?
+  assignedBy   User       @relation("TaskAssignmentBy", fields: [assignedById], references: [id])
+  fromUser     User?      @relation("TaskAssignmentFrom", fields: [fromUserId], references: [id])
+  task         TicketTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  toUser       User?      @relation("TaskAssignmentTo", fields: [toUserId], references: [id])
 
   @@map("task_assignment_history")
 }
 
 model TaskStatusDef {
-  id        String  @id @default(cuid())
-  key       String  @unique
+  id        String       @id @default(cuid())
+  key       String       @unique
   name      String
-  color     String? @default("gray")
-  sortOrder Int     @default(0)
-
+  color     String?      @default("gray")
+  sortOrder Int          @default(0)
   tasks     TicketTask[]
 
   @@map("task_statuses")
 }
 
 model TaskPriorityDef {
-  id        String  @id @default(cuid())
-  key       String  @unique
+  id        String       @id @default(cuid())
+  key       String       @unique
   name      String
-  color     String? @default("gray")
-  level     Int     @default(0)
-  sortOrder Int     @default(0)
-
+  color     String?      @default("gray")
+  level     Int          @default(0)
+  sortOrder Int          @default(0)
   tasks     TicketTask[]
 
   @@map("task_priorities")
@@ -391,78 +344,64 @@ model TicketEvent {
   description String?
   assignedTo  String?
   createdAt   DateTime  @default(now())
-
-  // Relations
   ticket      Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@map("ticket_events")
 }
 
 model KnowledgeBase {
-  id          String   @id @default(cuid())
-  title       String
-  content     String
-  category    String
-  tags        Json?
-  views       Int      @default(0)
-  helpful     Int      @default(0)
-  authorId    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  author      User?    @relation(fields: [authorId], references: [id])
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  category  String
+  tags      Json?
+  views     Int      @default(0)
+  helpful   Int      @default(0)
+  authorId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  author    User?    @relation(fields: [authorId], references: [id])
 
   @@map("knowledge_base")
 }
 
-// Organization & Access Control Models
-
 model Department {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  managerId   String?
-  parentId    String?
-  // Auto-assignment fields
-  autoAssignEnabled    Boolean @default(true)
-  assignmentStrategy   String  @default("round_robin") // round_robin, workload_balance, skill_based
-  maxTicketsPerAgent   Int     @default(10)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  manager   User?       @relation("DepartmentManager", fields: [managerId], references: [id])
-  parent    Department? @relation("DepartmentHierarchy", fields: [parentId], references: [id])
-  children  Department[] @relation("DepartmentHierarchy")
-  users     UserDepartment[]
-  assignedTickets Ticket[] @relation("AssignedToDepartment")
+  id                          String                    @id @default(cuid())
+  name                        String                    @unique
+  description                 String?
+  managerId                   String?
+  parentId                    String?
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+  assignmentStrategy          String                    @default("round_robin")
+  autoAssignEnabled           Boolean                   @default(true)
+  maxTicketsPerAgent          Int                       @default(10)
+  autoResponseTemplates       AutoResponseTemplate[]
+  manager                     User?                     @relation("DepartmentManager", fields: [managerId], references: [id])
+  parent                      Department?               @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  children                    Department[]              @relation("DepartmentHierarchy")
   ticketAssignmentHistoryFrom TicketAssignmentHistory[] @relation("AssignmentFromDepartment")
-  ticketAssignmentHistoryTo TicketAssignmentHistory[] @relation("AssignmentToDepartment")
-
-  // Auto-response relations
-  autoResponseTemplates AutoResponseTemplate[]
+  ticketAssignmentHistoryTo   TicketAssignmentHistory[] @relation("AssignmentToDepartment")
+  assignedTickets             Ticket[]                  @relation("AssignedToDepartment")
+  users                       UserDepartment[]
 
   @@map("departments")
 }
 
 /// Junction table for many-to-many relationship between Users and Departments
 model UserDepartment {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   userId       String
   departmentId String
-  isPrimary    Boolean  @default(false) // Whether this is the user's primary department
-  joinedAt     DateTime @default(now())
-  leftAt       DateTime? // When the user left this department (for historical tracking)
-  role         String?  // User's role within this department (e.g., "member", "lead", "specialist")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isPrimary    Boolean    @default(false)
+  joinedAt     DateTime   @default(now())
+  leftAt       DateTime?
+  role         String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Relations
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-
-  // Ensure unique user-department combinations
   @@unique([userId, departmentId])
   @@index([userId])
   @@index([departmentId])
@@ -471,14 +410,12 @@ model UserDepartment {
 }
 
 model Role {
-  id          String   @id @default(cuid())
-  name        String   @unique
+  id          String           @id @default(cuid())
+  name        String           @unique
   description String?
-  isSystem    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
+  isSystem    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
   permissions RolePermission[]
   users       UserRole[]
 
@@ -486,15 +423,13 @@ model Role {
 }
 
 model Permission {
-  id          String   @id @default(cuid())
-  key         String   @unique // e.g. "tickets:read"
+  id          String               @id @default(cuid())
+  key         String               @unique
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  roles RolePermission[]
-  menuItems MenuItemPermission[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  menuItems   MenuItemPermission[]
+  roles       RolePermission[]
 
   @@map("permissions")
 }
@@ -503,46 +438,39 @@ model RolePermission {
   id           String     @id @default(cuid())
   roleId       String
   permissionId String
-
-  // Relations
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, permissionId])
   @@map("role_permissions")
 }
 
 model UserRole {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   userId    String
   roleId    String
-  isPrimary Boolean  @default(false)
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  isPrimary Boolean @default(false)
+  role      Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roleId])
   @@map("user_roles")
 }
 
-// Menu & Navigation Models
 model MenuItem {
-  id          String    @id @default(cuid())
+  id          String               @id @default(cuid())
   parentId    String?
   label       String
   path        String?
   icon        String?
-  sortOrder   Int       @default(0)
-  isActive    Boolean   @default(true)
+  sortOrder   Int                  @default(0)
+  isActive    Boolean              @default(true)
   featureFlag String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Relations
-  parent    MenuItem?     @relation("MenuHierarchy", fields: [parentId], references: [id])
-  children  MenuItem[]    @relation("MenuHierarchy")
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
   permissions MenuItemPermission[]
+  parent      MenuItem?            @relation("MenuHierarchy", fields: [parentId], references: [id])
+  children    MenuItem[]           @relation("MenuHierarchy")
 
   @@map("menu_items")
 }
@@ -550,10 +478,8 @@ model MenuItem {
 model MenuItemPermission {
   menuItemId   String
   permissionId String
-
-  // Relations
-  menuItem   MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  menuItem     MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([menuItemId, permissionId])
   @@map("menu_item_permissions")
@@ -565,10 +491,10 @@ model AccessPolicy {
   description String?
   effect      AccessEffect      @default(ALLOW)
   subjectType PolicySubjectType
-  subjectId   String?           // roleId, userId, or departmentId depending on subjectType
-  resource    String            // e.g. "tickets", "comments", "users"
-  action      String            // e.g. "read", "write", "delete"
-  conditions  Json?             // JSON-based ABAC conditions
+  subjectId   String?
+  resource    String
+  action      String
+  conditions  Json?
   isActive    Boolean           @default(true)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
@@ -577,168 +503,150 @@ model AccessPolicy {
   @@map("access_policies")
 }
 
-// Enhanced Ticket Management Models
 model TicketCategory {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  color       String   @default("blue")
-  icon        String?  // Icon identifier for UI
-  parentId    String?  // For hierarchical categories
-  isActive    Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  customFields Json?   // Dynamic form fields for this category
-  autoAssignRules Json? // Rules for auto-assignment
-  slaRules    Json?    // Category-specific SLA rules
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  parent      TicketCategory? @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children    TicketCategory[] @relation("CategoryHierarchy")
-  tickets     Ticket[]
-  templates   TicketTemplate[]
-  workflows   TicketWorkflow[]
+  id              String           @id @default(cuid())
+  name            String           @unique
+  description     String?
+  color           String           @default("blue")
+  icon            String?
+  parentId        String?
+  isActive        Boolean          @default(true)
+  sortOrder       Int              @default(0)
+  customFields    Json?
+  autoAssignRules Json?
+  slaRules        Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  parent          TicketCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children        TicketCategory[] @relation("CategoryHierarchy")
+  templates       TicketTemplate[]
+  workflows       TicketWorkflow[]
+  tickets         Ticket[]
 
   @@map("ticket_categories")
 }
 
 model TicketPriority {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  color       String   @default("blue")
-  icon        String?  // Icon identifier for UI
-  level       Int      @unique // 1-10 scale for sorting
-  isActive    Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  slaResponseHours Int @default(24) // Response time in hours
-  slaResolveHours  Int @default(72) // Resolution time in hours
-  escalationRules  Json? // Auto-escalation rules
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  tickets     Ticket[]
-  workflows   TicketWorkflow[]
+  id               String           @id @default(cuid())
+  name             String           @unique
+  description      String?
+  color            String           @default("blue")
+  icon             String?
+  level            Int              @unique
+  isActive         Boolean          @default(true)
+  sortOrder        Int              @default(0)
+  slaResponseHours Int              @default(24)
+  slaResolveHours  Int              @default(72)
+  escalationRules  Json?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  workflows        TicketWorkflow[]
+  tickets          Ticket[]
 
   @@map("ticket_priorities")
 }
 
 model TicketStatus {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  color       String   @default("blue")
-  icon        String?  // Icon identifier for UI
-  isActive    Boolean  @default(true)
-  isClosed    Boolean  @default(false) // Whether this status closes the ticket
-  isResolved  Boolean  @default(false) // Whether this status resolves the ticket
-  sortOrder   Int      @default(0)
-  allowedTransitions Json? // Which statuses can transition to this one
-  permissions Json?    // Who can set this status
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  tickets     Ticket[]
-  statusHistory TicketStatusHistory[] @relation("CurrentStatus")
+  id                    String                @id @default(cuid())
+  name                  String                @unique
+  description           String?
+  color                 String                @default("blue")
+  icon                  String?
+  isActive              Boolean               @default(true)
+  isClosed              Boolean               @default(false)
+  isResolved            Boolean               @default(false)
+  sortOrder             Int                   @default(0)
+  allowedTransitions    Json?
+  permissions           Json?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
   previousStatusHistory TicketStatusHistory[] @relation("PreviousStatus")
+  statusHistory         TicketStatusHistory[] @relation("CurrentStatus")
+  tickets               Ticket[]
 
   @@map("ticket_statuses")
 }
 
 model TicketStatusHistory {
-  id          String   @id @default(cuid())
-  ticketId    String
-  statusId    String
+  id               String        @id @default(cuid())
+  ticketId         String
+  statusId         String
   previousStatusId String?
-  changedBy   String
-  changedAt   DateTime @default(now())
-  reason      String?  // Optional reason for status change
-  comment     String?  // Optional comment about the change
-
-  // Relations
-  ticket      Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  status      TicketStatus @relation("CurrentStatus", fields: [statusId], references: [id])
-  previousStatus TicketStatus? @relation("PreviousStatus", fields: [previousStatusId], references: [id])
-  user        User @relation(fields: [changedBy], references: [id])
+  changedBy        String
+  changedAt        DateTime      @default(now())
+  reason           String?
+  comment          String?
+  user             User          @relation(fields: [changedBy], references: [id])
+  previousStatus   TicketStatus? @relation("PreviousStatus", fields: [previousStatusId], references: [id])
+  status           TicketStatus  @relation("CurrentStatus", fields: [statusId], references: [id])
+  ticket           Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@map("ticket_status_history")
 }
 
 model TicketAssignmentHistory {
-  id                String    @id @default(cuid())
-  ticketId          String
-  fromUserId        String?
-  toUserId          String?
-  fromDepartmentId  String?
-  toDepartmentId    String?
-  assignedById      String
-  reason            String?
-  assignedAt        DateTime  @default(now())
-
-  // Relations
-  ticket            Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  fromUser          User? @relation("AssignmentFromUser", fields: [fromUserId], references: [id])
-  toUser            User? @relation("AssignmentToUser", fields: [toUserId], references: [id])
-  fromDepartment    Department? @relation("AssignmentFromDepartment", fields: [fromDepartmentId], references: [id])
-  toDepartment      Department? @relation("AssignmentToDepartment", fields: [toDepartmentId], references: [id])
-  assignedBy        User @relation("AssignmentAssignedBy", fields: [assignedById], references: [id])
+  id               String      @id @default(cuid())
+  ticketId         String
+  fromUserId       String?
+  toUserId         String?
+  fromDepartmentId String?
+  toDepartmentId   String?
+  assignedById     String
+  reason           String?
+  assignedAt       DateTime    @default(now())
+  assignedBy       User        @relation("AssignmentAssignedBy", fields: [assignedById], references: [id])
+  fromDepartment   Department? @relation("AssignmentFromDepartment", fields: [fromDepartmentId], references: [id])
+  fromUser         User?       @relation("AssignmentFromUser", fields: [fromUserId], references: [id])
+  ticket           Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  toDepartment     Department? @relation("AssignmentToDepartment", fields: [toDepartmentId], references: [id])
+  toUser           User?       @relation("AssignmentToUser", fields: [toUserId], references: [id])
 
   @@map("ticket_assignment_history")
 }
 
 model TicketTemplate {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  categoryId  String
-  title       String
+  id                  String         @id @default(cuid())
+  name                String         @unique
+  description         String?
+  categoryId          String
+  title               String
   templateDescription String
-  customFields Json?   // Pre-filled custom fields
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  category    TicketCategory @relation(fields: [categoryId], references: [id])
+  customFields        Json?
+  isActive            Boolean        @default(true)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  category            TicketCategory @relation(fields: [categoryId], references: [id])
 
   @@map("ticket_templates")
 }
 
 model TicketWorkflow {
-  id          String   @id @default(cuid())
-  name        String   @unique
+  id          String          @id @default(cuid())
+  name        String          @unique
   description String?
-  categoryId  String?  // Optional: workflow for specific category
-  priorityId  String?  // Optional: workflow for specific priority
-  rules       Json     // Workflow automation rules
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
+  categoryId  String?
+  priorityId  String?
+  rules       Json
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
   category    TicketCategory? @relation(fields: [categoryId], references: [id])
   priority    TicketPriority? @relation(fields: [priorityId], references: [id])
 
   @@map("ticket_workflows")
 }
 
-// SystemSettings model removed after migration to generic settings
-
-// Generic App Settings (namespace/key/value)
 model AppSetting {
-  id         String   @id @default(cuid())
-  namespace  String
-  key        String
-  value      Json
-  type       SettingType @default(JSON)
-  isSecret   Boolean  @default(false)
+  id          String      @id @default(cuid())
+  namespace   String
+  key         String
+  value       Json
+  isSecret    Boolean     @default(false)
   description String?
-  updatedBy  String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  updatedBy   String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  type        SettingType @default(JSON)
 
   @@unique([namespace, key])
   @@index([namespace])
@@ -746,20 +654,19 @@ model AppSetting {
 }
 
 model SettingHistory {
-  id         String   @id @default(cuid())
-  namespace  String
-  key        String
-  oldValue   Json?
-  newValue   Json?
-  changedBy  String?
-  reason     String?
-  changedAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  namespace String
+  key       String
+  oldValue  Json?
+  newValue  Json?
+  changedBy String?
+  reason    String?
+  changedAt DateTime @default(now())
 
   @@index([namespace, key])
   @@map("setting_history")
 }
 
-// Enums
 enum Priority {
   LOW
   MEDIUM

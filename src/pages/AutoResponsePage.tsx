@@ -9,29 +9,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Breadcrumb } from '@/components/Breadcrumb';
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { 
   Mail, 
   Plus, 
   Edit, 
   Trash2, 
-  Play, 
   Eye, 
-  Settings,
   CheckCircle,
   XCircle,
-  Clock,
-  AlertCircle,
   ArrowLeft,
-  RefreshCw,
-  Search,
-  Filter,
   Loader2,
   FileText,
   Users,
-  Calendar,
   ChevronLeft,
   ChevronRight,
   Info,
@@ -39,11 +29,9 @@ import {
 } from 'lucide-react';
 import { autoResponseService } from '@/lib/services/autoResponseService';
 import { apiClient } from '@/lib/api';
-import { cacheUtils } from '@/lib/utils';
 import type { 
   AutoResponseTemplate, 
   CreateAutoResponseTemplateRequest,
-  UpdateAutoResponseTemplateRequest,
   AutoResponseTemplateFilters
 } from '@/types/autoResponse';
 import { toast } from 'sonner';
@@ -162,14 +150,6 @@ const VariableHelper = ({
   );
 };
 
-const statusColors = {
-  SENT: 'bg-green-50 text-green-700 border-green-200',
-  DELIVERED: 'bg-blue-50 text-blue-700 border-blue-200',
-  FAILED: 'bg-red-50 text-red-700 border-red-200',
-  BOUNCED: 'bg-orange-50 text-orange-700 border-orange-200',
-  PROCESSING: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  ERROR: 'bg-red-50 text-red-700 border-red-200',
-};
 
 export default function AutoResponsePage() {
   const [templates, setTemplates] = useState<AutoResponseTemplate[]>([]);

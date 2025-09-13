@@ -1,17 +1,14 @@
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { FileUpload, type FileAttachment } from '@/components/ui/file-upload';
-import { RichTextDisplay } from '@/components/ui/rich-text-display';
-import { AttachmentDisplay } from '@/components/ui/attachment-display';
 import { AddCommentDialog } from '@/components/ui/add-comment-dialog';
 import { Breadcrumb } from '@/components/Breadcrumb';
 import { DepartmentFilter } from '@/components/DepartmentFilter';
@@ -19,11 +16,9 @@ import { DepartmentFilter } from '@/components/DepartmentFilter';
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { TicketService, type Ticket } from '@/lib/services/ticketService';
 import { AttachmentService } from '@/lib/services/attachmentService';
-import { CommentService, type Comment } from '@/lib/services/commentService';
+import { CommentService } from '@/lib/services/commentService';
 import { UserService, type User as UserType } from '@/lib/services/userService';
-import { useApi } from '@/hooks/useApi';
 import { apiClient, API_ENDPOINTS } from '@/lib/api';
-import { type TicketAttachment } from '@/data/mockData';
 import { 
   ArrowLeft, 
   HelpCircle, 
@@ -40,13 +35,10 @@ import {
   Wifi,
   Settings,
   Smartphone,
-  ChevronRight,
-  ChevronDown,
   Calendar,
   Paperclip,
   User,
   CheckSquare,
-  LogOut
 } from 'lucide-react';
 import { useState, useEffect, useCallback, type FC } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -222,7 +214,7 @@ const formatDate = (date: Date | string) => {
   }).format(dateObj);
 };
 
-const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[]; onTicketUpdated?: () => void; users: UserType[]; loadingUsers: boolean }> = ({ ticket, index = 0, statuses, onTicketUpdated, users, loadingUsers }) => {
+const TicketCard: FC<{ ticket: Ticket; index?: number; statuses: TicketStatus[]; onTicketUpdated?: () => void; users: UserType[]; loadingUsers: boolean }> = ({ ticket, index = 0, statuses: _statuses, onTicketUpdated, users, loadingUsers: _loadingUsers }) => {
   const navigate = useNavigate();
   const [showAddComment, setShowAddComment] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
@@ -1023,7 +1015,7 @@ export const HelpDeskPage: FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [ticketFilter, setTicketFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('tickets');
+  const [_activeTab, setActiveTab] = useState('tickets');
   const [autoOpenNewTicket, setAutoOpenNewTicket] = useState(false);
   // Fetch tickets from backend API
   // Infinite pagination state
@@ -1032,13 +1024,13 @@ export const HelpDeskPage: FC = () => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [ticketsLoading, setTicketsLoading] = useState(false);
-  const [ticketsError, setTicketsError] = useState<string | null>(null);
+  const [_ticketsError, setTicketsError] = useState<string | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [priorityOptions, setPriorityOptions] = useState<TicketPriority[]>([]);
-  const [loadingPriorityOptions, setLoadingPriorityOptions] = useState(false);
+  const [_loadingPriorityOptions, setLoadingPriorityOptions] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [categoryOptions, setCategoryOptions] = useState<TicketCategory[]>([]);
-  const [loadingCategoryOptions, setLoadingCategoryOptions] = useState(false);
+  const [_loadingCategoryOptions, setLoadingCategoryOptions] = useState(false);
   const [assignedToDepartmentFilter, setAssignedToDepartmentFilter] = useState<string>('all');
   const [totalTickets, setTotalTickets] = useState<number>(0);
   
@@ -1112,7 +1104,7 @@ export const HelpDeskPage: FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, ticketNumberQuery]);
   const [statuses, setStatuses] = useState<TicketStatus[]>([]);
-  const [loadingStatuses, setLoadingStatuses] = useState(false);
+  const [_loadingStatuses, setLoadingStatuses] = useState(false);
 
   useEffect(() => {
     const loadStatuses = async () => {
@@ -1201,11 +1193,6 @@ export const HelpDeskPage: FC = () => {
   const filteredTickets = tickets;
 
   // For now, we'll use empty knowledge base until we implement that API
-  const filteredKnowledgeBase: any[] = [];
-
-  const openTickets = tickets.filter((t: Ticket) => t.status === 'OPEN').length;
-  const inProgressTickets = tickets.filter((t: Ticket) => t.status === 'IN_PROGRESS').length;
-  const resolvedTickets = tickets.filter((t: Ticket) => t.status === 'RESOLVED').length;
 
   return (
     <div className="relative z-0 min-h-screen bg-background">

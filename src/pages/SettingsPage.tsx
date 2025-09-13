@@ -615,7 +615,7 @@ export default function SettingsPage() {
       setDepartmentsCount(departments.success && departments.data && Array.isArray(departments.data) ? departments.data!.length : 0);
       setAutoResponseTemplatesCount(autoResponseTemplates.success && autoResponseTemplates.data && typeof autoResponseTemplates.data === 'object' && 'templates' in autoResponseTemplates.data && Array.isArray((autoResponseTemplates.data as any).templates) ? (autoResponseTemplates.data as any).templates.length : 0);
       setFollowupSettingsCount(followupSettings.success && followupSettings.data ? Object.keys(followupSettings.data).length : 0);
-      setAutoResponseEnabled(autoResponseSettings.success && autoResponseSettings.data && (autoResponseSettings.data as any).enabled === true);
+      setAutoResponseEnabled(Boolean(autoResponseSettings.success && autoResponseSettings.data && (autoResponseSettings.data as any).enabled === true));
     } catch (e) {
       console.error('Error loading RBAC/ABAC:', e);
     } finally {

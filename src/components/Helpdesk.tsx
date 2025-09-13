@@ -2,24 +2,22 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { ArrowRight, Headphones, Clock, AlertCircle, CheckCircle, MessageSquare, Loader2, AlertTriangle, User, Timer } from 'lucide-react';
+import { ArrowRight, Headphones, Clock, CheckCircle, MessageSquare, Loader2, AlertTriangle, User, Timer } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { type FC } from 'react';
 import { Link } from 'react-router-dom';
-import { TicketService, type Ticket } from '@/lib/services/ticketService';
+import { TicketService } from '@/lib/services/ticketService';
 import { ticketSystemService } from '@/lib/services/ticketSystemService';
 import { useApi } from '@/hooks/useApi';
 import { TicketStatusBadge } from './TicketStatusBadge';
-import { TicketStatusChange } from './TicketStatusChange';
 import { PriorityBadge } from './PriorityBadge';
-import { toast } from 'sonner';
 
 type HelpdeskProps = {
   showStatusChange?: boolean;
 };
 
-export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
+export const Helpdesk: FC<HelpdeskProps> = () => {
 
   
 
@@ -53,79 +51,15 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
 
   // Filter tickets for display
   const getStatusName = (t: any) => (typeof t.status === 'string' ? t.status : t.status?.name || '');
-  const openTickets = tickets.filter(t => {
+  const openTickets = tickets.filter((t: any) => {
     const s = getStatusName(t).toUpperCase();
     return s === 'OPEN' || s === 'IN_PROGRESS';
-  });
-  const resolvedTickets = tickets.filter(t => {
-    const s = getStatusName(t).toUpperCase();
-    return s === 'RESOLVED' || s === 'CLOSED';
   });
   const recentTickets = tickets.slice(0, 4);
 
 
 
-  // Handle status change
-  const handleStatusChange = async (ticketId: string, newStatusId: string, reason?: string, comment?: string) => {
-    try {
-      await TicketService.updateTicket(ticketId, { statusId: newStatusId });
-      toast.success('Status updated successfully');
-      fetchTickets();
-      fetchStats();
-    } catch (error) {
-      console.error('Failed to update status:', error);
-      toast.error('Failed to update status');
-      throw error;
-    }
-  };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'OPEN':
-        return 'bg-blue-100 text-blue-800 border-blue-300 font-medium';
-      case 'IN_PROGRESS':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300 font-medium';
-      case 'RESOLVED':
-        return 'bg-green-100 text-green-800 border-green-300 font-medium';
-      case 'CLOSED':
-        return 'bg-gray-100 text-gray-800 border-gray-300 font-medium';
-      case 'ESCALATED':
-        return 'bg-red-100 text-red-800 border-red-300 font-medium';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-300 font-medium';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'OPEN':
-        return <AlertCircle className="h-3 w-3" />;
-      case 'IN_PROGRESS':
-        return <Clock className="h-3 w-3" />;
-      case 'RESOLVED':
-      case 'CLOSED':
-        return <CheckCircle className="h-3 w-3" />;
-      case 'ESCALATED':
-        return <AlertCircle className="h-3 w-3" />;
-      default:
-        return <Clock className="h-3 w-3" />;
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'CRITICAL':
-        return 'text-red-700 font-semibold';
-      case 'HIGH':
-        return 'text-orange-700 font-semibold';
-      case 'MEDIUM':
-        return 'text-yellow-700 font-semibold';
-      case 'LOW':
-        return 'text-green-700 font-semibold';
-      default:
-        return 'text-gray-700 font-medium';
-    }
-  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -148,37 +82,6 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
     return 'Unknown';
   };
 
-  const getStatusDisplayName = (status: string) => {
-    switch (status) {
-      case 'OPEN':
-        return 'Open';
-      case 'IN_PROGRESS':
-        return 'In Progress';
-      case 'RESOLVED':
-        return 'Resolved';
-      case 'CLOSED':
-        return 'Closed';
-      case 'ESCALATED':
-        return 'Escalated';
-      default:
-        return status;
-    }
-  };
-
-  const getPriorityDisplayName = (priority: string) => {
-    switch (priority) {
-      case 'CRITICAL':
-        return 'Critical';
-      case 'HIGH':
-        return 'High';
-      case 'MEDIUM':
-        return 'Medium';
-      case 'LOW':
-        return 'Low';
-      default:
-        return priority;
-    }
-  };
 
   // Refresh data
   const refreshData = () => {
@@ -346,7 +249,7 @@ export const Helpdesk: FC<HelpdeskProps> = ({ showStatusChange = true }) => {
 
           {recentTickets.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {recentTickets.map((ticket, index) => (
+              {recentTickets.map((ticket: any, index: number) => (
                 <div
                   key={ticket.id}
                   className="rounded-lg border bg-card text-card-foreground p-3 flex flex-col justify-between min-h-[120px] hover:shadow-md transition-all duration-300 hover:scale-[1.02] animate-in fade-in slide-in-from-bottom-4 duration-500"

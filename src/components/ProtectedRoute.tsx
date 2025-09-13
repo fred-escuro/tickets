@@ -1,15 +1,12 @@
 import { useState, useEffect, type FC, type ReactNode } from 'react';
-import { roleService } from '@/lib/services/roleService';
 import { LoginDialog } from '@/components/LoginDialog';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { HelpCircle, LogIn } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
 import { useAppTitle } from '@/hooks/useAppTitle';
 
 interface ProtectedRouteProps {
   children: ReactNode;
   pageTitle?: string;
-  pageDescription?: string;
   // Optional RBAC requirements
   requireAnyRoleNames?: string[]; // e.g., ['admin','manager']
   requireAnyPermissionKeys?: string[]; // e.g., ['tickets:read']
@@ -18,7 +15,6 @@ interface ProtectedRouteProps {
 export const ProtectedRoute: FC<ProtectedRouteProps> = ({ 
   children, 
   pageTitle = "Welcome", 
-  pageDescription = "Please log in to access this page.",
   requireAnyRoleNames,
   requireAnyPermissionKeys
 }) => {

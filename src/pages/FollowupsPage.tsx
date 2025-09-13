@@ -1,16 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { 
   Mail, 
   RefreshCw, 
-  Search, 
-  Filter,
-  Eye,
   CheckCircle,
   XCircle,
   Clock,
@@ -52,7 +48,6 @@ export default function FollowupsPage() {
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('recent');
 
   // Load data
   useEffect(() => {

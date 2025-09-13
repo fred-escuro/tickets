@@ -50,7 +50,7 @@ export class DepartmentService {
   }> {
     try {
       const response = await apiClient.get('/api/departments');
-      return response;
+      return response as { success: boolean; data?: Department[]; error?: string; };
     } catch (error) {
       console.error('Get departments error:', error);
       return {
@@ -68,7 +68,7 @@ export class DepartmentService {
   }> {
     try {
       const response = await apiClient.get(`/api/departments/${id}`);
-      return response;
+      return response as { success: boolean; data?: Department; error?: string; };
     } catch (error) {
       console.error('Get department error:', error);
       return {
@@ -86,7 +86,7 @@ export class DepartmentService {
   }> {
     try {
       const response = await apiClient.get(`/api/departments/${departmentId}/stats`);
-      return response;
+      return response as { success: boolean; data?: DepartmentStats; error?: string; };
     } catch (error) {
       console.error('Get department stats error:', error);
       return {
@@ -136,7 +136,7 @@ export class DepartmentService {
   }> {
     try {
       const response = await apiClient.post('/api/departments', data);
-      return response;
+      return response as { success: boolean; data?: Department; error?: string; };
     } catch (error) {
       console.error('Create department error:', error);
       return {
@@ -159,7 +159,7 @@ export class DepartmentService {
   }> {
     try {
       const response = await apiClient.put(`/api/departments/${id}`, data);
-      return response;
+      return response as { success: boolean; data?: Department; error?: string; };
     } catch (error) {
       console.error('Update department error:', error);
       return {

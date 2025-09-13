@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test 18 - Fixed HTML</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug { background: #f0f0f0; padding: 10px; margin: 10px 0; border-left: 4px solid #007acc; }
+        img { max-width: 100%; height: auto; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+    <h1>Test 18 - HTML Fixing Test</h1>
+    
+    <div class="debug">
+        <h3>🔧 HTML Fixing Process:</h3>
+        <p>This demonstrates the HTML structure fixing logic applied to Test 18's malformed HTML.</p>
+    </div>
+
+    <div id="original-content">
+        <h3>Original Content (Malformed):</h3>
+        <div id="original-html"></div>
+    </div>
+
+    <div id="fixed-content">
+        <h3>Fixed Content:</h3>
+        <div id="fixed-html"></div>
+    </div>
+
+    <script>
+        // This is the exact HTML content from Test 18 that we found in the database
+        const originalHtml = `<html xmlns:m="http://schemas.microsoft.com/office/2004/12/omml" xmlns="http://www.w3.org/TR/REC-html40"><head><META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=us-ascii"><meta name=Generator content="Microsoft Word 15 (filtered medium)"><style><!--
+/* Font Definitions */
+@font-face
+        {font-family:"Cambria Math";
+        panose-1:2 4 5 3 5 4 6 3 2 4;}
+@font-face
+        {font-family:Calibri;
+        panose-1:2 15 5 2 2 2 4 3 2 4;}
+@font-face
+        {font-family:Aptos;}
+/* Style Definitions */
+p. li. div.
+        {margin:0in;
+        font-size:12.0pt;
+        font-family:"Aptos",sans-serif;}
+a:link, span.MsoHyperlink
+        {
+        color:#467886;
+        text-decoration:underline;}
+span.EmailStyle18
+        {
+        font-family:"Aptos",sans-serif;
+        color:windowtext;}
+.MsoChpDefault
+        {
+        font-size:10.0pt;}
+@page WordSection1
+        {size:8.5in 11.0in;
+        margin:1.0in 1.0in 1.0in 1.0in;}
+div.WordSection1
+        {page:WordSection1;}
+--></style></head><body lang=EN-US link="#467886" vlink="#96607D" style='word-wrap:break-word'><div class=WordSection1><p class= style='font-size:11.0pt'>Test 18</span></p><p class= style='font-size:11.0pt'>&nbsp;</span></p><p class= width=388 height=206 style='width:4.0416in;height:2.1416in' id="Picture_x0020_1" src="<img src="data:image/png;base64,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" alt="Embedded Image">`;
+
+        // Apply the HTML fixing logic
+        function fixHtmlStructure(html) {
+            console.log('🔧 FIXING MALFORMED HTML STRUCTURE:');
+            console.log('HTML length before fixes:', html.length);
+            
+            // Extract and fix the main content area that contains the malformed HTML
+            const bodyMatch = html.match(/<body[^>]*>(.*?)<\/body>/is);
+            if (bodyMatch) {
+                let bodyContent = bodyMatch[1];
+                console.log('Found body content, length:', bodyContent.length);
+                
+                // Fix the specific malformed structure we identified
+                // Pattern: <p class= style='font-size:11.0pt'>Test 18</span></p>
+                bodyContent = bodyContent.replace(/<p class=\s+style='([^']*)'>([^<]*)<\/span><\/p>/gi, '<p style="$1">$2</p>');
+                
+                // Fix paragraphs with &nbsp; and malformed structure
+                bodyContent = bodyContent.replace(/<p[^>]*>\s*&nbsp;<\/span><\/p>/gi, '<p>&nbsp;</p>');
+                
+                // Fix the Picture_x0020 malformed structure
+                bodyContent = bodyContent.replace(/<p[^>]*width=\d+\s+height=\d+[^>]*id="Picture[^"]*"[^>]*>\s*src="<img\s+src="([^"]*)"/gi, '<p><img src="$1" alt="Embedded Image">');
+                
+                // Fix any remaining malformed img tags
+                bodyContent = bodyContent.replace(/<p[^>]*>\s*src="<img\s+src="([^"]*)"/gi, '<p><img src="$1" alt="Embedded Image">');
+                
+                // Replace the body content with the fixed version
+                const fixedHtml = html.replace(/<body[^>]*>.*?<\/body>/is, `<body>${bodyContent}</body>`);
+                
+                console.log('Fixed body content, new length:', fixedHtml.length);
+                return fixedHtml;
+            }
+            
+            return html;
+        }
+
+        // Display the original content
+        document.getElementById('original-html').innerHTML = originalHtml;
+
+        // Apply fixes and display the fixed content
+        const fixedHtml = fixHtmlStructure(originalHtml);
+        document.getElementById('fixed-html').innerHTML = fixedHtml;
+
+        // Log the results
+        console.log('Original HTML length:', originalHtml.length);
+        console.log('Fixed HTML length:', fixedHtml.length);
+        
+        // Check for img tags in both versions
+        const originalImgTags = originalHtml.match(/<img[^>]*>/gi);
+        const fixedImgTags = fixedHtml.match(/<img[^>]*>/gi);
+        
+        console.log('Original img tags:', originalImgTags ? originalImgTags.length : 0);
+        console.log('Fixed img tags:', fixedImgTags ? fixedImgTags.length : 0);
+    </script>
+</body>
+</html>

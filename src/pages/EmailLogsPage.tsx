@@ -1,15 +1,13 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Breadcrumb } from '@/components/Breadcrumb';
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { 
   Mail, 
@@ -21,9 +19,7 @@ import {
   RefreshCw,
   Search,
   Filter,
-  Download,
   Trash2,
-  Play,
   ArrowLeft,
   Plus,
   Loader2,
@@ -33,12 +29,12 @@ import {
 import { emailLogsService } from '@/lib/services/emailLogsService';
 import { settingsApi } from '@/lib/services/settingsApi';
 import { useProcessingModal } from '@/hooks/useProcessingModal';
-import { cacheUtils } from '@/lib/utils';
 import type { EmailLog, EmailLogsFilters, EmailStatistics } from '@/lib/types/emailLogs';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
 import DOMPurify from 'dompurify';
+import { SimpleOutlookEmailDisplay } from '@/components/ui/simple-outlook-email-display';
 
 // Robust HTML sanitization using DOMPurify
 const sanitizeHtml = (html: string): string => {
@@ -67,7 +63,6 @@ const sanitizeHtml = (html: string): string => {
   return DOMPurify.sanitize(html, config);
 };
 import { Link } from 'react-router-dom';
-import { Separator } from '@/components/ui/separator';
 
 
 const directionIcons = {
@@ -245,142 +240,6 @@ const EmailLogCard = ({
 };
 
 // Memoized table row component for better performance
-const EmailLogRow = React.memo(({ log, onView, onRetry, onDelete }: {
-  log: EmailLog;
-  onView: (log: EmailLog) => void;
-  onRetry: (id: string) => void;
-  onDelete: (id: string) => void;
-}) => {
-  const DirectionIcon = directionIcons[log.direction];
-  
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'SENT':
-      case 'DELIVERED':
-      case 'PROCESSED':
-        return <CheckCircle className="h-4 w-4" />;
-      case 'FAILED':
-      case 'ERROR':
-        return <AlertCircle className="h-4 w-4" />;
-      case 'BOUNCED':
-        return <AlertCircle className="h-4 w-4" />;
-      case 'PROCESSING':
-        return <Clock className="h-4 w-4" />;
-      default:
-        return <Clock className="h-4 w-4" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'SENT':
-      case 'DELIVERED':
-      case 'PROCESSED':
-        return 'bg-green-100 text-green-700 border-green-200';
-      case 'FAILED':
-      case 'ERROR':
-        return 'bg-red-100 text-red-700 border-red-200';
-      case 'PROCESSING':
-      case 'PENDING':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'BOUNCED':
-        return 'bg-orange-100 text-orange-700 border-orange-200';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    return format(new Date(dateString), 'MMM dd, yyyy HH:mm:ss');
-  };
-
-  return (
-    <TableRow key={log.id} className="hover:bg-muted/50">
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <DirectionIcon className="h-4 w-4 text-muted-foreground" />
-          <Badge 
-            variant={log.direction === 'INBOUND' ? 'default' : 'secondary'}
-            className="text-xs"
-          >
-            {log.direction}
-          </Badge>
-        </div>
-      </TableCell>
-      <TableCell className="max-w-[200px]">
-        <div className="truncate font-medium" title={log.from}>
-          {log.from}
-        </div>
-      </TableCell>
-      <TableCell className="max-w-[200px]">
-        <div className="truncate" title={log.to}>
-          {log.to}
-        </div>
-      </TableCell>
-      <TableCell className="max-w-[250px]">
-        <div className="truncate" title={log.subject || 'No subject'}>
-          {log.subject || (
-            <span className="text-muted-foreground italic">No subject</span>
-          )}
-        </div>
-      </TableCell>
-      <TableCell>
-        <Badge className={`${getStatusColor(log.status)} text-xs`}>
-          <div className="flex items-center gap-1">
-            {getStatusIcon(log.status)}
-            {log.status}
-          </div>
-        </Badge>
-      </TableCell>
-      <TableCell>
-        <div className="text-sm text-muted-foreground">
-          {formatDate(log.sentAt || log.receivedAt || log.processedAt)}
-        </div>
-      </TableCell>
-      <TableCell>
-        {log.ticket ? (
-          <Badge variant="outline" className="text-xs">
-            #{log.ticket.ticketNumber}
-          </Badge>
-        ) : (
-          <span className="text-muted-foreground text-sm">-</span>
-        )}
-      </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onView(log)}
-            className="h-8 w-8 p-0"
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-          {log.status === 'FAILED' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onRetry(log.id)}
-              className="h-8 w-8 p-0"
-              title="Retry email"
-            >
-              <Play className="h-4 w-4" />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onDelete(log.id)}
-            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-            title="Delete email log"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </TableCell>
-    </TableRow>
-  );
-});
 
 export default function EmailLogsPage() {
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>([]);
@@ -500,15 +359,7 @@ export default function EmailLogsPage() {
         throw new Error('No response received from server');
       }
       
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to load email logs');
-      }
-      
-      if (!response.data) {
-        throw new Error('No data received from server');
-      }
-      
-      const newLogs = response.data.logs || [];
+      const newLogs = response.logs || [];
       
       if (loadMore) {
         // Append new logs for infinite scroll
@@ -521,11 +372,11 @@ export default function EmailLogsPage() {
       }
       
       setPagination({
-        total: response.data.total || 0,
-        page: response.data.page || 1,
-        limit: response.data.limit || 25,
-        totalPages: response.data.totalPages || 0,
-        hasMore: (response.data.page || 1) < (response.data.totalPages || 0),
+        total: response.total || 0,
+        page: response.page || 1,
+        limit: response.limit || 25,
+        totalPages: response.totalPages || 0,
+        hasMore: (response.page || 1) < (response.totalPages || 0),
       });
     } catch (error: any) {
       console.error('Error loading email logs:', error);
@@ -553,23 +404,13 @@ export default function EmailLogsPage() {
         endDate: filters.endDate,
       });
       
-      // Check if response exists and has the expected structure
+      // Check if response exists
       if (!response) {
         console.error('No response received from server for statistics');
         return;
       }
       
-      if (!response.success) {
-        console.error('Failed to load statistics:', response.error);
-        return;
-      }
-      
-      if (!response.data) {
-        console.error('No statistics data received from server');
-        return;
-      }
-      
-      setStatistics(response.data);
+      setStatistics(response);
     } catch (error: any) {
       console.error('Failed to load statistics:', error);
     }
@@ -588,7 +429,7 @@ export default function EmailLogsPage() {
     
     setFilters(prev => ({
       ...prev,
-      page: prev.page + 1,
+      page: (prev.page || 1) + 1,
     }));
     
     // Load more logs with the next page
@@ -1211,7 +1052,7 @@ export default function EmailLogsPage() {
                   </div>
 
                   <div className="flex gap-3 pt-4 border-t">
-                    <Button onClick={loadEmailLogs} className="flex items-center gap-2">
+                    <Button onClick={() => loadEmailLogs()} className="flex items-center gap-2">
                       <Search className="h-4 w-4" />
                       Apply Filters
                     </Button>
@@ -1290,7 +1131,27 @@ export default function EmailLogsPage() {
               {/* Subject - Full Width */}
               <div className="space-y-1">
                 <Label className="text-xs font-medium text-muted-foreground">Subject</Label>
-                <p className="text-sm bg-background p-2 rounded border font-medium">{selectedLog.subject || 'No subject'}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm bg-background p-2 rounded border font-medium flex-1">{selectedLog.subject || 'No subject'}</p>
+                  {(selectedLog as any).imap_raw && (
+                    <SimpleOutlookEmailDisplay
+                      emailLog={{
+                        id: selectedLog.id,
+                        messageId: selectedLog.messageId,
+                        from: selectedLog.from,
+                        to: selectedLog.to,
+                        cc: selectedLog.cc,
+                        subject: selectedLog.subject,
+                        body: selectedLog.body,
+                        htmlBody: selectedLog.htmlBody,
+                        receivedAt: selectedLog.receivedAt || '',
+                        processedAt: selectedLog.processedAt,
+                        imap_raw: (selectedLog as any).imap_raw,
+                        rawMeta: selectedLog.rawMeta
+                      }}
+                    />
+                  )}
+                </div>
               </div>
 
               {/* Content Tabs */}

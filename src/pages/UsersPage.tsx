@@ -10,15 +10,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 import { OrganizationChart } from '@/components/OrganizationChart';
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
-import { ArrowLeft, Search, Filter, Mail, Phone, MapPin, Users, Network, Shield, Wrench, Loader2, AlertCircle, Plus, Star, Building2 } from 'lucide-react';
+import { ArrowLeft, Search, Mail, Phone, Users, Network, Shield, Loader2, AlertCircle, Plus, Star, Building2 } from 'lucide-react';
 import { useState, useEffect, type FC } from 'react';
 import { Link } from 'react-router-dom';
+import { generateId } from '@/lib/utils';
 import { useApi } from '@/hooks/useApi';
-import { UserService, USER_ROLES, LEGACY_USER_DEPARTMENTS } from '@/lib/services/userService';
-import type { SupportAgent, User, CreateUserData, UpdateUserData, DepartmentOption, UserDepartment } from '@/lib/services/userService';
+import { UserService } from '@/lib/services/userService';
+import type { User, CreateUserData, UpdateUserData, DepartmentOption, UserDepartment } from '@/lib/services/userService';
 import { MultipleDepartmentsSelector } from '@/components/MultipleDepartmentsSelector';
 import { roleService, type Role as RbacRole } from '@/lib/services/roleService';
 import { AuthService } from '@/lib/services/authService';
+import { toast } from 'sonner';
 
 const getDepartmentBadgeColor = (department: string) => {
   switch (department) {
@@ -37,11 +39,6 @@ const getDepartmentBadgeColor = (department: string) => {
   }
 };
 
-const getAgentBadgeColor = (isAgent: boolean) => {
-  return isAgent 
-    ? 'border-green-600 bg-green-50 text-green-700 dark:border-green-300 dark:bg-green-100 dark:text-green-800'
-    : 'border-gray-600 bg-gray-50 text-gray-700 dark:border-gray-300 dark:bg-gray-100 dark:text-gray-800';
-};
 
 export const UsersPage: FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,7 +68,7 @@ export const UsersPage: FC = () => {
   const [selectedRoleIdCreate, setSelectedRoleIdCreate] = useState<string>('');
   const [selectedRoleIdEdit, setSelectedRoleIdEdit] = useState<string>('');
   const [departmentsApi, setDepartmentsApi] = useState<DepartmentOption[]>([]);
-  const [departmentsLoading, setDepartmentsLoading] = useState(false);
+  const [_departmentsLoading, setDepartmentsLoading] = useState(false);
 
   // Fetch all users using the API hook
   const { data: usersData, loading: usersLoading, error: usersError, execute: fetchUsers } = useApi(
@@ -117,11 +114,12 @@ export const UsersPage: FC = () => {
     if (!selectedUser) return;
     // Prefer primary RBAC role from user payload if available
     const userAny: any = selectedUser as any;
-    const rolesArr: any[] = Array.isArray(userAny?.roles) ? userAny.roles : [];
+    // User has a single role string, not an array of role objects
     let currentRoleId = '';
-    if (rolesArr.length > 0) {
-      const primary = rolesArr.find((ur: any) => ur?.isPrimary);
-      currentRoleId = primary?.role?.id || rolesArr[0]?.role?.id || '';
+    if (userAny?.role) {
+      // Find the role ID by name
+      const roleObj = rbacRoles.find(r => r.name.toLowerCase() === userAny.role.toLowerCase());
+      currentRoleId = roleObj?.id || '';
     }
     if (!currentRoleId && rbacRoles.length > 0) {
       // Fallback to 'user' role if nothing found
@@ -164,9 +162,12 @@ export const UsersPage: FC = () => {
         password: formData.password,
         role: 'user',
         departments: formData.departments.map(dept => ({
+          id: generateId(),
           departmentId: dept.department.id,
           isPrimary: dept.isPrimary,
-          role: dept.role
+          role: dept.role,
+          joinedAt: new Date().toISOString(),
+          department: dept.department
         })),
         phone: formData.phone || undefined,
         avatar: formData.avatar || undefined,
@@ -221,9 +222,12 @@ export const UsersPage: FC = () => {
         middleName: formData.middleName || undefined,
         role: formData.role,
         departments: formData.departments.map(dept => ({
+          id: generateId(),
           departmentId: dept.department.id,
           isPrimary: dept.isPrimary,
-          role: dept.role
+          role: dept.role,
+          joinedAt: new Date().toISOString(),
+          department: dept.department
         })),
         phone: formData.phone || undefined,
         avatar: formData.avatar || undefined,
@@ -241,9 +245,9 @@ export const UsersPage: FC = () => {
           const chosenRoleId = selectedRoleIdEdit || (rbacRoles.find(r => r.name.toLowerCase() === 'user')?.id || '');
           if (chosenRoleId) {
             const userResp: any = await UserService.getUser(selectedUser.id);
-            const currentRoles: string[] = ((userResp.data || userResp)?.roles || [])
-              .map((ur: any) => ur.role?.id)
-              .filter((id: any) => typeof id === 'string');
+            // User has a single role, not an array of roles
+            const currentRole = (userResp.data || userResp)?.role;
+            const currentRoles: string[] = currentRole ? [currentRole] : [];
             for (const rid of currentRoles) {
               if (rid !== chosenRoleId) {
                 await roleService.removeFromUser(rid, selectedUser.id);
@@ -504,14 +508,14 @@ export const UsersPage: FC = () => {
                             {/* Role and Status in 2 columns */}
                             <div className="grid grid-cols-2 gap-3 mb-2">
                               {/* RBAC Role Section */}
-                              {Array.isArray((user as any).roles) && (user as any).roles.length > 0 && (
+                              {user.role && (
                                 <div>
                                   <div className="flex items-center gap-1 mb-1">
                                     <Shield className="h-3 w-3 text-muted-foreground" />
                                     <span className="text-xs font-medium text-muted-foreground">Role</span>
                                   </div>
                                   <Badge className="border-indigo-600 bg-indigo-50 text-indigo-700 dark:border-indigo-300 dark:bg-indigo-100 dark:text-indigo-800 text-xs group-hover:scale-105 transition-transform duration-300 shadow-sm">
-                                    {((user as any).roles.find((r: any) => r.isPrimary) || (user as any).roles[0]).role?.name || 'Role'}
+                                    {user.role}
                                   </Badge>
                                 </div>
                               )}
@@ -539,7 +543,7 @@ export const UsersPage: FC = () => {
                                   <span className="text-xs text-muted-foreground/60">({user.departments.length})</span>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5">
-                                  {user.departments.map((userDept, index) => (
+                                  {user.departments.map((userDept) => (
                                     <div key={userDept.department.id} className="flex flex-col gap-1">
                                       <Badge 
                                         className={`${getDepartmentBadgeColor(userDept.department.name)} text-xs font-medium group-hover:scale-105 transition-all duration-200 shadow-sm hover:shadow-md ${userDept.isPrimary ? 'ring-2 ring-primary/30 bg-primary/10' : 'hover:bg-opacity-80'}`}
@@ -826,10 +830,8 @@ export const UsersPage: FC = () => {
                <div className="space-y-2">
                  {(() => {
                    const currentUser = AuthService.getCurrentUser();
-                   const perms = currentUser?.permissions || [];
-                   const roleNames: string[] = Array.isArray(currentUser?.roles)
-                     ? currentUser.roles.map((ur: any) => ur?.role?.name).filter((n: any) => typeof n === 'string')
-                     : (currentUser?.role ? [currentUser.role] : []);
+                   const perms = (currentUser as any)?.permissions || [];
+                   const roleNames: string[] = currentUser?.role ? [currentUser.role] : [];
                    const canEditPassword = perms.includes('users:write') || roleNames.includes('admin') || roleNames.includes('manager');
                    if (!canEditPassword) return null;
                    return (
@@ -922,7 +924,7 @@ export const UsersPage: FC = () => {
               {(() => {
                 const currentUser = JSON.parse(localStorage.getItem('user') || 'null') as any;
                 const perms: string[] = Array.isArray(currentUser?.permissions) ? currentUser.permissions : [];
-                const roles: string[] = Array.isArray(currentUser?.roles) ? currentUser.roles.map((r: any) => r?.role?.name) : [];
+                const roles: string[] = currentUser?.role ? [currentUser.role] : [];
                 const canVerify = perms.includes('users:write') || roles.includes('admin');
                 if (!canVerify) return null;
                 return (

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from './button';
 import { Card, CardContent } from './card';
-import { Badge } from './badge';
 import { 
   File as FileIcon, 
   FileText, 
@@ -10,7 +9,6 @@ import {
   Music, 
   Archive,
   Download,
-  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AttachmentViewer } from './attachment-viewer';
@@ -82,7 +80,7 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
   attachments,
   className,
   showDownload = true,
-  showPreview = true
+  // Removed unused showPreview parameter
 }) => {
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [selectedAttachmentIndex, setSelectedAttachmentIndex] = useState(0);
@@ -141,7 +139,7 @@ export const AttachmentDisplay: React.FC<AttachmentDisplayProps> = ({
     }
   };
 
-  const handlePreview = (attachment: BackendAttachment, index: number) => {
+  const handlePreview = (_attachment: BackendAttachment, index: number) => {
     setSelectedAttachmentIndex(index);
     setIsViewerOpen(true);
   };

@@ -21,7 +21,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
   onClose,
   onLoginSuccess
 }) => {
-  const { appName } = useAppTitle();
+  const { appName } = useAppTitle('Login');
   const [credentials, setCredentials] = useState({
     email: '',
     password: ''

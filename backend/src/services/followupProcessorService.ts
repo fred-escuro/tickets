@@ -145,8 +145,46 @@ export class FollowupProcessorService {
     if (parsedEmail && parsedEmail.html) {
       content = parsedEmail.html;
       console.log('Using parsed email HTML content');
+      
+      // Handle inline images by converting cid: URLs to data: URLs
+      if (parsedEmail.attachments) {
+        const inlineImages = parsedEmail.attachments.filter(att => att.contentDisposition === 'inline');
+        console.log(`Found ${inlineImages.length} inline images to process`);
+        
+        for (const img of inlineImages) {
+          if (img.contentId && img.content) {
+            // Convert image content to base64 data URL
+            const base64 = (img.content as Buffer).toString('base64');
+            const dataUrl = `data:${img.contentType || 'image/jpeg'};base64,${base64}`;
+            
+            // Replace cid: references with data: URLs
+            const cidPattern = new RegExp(`cid:${img.contentId.replace(/[<>]/g, '')}`, 'gi');
+            content = content.replace(cidPattern, dataUrl);
+            console.log(`Replaced cid:${img.contentId} with data URL`);
+          }
+        }
+      }
     } else {
       console.log('Using original email body/htmlBody content');
+      
+      // Handle inline images in original content if we have parsed email data
+      if (parsedEmail && parsedEmail.attachments && (email.htmlBody || email.body)) {
+        const inlineImages = parsedEmail.attachments.filter(att => att.contentDisposition === 'inline');
+        console.log(`Found ${inlineImages.length} inline images to process in original content`);
+        
+        for (const img of inlineImages) {
+          if (img.contentId && img.content) {
+            // Convert image content to base64 data URL
+            const base64 = (img.content as Buffer).toString('base64');
+            const dataUrl = `data:${img.contentType || 'image/jpeg'};base64,${base64}`;
+            
+            // Replace cid: references with data: URLs
+            const cidPattern = new RegExp(`cid:${img.contentId.replace(/[<>]/g, '')}`, 'gi');
+            content = content.replace(cidPattern, dataUrl);
+            console.log(`Replaced cid:${img.contentId} with data URL in original content`);
+          }
+        }
+      }
     }
     
     console.log('Selected content preview:', content?.substring(0, 200) + '...');
@@ -330,6 +368,14 @@ export class FollowupProcessorService {
     // If no user content found, proceed with normal HTML cleaning
     console.log('No user content found, proceeding with HTML cleaning');
     
+    // Before proceeding with aggressive HTML cleaning, try one more approach
+    // Extract meaningful content directly from the original HTML
+    const meaningfulContent = this.extractMeaningfulContent(htmlContent);
+    if (meaningfulContent && meaningfulContent.trim().length > 10) {
+      console.log('Found meaningful content before HTML cleaning:', meaningfulContent.substring(0, 100) + '...');
+      return `<p>${meaningfulContent.trim()}</p>`;
+    }
+    
     // Remove auto-response content from HTML
     let cleanedHtml = this.removeAutoResponseContent(htmlContent);
     
@@ -405,26 +451,39 @@ export class FollowupProcessorService {
     }
     
     // If still no meaningful HTML content, convert to HTML from plain text
-    if (formattedHtml.length < 10 || !formattedHtml.includes('<')) {
+    // Check if the formatted HTML contains actual text content (not just HTML tags)
+    const hasTextContent = formattedHtml.replace(/<[^>]*>/g, '').trim().length > 10;
+    
+    if (formattedHtml.length < 10 || !formattedHtml.includes('<') || !hasTextContent) {
       console.log('Still no meaningful content, converting to HTML from plain text');
-      const plainText = htmlContent
-        .replace(/<[^>]*>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/\s+/g, ' ')
-        .trim();
+      console.log('Has text content check:', hasTextContent, 'Text length:', formattedHtml.replace(/<[^>]*>/g, '').trim().length);
       
-      // Convert plain text to HTML with proper formatting
-      formattedHtml = plainText
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .map(line => `<p>${line}</p>`)
-        .join('');
+      // Try to extract meaningful content before falling back to full HTML stripping
+      const meaningfulContent = this.extractMeaningfulContent(htmlContent);
+      if (meaningfulContent && meaningfulContent.trim().length > 10) {
+        console.log('Found meaningful content:', meaningfulContent.substring(0, 100) + '...');
+        formattedHtml = `<p>${meaningfulContent.trim()}</p>`;
+      } else {
+        // Fallback to full HTML stripping
+        const plainText = htmlContent
+          .replace(/<[^>]*>/g, '')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        // Convert plain text to HTML with proper formatting
+        formattedHtml = plainText
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.length > 0)
+          .map(line => `<p>${line}</p>`)
+          .join('');
+      }
     }
     
     console.log('Final formatted HTML length:', formattedHtml?.length || 0);
@@ -432,6 +491,55 @@ export class FollowupProcessorService {
     console.log('=== END CLEAN HTML CONTENT DEBUG ===');
     
     return formattedHtml;
+  }
+
+  /**
+   * Extracts meaningful content from HTML by looking for actual text content
+   * before quoted sections or auto-response content
+   */
+  private extractMeaningfulContent(htmlContent: string): string {
+    console.log('=== EXTRACT MEANINGFUL CONTENT DEBUG ===');
+    
+    // Remove HTML tags to get plain text
+    const plainText = htmlContent
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    console.log('Plain text content:', plainText.substring(0, 300) + '...');
+    
+    // Look for meaningful content patterns
+    const meaningfulPatterns = [
+      /^(Followup please.*?)(?=From:|Sent:|To:|Subject:|-----|Best regards|Support Team|Thanks!)/i,
+      /^(This is the.*?)(?=From:|Sent:|To:|Subject:|-----|Best regards|Support Team|Thanks!)/i,
+      /^(.*?)(?=From:|Sent:|To:|Subject:|-----|Best regards|Support Team|Thanks!)/i,
+    ];
+    
+    for (const pattern of meaningfulPatterns) {
+      const match = plainText.match(pattern);
+      if (match && match[1] && match[1].trim().length > 10) {
+        const content = match[1].trim();
+        console.log('Found meaningful content:', content);
+        return content;
+      }
+    }
+    
+    // If no pattern matches, try to get the first meaningful sentence
+    const sentences = plainText.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 10);
+    if (sentences.length > 0) {
+      console.log('Using first meaningful sentence:', sentences[0]);
+      return sentences[0];
+    }
+    
+    console.log('No meaningful content found');
+    console.log('=== END EXTRACT MEANINGFUL CONTENT DEBUG ===');
+    return '';
   }
 
   /**
@@ -445,15 +553,17 @@ export class FollowupProcessorService {
     
     // Look for simple user messages at the beginning
     const simplePatterns = [
-      /^[^<]*?(Followup please|Thank you|Please|Update|Status|Hi|Hello|I need|Can you|When will)[^<]*/i,
+      /^[^<]*?(Followup please.*?)(?=<|From:|Sent:|To:|Subject:|Thanks!)/i,
+      /^[^<]*?(Thank you.*?)(?=<|From:|Sent:|To:|Subject:)/i,
+      /^[^<]*?(This is the.*?)(?=<|From:|Sent:|To:|Subject:|Thanks!)/i,
       /^[^<]*?([A-Z][a-z]+ [a-z]+)[^<]*/i, // Simple sentence patterns
     ];
     
     for (const pattern of simplePatterns) {
       const match = htmlContent.match(pattern);
-      if (match && match[0].trim().length > 0 && match[0].trim().length < 100) {
-        console.log('Found simple user message:', match[0].trim());
-        return match[0].trim();
+      if (match && match[1] && match[1].trim().length > 0 && match[1].trim().length < 200) {
+        console.log('Found simple user message:', match[1].trim());
+        return match[1].trim();
       }
     }
     
@@ -473,7 +583,10 @@ export class FollowupProcessorService {
     
     // Look for user message patterns in the text
     const userMessagePatterns = [
-      /^(Followup please|Thank you|Please|Update|Status|Hi|Hello|I need|Can you|When will).*$/i,
+      /^(Followup please.*?)(?=From:|Sent:|To:|Subject:|-----|Best regards|Support Team|Thanks!)/i,
+      /^(Thank you.*?)(?=From:|Sent:|To:|Subject:|-----|Best regards|Support Team)/i,
+      /^(Please.*?)(?=From:|Sent:|To:|Subject:|-----|Best regards|Support Team)/i,
+      /^(This is the.*?)(?=From:|Sent:|To:|Subject:|-----|Best regards|Support Team|Thanks!)/i,
       /^([A-Z][a-z]+ [a-z]+.*?)(?=From:|Sent:|To:|Subject:|-----|Best regards|Support Team)/i,
     ];
     

@@ -29,12 +29,12 @@ export class AutoResponseService {
     
     const endpoint = `/api/auto-response/templates${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     const response = await apiClient.get(endpoint);
-    return response.data;
+    return response.data as { templates: AutoResponseTemplate[]; total: number; page: number; limit: number; totalPages: number; };
   }
 
   async getTemplate(id: string): Promise<AutoResponseTemplate> {
     const response = await apiClient.get(`/api/auto-response/templates/${id}`);
-    return response.data;
+    return response.data as AutoResponseTemplate;
   }
 
   async createTemplate(data: CreateAutoResponseTemplateRequest): Promise<AutoResponseTemplate> {
@@ -46,7 +46,7 @@ export class AutoResponseService {
       throw new Error(response.error || 'Failed to create template');
     }
     
-    return response.data;
+    return response.data as AutoResponseTemplate;
   }
 
   async updateTemplate(id: string, data: UpdateAutoResponseTemplateRequest): Promise<AutoResponseTemplate> {
@@ -58,7 +58,7 @@ export class AutoResponseService {
       throw new Error(response.error || 'Failed to update template');
     }
     
-    return response.data;
+    return response.data as AutoResponseTemplate;
   }
 
   async deleteTemplate(id: string): Promise<void> {
@@ -71,7 +71,7 @@ export class AutoResponseService {
     generated: any;
   }> {
     const response = await apiClient.post(`/api/auto-response/templates/${id}/test`, { ticketId });
-    return response.data;
+    return response.data as { template: AutoResponseTemplate; variables: any; generated: any; };
   }
 
   // Auto-Response Management
@@ -92,12 +92,12 @@ export class AutoResponseService {
     
     const endpoint = `/api/auto-response/responses${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     const response = await apiClient.get(endpoint);
-    return response.data;
+    return response.data as { responses: AutoResponse[]; total: number; page: number; limit: number; totalPages: number; };
   }
 
   async getResponseByResponseId(responseId: string): Promise<AutoResponse> {
     const response = await apiClient.get(`/api/auto-response/responses/by-response-id/${responseId}`);
-    return response.data;
+    return response.data as AutoResponse;
   }
 
   // Follow-up Management
@@ -118,7 +118,7 @@ export class AutoResponseService {
     
     const endpoint = `/api/auto-response/followups${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     const response = await apiClient.get(endpoint);
-    return response.data;
+    return response.data as { followups: EmailFollowup[]; total: number; page: number; limit: number; totalPages: number; };
   }
 }
 

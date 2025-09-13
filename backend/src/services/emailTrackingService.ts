@@ -36,6 +36,7 @@ export interface InboundEmailData {
   attachments?: any[];
   receivedAt?: Date;
   rawMeta?: any;
+  imap_raw?: string;
   options?: EmailTrackingOptions;
 }
 
@@ -229,32 +230,68 @@ export class EmailTrackingService {
    */
   async trackInboundEmail(emailData: InboundEmailData): Promise<string> {
     const { prisma } = await import('../index');
-    const emailLog = await prisma.emailLog.create({
-      data: {
-        messageId: emailData.messageId,
-        imapUid: emailData.imapUid,
-        direction: EmailDirection.INBOUND,
-        type: emailData.options?.type || EmailMessageType.NEW,
-        from: emailData.from,
-        to: emailData.to,
-        cc: emailData.cc,
-        bcc: emailData.bcc,
-        subject: emailData.subject,
-        body: emailData.text,
-        htmlBody: emailData.html,
-        ticketId: emailData.options?.ticketId,
-        userId: emailData.options?.userId,
-        status: EmailStatus.PROCESSING,
-        receivedAt: emailData.receivedAt || new Date(),
-        rawMeta: emailData.rawMeta,
-        attachments: emailData.attachments ? JSON.stringify(emailData.attachments) : undefined,
-        replyTo: emailData.options?.replyTo,
-        inReplyTo: emailData.options?.inReplyTo,
-        references: emailData.options?.references,
-      },
-    });
+    
+    // Check if email with this messageId already exists
+    if (emailData.messageId) {
+      const existingEmailLog = await prisma.emailLog.findUnique({
+        where: { messageId: emailData.messageId },
+        select: { id: true, status: true }
+      });
 
-    return emailLog.id;
+      if (existingEmailLog) {
+        console.log(`📧 Email with messageId ${emailData.messageId} already exists, returning existing ID: ${existingEmailLog.id}`);
+        return existingEmailLog.id;
+      }
+    }
+
+    try {
+      const emailLog = await prisma.emailLog.create({
+        data: {
+          messageId: emailData.messageId,
+          imapUid: emailData.imapUid,
+          direction: EmailDirection.INBOUND,
+          type: emailData.options?.type || EmailMessageType.NEW,
+          from: emailData.from,
+          to: emailData.to,
+          cc: emailData.cc,
+          bcc: emailData.bcc,
+          subject: emailData.subject,
+          body: emailData.text,
+          htmlBody: emailData.html,
+          ticketId: emailData.options?.ticketId,
+          userId: emailData.options?.userId,
+          status: EmailStatus.PROCESSING,
+          receivedAt: emailData.receivedAt || new Date(),
+          rawMeta: emailData.rawMeta,
+          imap_raw: emailData.imap_raw,
+          attachments: emailData.attachments ? JSON.stringify(emailData.attachments) : undefined,
+          replyTo: emailData.options?.replyTo,
+          inReplyTo: emailData.options?.inReplyTo,
+          references: emailData.options?.references,
+        },
+      });
+
+      return emailLog.id;
+    } catch (error: any) {
+      // Handle unique constraint violation gracefully
+      if (error.code === 'P2002' && error.meta?.target?.includes('messageId')) {
+        console.log(`⚠️ Duplicate messageId ${emailData.messageId} detected, attempting to find existing record`);
+        
+        // Try to find the existing record
+        const existingEmailLog = await prisma.emailLog.findUnique({
+          where: { messageId: emailData.messageId },
+          select: { id: true }
+        });
+
+        if (existingEmailLog) {
+          console.log(`✅ Found existing email log with ID: ${existingEmailLog.id}`);
+          return existingEmailLog.id;
+        }
+      }
+      
+      // Re-throw if it's not a duplicate constraint error
+      throw error;
+    }
   }
 
   /**

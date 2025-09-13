@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { 
   ArrowUp, 
-  ArrowDown, 
   Clock, 
   AlertCircle,
   Zap,
@@ -134,7 +132,7 @@ export const PriorityWorkflow: React.FC<PriorityWorkflowProps> = ({
                   {/* SLA Indicator */}
                   <div className="absolute -top-2 -right-2">
                     <Badge variant="outline" className="text-xs bg-white">
-                      {node.priority.slaHours}h
+                      {node.priority.slaResolveHours}h
                     </Badge>
                   </div>
                 </div>
@@ -166,7 +164,7 @@ export const PriorityWorkflow: React.FC<PriorityWorkflowProps> = ({
               if (!node) return null;
               
               const priority = node.priority;
-              const slaStatus = getSLAStatus(priority.slaHours || 24);
+              const slaStatus = getSLAStatus(priority.slaResolveHours || 24);
               
               return (
                 <div className="space-y-4">
@@ -186,12 +184,12 @@ export const PriorityWorkflow: React.FC<PriorityWorkflowProps> = ({
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <h4 className="font-medium text-sm text-muted-foreground">Response Time</h4>
-                      <p className="text-lg font-semibold">{priority.slaHours || 24} hours</p>
+                      <p className="text-lg font-semibold">{priority.slaResolveHours || 24} hours</p>
                     </div>
                     <div>
                       <h4 className="font-medium text-sm text-muted-foreground">Escalation</h4>
                       <p className="text-lg font-semibold">
-                        {Math.floor((priority.slaHours || 24) * 0.8)} hours
+                        {Math.floor((priority.slaResolveHours || 24) * 0.8)} hours
                       </p>
                     </div>
                   </div>
@@ -236,7 +234,7 @@ export const PriorityWorkflow: React.FC<PriorityWorkflowProps> = ({
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {priorities.map((priority) => {
-              const slaStatus = getSLAStatus(priority.slaHours || 24);
+              const slaStatus = getSLAStatus(priority.slaResolveHours || 24);
               return (
                 <div key={priority.id} className="p-3 border rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
@@ -246,7 +244,7 @@ export const PriorityWorkflow: React.FC<PriorityWorkflowProps> = ({
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">SLA:</span>
-                      <span className="font-medium">{priority.slaHours || 24}h</span>
+                      <span className="font-medium">{priority.slaResolveHours || 24}h</span>
                     </div>
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">Status:</span>

@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
 import { 
   ArrowLeft, 
@@ -13,9 +12,7 @@ import {
   Settings, 
   Clock, 
   Mail, 
-  MessageSquare,
   AlertTriangle,
-  CheckCircle,
   Loader2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -108,7 +105,7 @@ export default function FollowupSettingsPage() {
       setLoading(true);
       const response = await apiClient.get('/api/settings/followup');
       if (response.success && response.data) {
-        setSettings(response.data);
+        setSettings(response.data as FollowupSettings);
       }
     } catch (error) {
       console.error('Error loading followup settings:', error);

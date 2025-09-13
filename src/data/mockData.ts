@@ -901,3 +901,49 @@ export const helpdeskKnowledgeBase: HelpdeskKnowledgeBase[] = [
     author: 'Lisa Network'
   }
 ];
+
+// Quick Links types and data
+export interface QuickLink {
+  id: string;
+  title: string;
+  name: string;
+  url: string;
+  icon: string;
+  description?: string;
+}
+
+export const defaultQuickLinks: QuickLink[] = [
+  {
+    id: '1',
+    title: 'Help Desk',
+    name: 'Help Desk',
+    url: '/helpdesk',
+    icon: 'headphones',
+    description: 'Access the main help desk dashboard'
+  },
+  {
+    id: '2',
+    title: 'Tickets',
+    name: 'Tickets',
+    url: '/tickets',
+    icon: 'file-text',
+    description: 'View and manage support tickets'
+  },
+  {
+    id: '3',
+    title: 'Settings',
+    name: 'Settings',
+    url: '/settings',
+    icon: 'settings',
+    description: 'Configure system settings'
+  },
+  {
+    id: '4',
+    title: 'Analytics',
+    name: 'Analytics',
+    url: '/analytics',
+    icon: 'bar-chart-3',
+    description: 'View system analytics and reports'
+  }
+];
+

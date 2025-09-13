@@ -3,23 +3,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Avatar } from '@/components/ui/avatar';
 import { PageWrapper, PageSection } from '@/components/PageWrapper';
-import { ArrowLeft, User as UserIcon, Mail, Phone, MapPin, Building, Shield, Calendar, Edit, Save, X } from 'lucide-react';
+import { ArrowLeft, User as UserIcon, Mail, Phone, MapPin, Calendar, Edit, Save, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { UserService, type User } from '@/lib/services/userService';
 import { AuthService } from '@/lib/services/authService';
 import { toast } from 'sonner';
-import { useApi } from '@/hooks/useApi';
 
 export const ProfilePage: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const { apiCall } = useApi();
+  // Removed unused useApi hook
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -59,7 +56,7 @@ export const ProfilePage: React.FC = () => {
               email: freshUser.email,
               phone: freshUser.phone || '',
               location: freshUser.location || '',
-              department: freshUser.department || '',
+              department: freshUser.departmentEntity?.name || '',
               avatar: freshUser.avatar || ''
             };
             setFormData(newFormData);
